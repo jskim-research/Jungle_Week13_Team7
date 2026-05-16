@@ -238,24 +238,25 @@ UberPS_Output PS(UberVS_Output input)
     float4 baseColor = texColor * input.color;
 
 #if defined(WEIGHT_BONE_HEATMAP) && WEIGHT_BONE_HEATMAP
-float Heat = saturate(input.selectedBoneWeight);
+    float Heat = saturate(input.selectedBoneWeight);
 
-float t0 = smoothstep(0.0f,   0.05f,  Heat);   // 마젠타 ->  파랑
-float t1 = smoothstep(0.05f,  0.2f, Heat);     // 파랑   ->  시안
-float t2 = smoothstep(0.2f,   0.35f,  Heat);   // 시안   ->  초록
-float t3 = smoothstep(0.35f,  0.5f, Heat);    // 초록   ->  노랑
-float t4 = smoothstep(0.5f,  1.0f,  Heat);    // 노랑   ->  빨강
+    // 파 -> 초
+    float3 HeatColor = lerp(float3(0.05f, 0.15f, 0.95f), float3(0.0f, 0.9f, 0.15f), saturate(Heat * 2.0f));
+    
+    // 초 -> 노
+    HeatColor = lerp(HeatColor, float3(1.0f, 1.0f, 0.0f), saturate(Heat * 3.0f - 1.0f));
+    
+    // 노 -> 빨
+    HeatColor = lerp(HeatColor, float3(1.0f, 0.05f, 0.0f), saturate(Heat * 3.0f - 2.0f));
 
-float3 HeatColor = lerp(float3(1.0f, 0.0f, 1.0f),  float3(0.0f, 0.0f, 1.0f),  t0);
-HeatColor = lerp(HeatColor, float3(0.0f, 1.0f, 1.0f),  t1);
-HeatColor = lerp(HeatColor, float3(0.0f, 0.9f, 0.15f), t2);
-HeatColor = lerp(HeatColor, float3(1.0f, 1.0f, 0.0f),  t3);
-HeatColor = lerp(HeatColor, float3(1.0f, 0.05f, 0.0f), t4);
+    // Heat == 0이면 마젠타
+    float IsZero = step(Heat, 0.0f);
+    HeatColor = lerp(HeatColor, float3(1.0f, 0.0f, 1.0f), IsZero);
 
-output.Color = float4(HeatColor, 1.f);
-output.Normal = float4(normalize(input.normal), 1.0f);
-output.Culling = float4(0, 0, 0, 0);
-return output;
+    output.Color = float4(ApplyWireframe(HeatColor), baseColor.a);
+    output.Normal = float4(normalize(input.normal), 1.0f);
+    output.Culling = float4(0, 0, 0, 0);
+    return output;
 #endif
 
     float3 N = normalize(input.normal);
