@@ -1,42 +1,48 @@
 @echo off
 chcp 65001 > nul
-setlocal
+setlocal enabledelayedexpansion
 
-REM =========================
-REM Path Configuration (상대 경로 기준 설정)
-REM =========================
-REM %~dp0는 현재 배치 파일이 실행된 폴더 경로(끝에 \ 포함)를 의미합니다. (예: C:\Jungle_Week12_Team5\Scripts\)
-REM 이 경로에서 한 단계 상위로 올라간(..) 곳이 프로젝트 루트 폴더가 됩니다.
+REM =======================================================================
+REM Path Configuration
+REM =======================================================================
 set ROOT_PATH=%~dp0..
 for %%i in ("%ROOT_PATH%") do set ROOT_PATH=%%~fi
 
-REM =========================
+REM =======================================================================
 REM Project
-REM =========================
+REM =======================================================================
 set PROJECT=KraftonEngine
 
 set BUILD_PATH=%ROOT_PATH%\%PROJECT%\Bin\Debug
 set EXE=%BUILD_PATH%\%PROJECT%.exe
 set PDB=%BUILD_PATH%\%PROJECT%.pdb
+set SRCINFO=%BUILD_PATH%\srcsrv.txt
+set TEMP_RAW_LIST=%BUILD_PATH%\raw_files.txt
+set PS1=%~dp0gen_srcsrv.ps1
 
-REM =========================
+REM =======================================================================
 REM Servers
-REM =========================
-set SOURCE_SERVER=\\DESKTOP-UFL5EJM\sources
-set SYMBOL_SERVER=\\DESKTOP-UFL5EJM\symbols
+REM =======================================================================
+set SOURCE_SERVER=\\172.21.10.44\sources
+set SYMBOL_SERVER=\\172.21.10.44\symbols
 
-REM =========================
+REM =======================================================================
 REM Tools
-REM =========================
+REM =======================================================================
 set SDK_TOOLS=C:\Program Files (x86)\Windows Kits\10\Debuggers\x64
 set SRCSRV_TOOLS=%SDK_TOOLS%\srcsrv
 
-echo =========================
+echo =========================================
 echo 0. Check files
-echo =========================
+echo =========================================
 
 if not exist "%PDB%" (
     echo [ERROR] PDB not found: %PDB%
+    exit /b 1
+)
+
+if not exist "%PS1%" (
+    echo [ERROR] gen_srcsrv.ps1 not found: %PS1%
     exit /b 1
 )
 
@@ -44,102 +50,124 @@ if not exist "%EXE%" (
     echo [WARNING] EXE not found: %EXE%
 )
 
-REM =========================
-REM 1. Upload PDB and EXE to Symbol Server
-REM =========================
-echo =========================
-echo 1. Upload PDB and EXE to Symbol Server
-echo =========================
+REM =======================================================================
+REM 1. Copy Source and Required Files
+REM =======================================================================
+echo =========================================
+echo 1. Copy Source to Source Server
+echo =========================================
 
-REM PDB 등록
-"%SDK_TOOLS%\symstore.exe" add ^
-    /f "%PDB%" ^
-    /s "%SYMBOL_SERVER%" ^
-    /t "%PROJECT%"
+REM ★ EXE/PDB 복사
+if exist "%EXE%" (
+    xcopy "%EXE%" "%SOURCE_SERVER%\%PROJECT%\Bin\" /Y
+)
+if exist "%PDB%" (
+    xcopy "%PDB%" "%SOURCE_SERVER%\%PROJECT%\Bin\" /Y
+)
+
+REM 1) 프로젝트 루트의 파일들 (main.cpp 등)
+xcopy "%ROOT_PATH%\%PROJECT%\*.cpp" "%SOURCE_SERVER%\%PROJECT%\" /Y /D
+xcopy "%ROOT_PATH%\%PROJECT%\*.h" "%SOURCE_SERVER%\%PROJECT%\" /Y /D
+
+REM 2) 주요 소스 폴더들
+xcopy "%ROOT_PATH%\%PROJECT%\Source\*" "%SOURCE_SERVER%\%PROJECT%\Source\" /E /I /Y /D
+xcopy "%ROOT_PATH%\%PROJECT%\Shaders\*" "%SOURCE_SERVER%\%PROJECT%\Shaders\" /E /I /Y /D
+xcopy "%ROOT_PATH%\%PROJECT%\ThirdParty\*" "%SOURCE_SERVER%\%PROJECT%\ThirdParty\" /E /I /Y /D
+
+if errorlevel 1 (echo [ERROR] xcopy failed & exit /b 1)
+
+REM =======================================================================
+REM 2. Create & Inject FULL SOURCE INDEX
+REM =======================================================================
+echo =========================================
+echo 2. Generating Full Source Index Table
+echo =========================================
+
+REM PDB에 링크된 원본 소스 파일 목록 추출 (-r 옵션)
+"%SRCSRV_TOOLS%\srctool.exe" -r "%PDB%" > "%TEMP_RAW_LIST%"
+
+echo [DEBUG] raw_files.txt 앞 5줄:
+for /f "tokens=*" %%a in ('type "%TEMP_RAW_LIST%" ^| findstr /n "." ^| findstr /b "[1-5]:"') do echo %%a
+
+REM ps1 파일 실행
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" ^
+    -Project "%PROJECT%" ^
+    -SourceServer "%SOURCE_SERVER%" ^
+    -RawList "%TEMP_RAW_LIST%" ^
+    -SrcInfo "%SRCINFO%"
 
 if errorlevel 1 (
-    echo [ERROR] symstore PDB failed
+    echo [ERROR] No source files indexed or PowerShell failed.
     exit /b 1
 )
 
-REM EXE 등록
+if exist "%TEMP_RAW_LIST%" del "%TEMP_RAW_LIST%"
+
+REM PDB에 소스 인덱스 주입
+echo [INFO] Running pdbstr...
+"%SRCSRV_TOOLS%\pdbstr.exe" -w -p:"%PDB%" -s:srcsrv -i:"%SRCINFO%"
+echo [INFO] pdbstr errorlevel: %errorlevel%
+if errorlevel 1 (echo [ERROR] pdbstr injection failed & exit /b 1)
+
+REM =======================================================================
+REM 3. Upload Indexed PDB and EXE to Symbol Server
+REM =======================================================================
+echo =========================================
+echo 3. Upload Indexed PDB and EXE to Symbol Server
+echo =========================================
+
+set NEED_PDB_UPLOAD=1
+if exist "%SYMBOL_SERVER%\000Admin\history.txt" (
+    findstr /I /C:"\"%PROJECT%.pdb\"" "%SYMBOL_SERVER%\000Admin\history.txt" >nul 2>&1
+    if !errorlevel! equ 0 (set NEED_PDB_UPLOAD=0)
+)
+
+if !NEED_PDB_UPLOAD! equ 0 (
+    echo [SKIP] PDB is already uploaded to Symbol Server.
+) else (
+    echo [UPLOAD] Uploading Indexed PDB...
+    "%SDK_TOOLS%\symstore.exe" add /f "%PDB%" /s "%SYMBOL_SERVER%" /t "%PROJECT%"
+    if !errorlevel! geq 1 (
+        echo [ERROR] symstore PDB failed & exit /b 1
+    )
+)
+
 if exist "%EXE%" (
-    "%SDK_TOOLS%\symstore.exe" add ^
-        /f "%EXE%" ^
-        /s "%SYMBOL_SERVER%" ^
-        /t "%PROJECT%"
-        
-    if errorlevel 1 (
-        echo [ERROR] symstore EXE failed
-        exit /b 1
+    set NEED_EXE_UPLOAD=1
+    if exist "%SYMBOL_SERVER%\000Admin\history.txt" (
+        findstr /I /C:"\"%PROJECT%.exe\"" "%SYMBOL_SERVER%\000Admin\history.txt" >nul 2>&1
+        if !errorlevel! equ 0 (set NEED_EXE_UPLOAD=0)
+    )
+
+    if !NEED_EXE_UPLOAD! equ 0 (
+        echo [SKIP] EXE is already uploaded to Symbol Server.
+    ) else (
+        echo [UPLOAD] Uploading EXE...
+        "%SDK_TOOLS%\symstore.exe" add /f "%EXE%" /s "%SYMBOL_SERVER%" /t "%PROJECT%"
+        if !errorlevel! geq 1 (
+            echo [ERROR] symstore EXE failed & exit /b 1
+        )
     )
 ) else (
     echo [WARNING] Skipping EXE upload because EXE not found.
 )
 
-REM =========================
-REM 2. Copy EXE + Source
-REM =========================
-echo =========================
-echo 2. Copy EXE and Source
-echo =========================
+REM =======================================================================
+REM 4. Verify
+REM =======================================================================
+echo =========================================
+echo 4. Verify PDB Indexing Status
+echo =========================================
 
-xcopy "%BUILD_PATH%\*" "%SOURCE_SERVER%\%PROJECT%\Bin\" /E /I /Y
+echo [INFO] srctool verify:
+"%SRCSRV_TOOLS%\srctool.exe" "%PDB%"
+echo [INFO] srctool errorlevel: %errorlevel%
 
-if errorlevel 1 (
-    echo [ERROR] xcopy failed
-    exit /b 1
-)
-
-xcopy "%ROOT_PATH%\%PROJECT%" "%SOURCE_SERVER%\%PROJECT%\Source\" /E /I /Y
-
-REM =========================
-REM 3. Create srcsrv info
-REM =========================
-echo =========================
-echo 3. Create srcsrv info
-echo =========================
-
-set SRCINFO=%BUILD_PATH%\srcsrv.txt
-
-(
-echo SRCSRV: ini ------------------------------------------------
-echo VERSION=2
-echo VERCTRL=StGit
-echo SRCSRV: variables = SRCSRVTRG SRCSRVCMD SRCSRVTRG:SOURCE
-echo SRCSRVTRG=%SOURCE_SERVER%\%PROJECT%\Source\%%var2%%
-echo SRCSRVTRG:SOURCE=%ROOT_PATH%\%PROJECT%
-echo SRCSRVCMD=cmd /c copy "%%f" "%%targ%%\%%var2%%"
-echo SRCSRV: source files = %SOURCE_SERVER%\%PROJECT%\Source\%%var2%%
-echo SRCSRV: end ------------------------------------------------
-) > "%SRCINFO%"
-
-REM =========================
-REM 4. Inject srcsrv into PDB
-REM =========================
-echo =========================
-echo 4. Inject srcsrv into PDB
-echo =========================
-
-"%SRCSRV_TOOLS%\pdbstr.exe" -w -p:"%PDB%" -s:srcsrv -i:"%SRCINFO%"
-
-if errorlevel 1 (
-    echo [ERROR] pdbstr failed
-    exit /b 1
-)
-
-REM =========================
-REM 5. Verify
-REM =========================
-echo =========================
-echo 5. Verify PDB
-echo =========================
-
-"%SRCSRV_TOOLS%\srctool.exe" -r "%PDB%"
-
-echo =========================
+echo [INFO] pdbstr readback:
+"%SRCSRV_TOOLS%\pdbstr.exe" -r -p:"%PDB%" -s:srcsrv
+echo =========================================
 echo DONE
-echo =========================
+echo =========================================
 pause
 
 endlocal
