@@ -3,17 +3,36 @@ chcp 65001 > nul
 setlocal enabledelayedexpansion
 
 REM =======================================================================
+REM 1. Build Configuration & Tool Path Arguments
+REM =======================================================================
+REM %1 : 빌드 구성 (Debug / Release) - 비어있으면 기본값 Debug
+set CONFIG=Debug
+if "%~1" NEQ "" (
+    set CONFIG=%~1
+)
+
+REM %2 : 커스텀 SDK 도구 경로 (선택 사항)
+set CUSTOM_TOOL_PATH=%~2
+
+echo =======================================================================
+echo  [Symbol Publisher] Target Configuration: %CONFIG%
+if "%CUSTOM_TOOL_PATH%" NEQ "" (
+    echo  [Symbol Publisher] Custom Tool Path   : %CUSTOM_TOOL_PATH%
+)
+echo =======================================================================
+
+REM =======================================================================
 REM Path Configuration
 REM =======================================================================
 set ROOT_PATH=%~dp0..
 for %%i in ("%ROOT_PATH%") do set ROOT_PATH=%%~fi
 
 REM =======================================================================
-REM Project
+REM Project & Dynamic Paths
 REM =======================================================================
 set PROJECT=KraftonEngine
 
-set BUILD_PATH=%ROOT_PATH%\%PROJECT%\Bin\Debug
+set BUILD_PATH=%ROOT_PATH%\%PROJECT%\Bin\%CONFIG%
 set EXE=%BUILD_PATH%\%PROJECT%.exe
 set PDB=%BUILD_PATH%\%PROJECT%.pdb
 set SRCINFO=%BUILD_PATH%\srcsrv.txt
@@ -27,17 +46,63 @@ set SOURCE_SERVER=\\172.21.10.44\sources
 set SYMBOL_SERVER=\\172.21.10.44\symbols
 
 REM =======================================================================
-REM Tools
+REM 2. Tools Path Resolution (입력값 검증 또는 자동 탐색)
 REM =======================================================================
-set SDK_TOOLS=C:\Program Files (x86)\Windows Kits\10\Debuggers\x64
+set SDK_TOOLS=
+
+REM 사용자가 수동으로 도구 경로를 넘겨준 경우 최우선 검증
+if "%CUSTOM_TOOL_PATH%" NEQ "" (
+    if exist "%CUSTOM_TOOL_PATH%\srcsrv\srctool.exe" (
+        set SDK_TOOLS=%CUSTOM_TOOL_PATH%
+        goto :TOOLS_FOUND
+    ) else (
+        echo [WARNING] 입력된 커스텀 경로에 srctool.exe가 없습니다. 자동 탐색을 시도합니다.
+    )
+)
+
+REM 자동 탐색 로직 (기존 경로 리스트 순회)
+set POSSIBLE_PATHS=(^
+    "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64"^
+    "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86"^
+    "C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"^
+    "C:\Program Files\Windows Kits\11\Debuggers\x64"^
+    "C:\Program Files\Windows Kits\10\Debuggers\x64"^
+    "D:\Windows Kits\10\Debuggers\x64"^
+)
+
+for %%p in %POSSIBLE_PATHS% do (
+    if exist "%%~p\srcsrv\srctool.exe" (
+        set SDK_TOOLS=%%~p
+        goto :TOOLS_FOUND
+    )
+)
+
+:TOOLS_NOT_FOUND
+echo -----------------------------------------------------------------------
+echo [ERROR] Windows SDK Debugging Tools를 찾을 수 없습니다.
+echo [원인] 팀원 컴퓨터에 "Debugging Tools for Windows"가 설치되어 있지 않거나
+echo        지정된 커스텀 경로가 올바르지 않습니다.
+echo [해결방법] 
+echo   1. 바로가기 .bat 파일을 편집기(메모장)로 열어 수동 경로를 세팅하거나
+echo   2. Visual Studio Installer - [개별 구성 요소]에서 
+echo      [Debugging Tools for Windows]를 체크하여 설치하세요.
+echo -----------------------------------------------------------------------
+pause
+exit /b 1
+
+:TOOLS_FOUND
 set SRCSRV_TOOLS=%SDK_TOOLS%\srcsrv
+echo [INFO] Using SDK Tools at: %SDK_TOOLS%
 
 echo =========================================
 echo 0. Check files
 echo =========================================
 
+if not exist "%BUILD_PATH%" mkdir "%BUILD_PATH%"
+
 if not exist "%PDB%" (
-    echo [ERROR] PDB not found: %PDB%
+    echo [ERROR] PDB not found at: %PDB%
+    echo [ERROR] %CONFIG% 빌드가 먼저 완료되었는지 확인하세요.
     exit /b 1
 )
 if not exist "%PS1%" (
@@ -57,9 +122,6 @@ echo =========================================
 echo 0-1. Extract PDB GUID
 echo =========================================
 
-REM PowerShell에서 PDB 바이너리를 직접 읽어 GUID 추출
-REM PDB7.0 포맷: offset 32부터 슈퍼블록, GUID는 고정 위치에 존재
-REM 실패 시 타임스탬프(wmic 없이 Get-Date) 사용
 for /f "usebackq delims=" %%G in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "try {" ^
     "  $b = [IO.File]::ReadAllBytes('%PDB%');" ^
@@ -93,11 +155,9 @@ echo =========================================
 
 set VERSIONED_SRC=%SOURCE_SERVER%\%PROJECT%\!BUILD_GUID!
 
-REM EXE/PDB 복사
 xcopy "%EXE%" "!VERSIONED_SRC!\Bin\" /Y /I
 xcopy "%PDB%" "!VERSIONED_SRC!\Bin\" /Y /I
 
-REM 소스 복사
 xcopy "%ROOT_PATH%\%PROJECT%\*.cpp"        "!VERSIONED_SRC!\"              /Y /D /I
 xcopy "%ROOT_PATH%\%PROJECT%\*.h"          "!VERSIONED_SRC!\"              /Y /D /I
 xcopy "%ROOT_PATH%\%PROJECT%\Source\*"     "!VERSIONED_SRC!\Source\"       /E /I /Y /D
@@ -132,7 +192,6 @@ if errorlevel 1 (
 
 if exist "%TEMP_RAW_LIST%" del "%TEMP_RAW_LIST%"
 
-REM PDB에 소스 인덱스 주입
 echo [INFO] Running pdbstr...
 "%SRCSRV_TOOLS%\pdbstr.exe" -w -p:"%PDB%" -s:srcsrv -i:"%SRCINFO%"
 if errorlevel 1 (echo [ERROR] pdbstr injection failed & exit /b 1)
@@ -184,7 +243,7 @@ echo =========================================
 "%SRCSRV_TOOLS%\pdbstr.exe" -r -p:"%PDB%" -s:srcsrv
 
 echo =========================================
-echo DONE  [GUID: !BUILD_GUID!]
+echo DONE  [CONFIG: %CONFIG%] [GUID: !BUILD_GUID!]
 echo =========================================
 pause
 endlocal
