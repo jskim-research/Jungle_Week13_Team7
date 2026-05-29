@@ -17,6 +17,13 @@ class UBillboardComponent : public UPrimitiveComponent
 public:
 	GENERATED_BODY()
 
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override
+	{
+		return ECollisionPropertyExposure::Hidden;
+	}
+
+	UBillboardComponent();
+
 	void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction& ThisTickFunction) override;
 	FPrimitiveSceneProxy* CreateSceneProxy() override;
 

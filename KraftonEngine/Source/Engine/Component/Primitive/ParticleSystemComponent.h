@@ -92,6 +92,11 @@ class UParticleSystemComponent : public UPrimitiveComponent
 public:
     GENERATED_BODY()
 
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override
+	{
+		return ECollisionPropertyExposure::Hidden;
+	}
+
     UParticleSystemComponent();
     ~UParticleSystemComponent() override;
 

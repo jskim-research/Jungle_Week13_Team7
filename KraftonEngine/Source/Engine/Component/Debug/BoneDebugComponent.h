@@ -18,6 +18,12 @@ class UBoneDebugComponent : public UPrimitiveComponent
 {
 public:
 	GENERATED_BODY()
+
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override
+	{
+		return ECollisionPropertyExposure::Hidden;
+	}
+
 	UBoneDebugComponent();
 	~UBoneDebugComponent() override;
 

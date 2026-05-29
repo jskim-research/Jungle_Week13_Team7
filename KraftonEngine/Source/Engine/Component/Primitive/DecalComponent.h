@@ -18,7 +18,13 @@ class UDecalComponent : public UPrimitiveComponent
 {
 public:
 	GENERATED_BODY()
-	UDecalComponent() = default;
+
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override
+	{
+		return ECollisionPropertyExposure::Hidden;
+	}
+
+	UDecalComponent();
 	~UDecalComponent() override = default;
 
 	void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction& ThisTickFunction) override;

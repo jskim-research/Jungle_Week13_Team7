@@ -17,6 +17,17 @@ class FScene;
 class FMeshBuffer;
 class FOctree;
 
+// UE-style inspector exposure for inherited UPrimitiveComponent collision/physics fields.
+enum class ECollisionPropertyExposure : uint8
+{
+	// Shape / simulated static mesh — full collision + rigid body properties.
+	Full,
+	// Mesh components used for queries/traces only (e.g. skinned visual) — channel settings, no rigid body.
+	CollisionOnly,
+	// FX / editor visualization — hide component-level collision & physics (particle module collision is separate).
+	Hidden,
+};
+
 // Overlap/Hit 델리게이트 시그니처
 // OnComponentBeginOverlap(OverlappedComp, OtherActor, OtherComp, OtherBodyIndex, bFromSweep, SweepResult)
 DECLARE_MULTICAST_DELEGATE_SixParams(
@@ -69,6 +80,7 @@ public:
     void BeginDestroy() override;
 
 	void PostEditProperty(const char* PropertyName) override;
+	bool ShouldExposeProperty(const FProperty& Property) const override;
 
 	virtual FMeshBuffer* GetMeshBuffer() const { return nullptr; }
 	virtual FMeshDataView GetMeshDataView() const { return {}; }
@@ -252,6 +264,11 @@ protected:
 
 	// 컴포넌트가 BeginPlay 후에만 PhysicsScene::RebuildBody 호출. 이전이면 skip.
 	void NotifyPhysicsBodyDirty();
+
+	virtual ECollisionPropertyExposure GetCollisionPropertyExposure() const
+	{
+		return ECollisionPropertyExposure::CollisionOnly;
+	}
 
 	FVector LocalExtents = { 0.5f, 0.5f, 0.5f };
 	mutable FVector WorldAABBMinLocation;

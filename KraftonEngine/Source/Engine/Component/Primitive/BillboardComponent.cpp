@@ -11,6 +11,11 @@
 
 #include <cstring>
 
+UBillboardComponent::UBillboardComponent()
+{
+	SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
 FPrimitiveSceneProxy* UBillboardComponent::CreateSceneProxy()
 {
 	return new FBillboardSceneProxy(this);

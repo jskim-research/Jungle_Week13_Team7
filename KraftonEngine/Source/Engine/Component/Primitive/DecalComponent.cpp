@@ -15,6 +15,11 @@
 #include "Object/GarbageCollection.h"
 #include <algorithm>
 
+UDecalComponent::UDecalComponent()
+{
+	SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
 void UDecalComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction& ThisTickFunction)
 {
 	if (TickType == ELevelTick::LEVELTICK_All)

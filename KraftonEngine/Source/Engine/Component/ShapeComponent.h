@@ -18,6 +18,11 @@ public:
 	bool SupportsOutline() const override { return false; }
 	FPrimitiveSceneProxy* CreateSceneProxy() override;
 
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override
+	{
+		return ECollisionPropertyExposure::Full;
+	}
+
 	bool IsDrawOnlyIfSelected() const { return bDrawOnlyIfSelected; }
 	const FVector4& GetShapeColorVec4() const { return ShapeColor; }
 

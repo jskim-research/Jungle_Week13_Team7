@@ -36,6 +36,63 @@ namespace
 
 HIDE_FROM_COMPONENT_LIST(UPrimitiveComponent)
 
+namespace
+{
+	bool IsCollisionOrPhysicsProperty(const FProperty& Property)
+	{
+		const char* Name = Property.Name;
+		if (!Name)
+		{
+			return false;
+		}
+
+		return strcmp(Name, "bSimulatePhysics") == 0
+			|| strcmp(Name, "bGenerateOverlapEvents") == 0
+			|| strcmp(Name, "bEnableGravity") == 0
+			|| strcmp(Name, "Mass") == 0
+			|| strcmp(Name, "CenterOfMassOffset") == 0
+			|| strcmp(Name, "CollisionEnabled") == 0
+			|| strcmp(Name, "ObjectType") == 0
+			|| strcmp(Name, "ResponseContainer") == 0;
+	}
+
+	bool IsRigidBodyProperty(const FProperty& Property)
+	{
+		const char* Name = Property.Name;
+		if (!Name)
+		{
+			return false;
+		}
+
+		return strcmp(Name, "bSimulatePhysics") == 0
+			|| strcmp(Name, "bEnableGravity") == 0
+			|| strcmp(Name, "Mass") == 0
+			|| strcmp(Name, "CenterOfMassOffset") == 0;
+	}
+}
+
+bool UPrimitiveComponent::ShouldExposeProperty(const FProperty& Property) const
+{
+	if (!USceneComponent::ShouldExposeProperty(Property))
+	{
+		return false;
+	}
+
+	const ECollisionPropertyExposure Exposure = GetCollisionPropertyExposure();
+	if (Exposure == ECollisionPropertyExposure::Full || !IsCollisionOrPhysicsProperty(Property))
+	{
+		return true;
+	}
+
+	if (Exposure == ECollisionPropertyExposure::Hidden)
+	{
+		return false;
+	}
+
+	// CollisionOnly — channel/query settings only (no PhysX rigid body tuning on visual meshes).
+	return !IsRigidBodyProperty(Property);
+}
+
 UPrimitiveComponent::~UPrimitiveComponent()
 {
 	if (UWorld* World = GetWorldEvenIfPendingKill())

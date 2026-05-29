@@ -73,6 +73,7 @@ void UGizmoComponent::DestroyRenderState()
 #include <cmath>
 UGizmoComponent::UGizmoComponent()
 {
+	SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	MeshData = &FMeshBufferManager::Get().GetMeshData(EMeshShape::TransGizmo);
 	LocalExtents = FVector(1.5f, 1.5f, 1.5f);
 }

@@ -25,6 +25,11 @@ public:
 	UStaticMeshComponent() = default;
 	~UStaticMeshComponent() override = default;
 
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override
+	{
+		return ECollisionPropertyExposure::Full;
+	}
+
 	FMeshBuffer* GetMeshBuffer() const override;
 	FMeshDataView GetMeshDataView() const override;
 	bool LineTraceComponent(const FRay& Ray, FHitResult& OutHitResult) override;
