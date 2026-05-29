@@ -5,7 +5,7 @@
 #include "Engine/Component/Camera/CameraComponent.h"
 #include "Render/Types/LODContext.h"
 #include "Physics/NativePhysicsScene.h"
-#include "Physics/PhysXPhysicsScene.h"
+#include "Physics/PhysX/PhysXPhysicsScene.h"
 #include "Core/ProjectSettings.h"
 #include "GameFramework/GameMode/GameModeBase.h"
 #include "GameFramework/GameMode/GameStateBase.h"

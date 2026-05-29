@@ -328,6 +328,12 @@
     <Filter Include="Source\Engine\Physics">
       <UniqueIdentifier>{c1985821-1144-9a46-639a-f7de31f4a1fa}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Engine\Physics\BodySetup">
+      <UniqueIdentifier>{a4b8c2d1-3e5f-4a6b-9c0d-1e2f3a4b5c6d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Engine\Physics\PhysX">
+      <UniqueIdentifier>{b5c9d3e2-4f6a-5b7c-0d1e-2f3a4b5c6d7e}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Engine\Platform">
       <UniqueIdentifier>{813e0a37-91de-2afc-805f-1a0f801727b9}</UniqueIdentifier>
     </Filter>
@@ -1505,11 +1511,23 @@
     <ClCompile Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.cpp">
       <Filter>Source\Engine\Particles\Velocity</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\BodyInstance.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\BodySetup\BodySetup.cpp">
+      <Filter>Source\Engine\Physics\BodySetup</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\BodySetup\BodySetupCore.cpp">
+      <Filter>Source\Engine\Physics\BodySetup</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Physics\NativePhysicsScene.cpp">
       <Filter>Source\Engine\Physics</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Physics\PhysXPhysicsScene.cpp">
-      <Filter>Source\Engine\Physics</Filter>
+    <ClCompile Include="Source\Engine\Physics\PhysX\PhysXPhysicsScene.cpp">
+      <Filter>Source\Engine\Physics\PhysX</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\PhysX\PhysXShapeUtils.cpp">
+      <Filter>Source\Engine\Physics\PhysX</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Platform\CrashDump.cpp">
       <Filter>Source\Engine\Platform</Filter>
@@ -2834,14 +2852,32 @@
     <ClInclude Include="Source\Engine\Particles\Velocity\ParticleModuleVelocityBase.h">
       <Filter>Source\Engine\Particles\Velocity</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\BodyInstance.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\BodySetup\AggregateGeom.h">
+      <Filter>Source\Engine\Physics\BodySetup</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\BodySetup\BodySetup.h">
+      <Filter>Source\Engine\Physics\BodySetup</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\BodySetup\BodySetupCore.h">
+      <Filter>Source\Engine\Physics\BodySetup</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\BodySetup\BodySetupEnums.h">
+      <Filter>Source\Engine\Physics\BodySetup</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Physics\IPhysicsScene.h">
       <Filter>Source\Engine\Physics</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Physics\NativePhysicsScene.h">
       <Filter>Source\Engine\Physics</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Physics\PhysXPhysicsScene.h">
-      <Filter>Source\Engine\Physics</Filter>
+    <ClInclude Include="Source\Engine\Physics\PhysX\PhysXPhysicsScene.h">
+      <Filter>Source\Engine\Physics\PhysX</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\PhysX\PhysXShapeUtils.h">
+      <Filter>Source\Engine\Physics\PhysX</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Platform\ConsoleHelper.h">
       <Filter>Source\Engine\Platform</Filter>

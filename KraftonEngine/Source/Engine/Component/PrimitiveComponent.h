@@ -236,6 +236,10 @@ public:
 	FBodyInstance* GetBodyInstance() { return &BodyInstance; }
 	const FBodyInstance* GetBodyInstance() const { return &BodyInstance; }
 
+	// UE lifecycle names — adapter to IPhysicsScene registration in this repo.
+	void CreatePhysicsState();
+	void DestroyPhysicsState();
+
 protected:
 	void OnTransformDirty() override;
 	void EnsureWorldAABBUpdated() const;

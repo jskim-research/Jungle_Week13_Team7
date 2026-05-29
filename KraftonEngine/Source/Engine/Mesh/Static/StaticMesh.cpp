@@ -1,5 +1,5 @@
 #include "Mesh/Static/StaticMesh.h"
-#include "Physics/BodySetup.h"
+#include "Physics/BodySetup/BodySetup.h"
 #include "Object/GarbageCollection.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Mesh/MeshManager.h"
@@ -46,7 +46,39 @@ void UStaticMesh::Serialize(FArchive& Ar)
 	// 2. 머티리얼 데이터 직렬화 (필수!)
 	Ar << StaticMaterials;
 
-	// 3. 로딩 시 Section → MaterialIndex 매핑 캐싱 (매 프레임 문자열 비교 방지)
+	// 3. BodySetup simple collision (optional chunk for backward compatibility)
+	if (Ar.IsSaving())
+	{
+		uint32 ChunkMagic = BodySetupChunkMagicV2;
+		Ar << ChunkMagic;
+		SerializeBodySetupCollision(Ar);
+	}
+	else if (Ar.IsLoading())
+	{
+		if (Ar.HasRemaining())
+		{
+			uint32 ChunkMagic = 0;
+			Ar << ChunkMagic;
+			if (ChunkMagic == BodySetupChunkMagicV2)
+			{
+				SerializeBodySetupCollision(Ar);
+			}
+			else if (ChunkMagic == BodySetupChunkMagicV1)
+			{
+				SerializeBodySetupCollisionLegacy(Ar);
+			}
+			else
+			{
+				EnsureSimpleCollisionFromBounds();
+			}
+		}
+		else
+		{
+			EnsureSimpleCollisionFromBounds();
+		}
+	}
+
+	// 4. 로딩 시 Section → MaterialIndex 매핑 캐싱 (매 프레임 문자열 비교 방지)
 	if (Ar.IsLoading())
 	{
 		for (FStaticMeshSection& Section : StaticMeshAsset->Sections)
@@ -172,6 +204,51 @@ UBodySetup* UStaticMesh::CreateBodySetup()
 		BodySetup = UObjectManager::Get().CreateObject<UBodySetup>(this);
 	}
 	return BodySetup.Get();
+}
+
+void UStaticMesh::EnsureSimpleCollisionFromBounds()
+{
+	if (BodySetup && BodySetup->HasSimpleCollision())
+	{
+		return;
+	}
+
+	FStaticMesh* MeshAsset = GetStaticMeshAsset();
+	if (!MeshAsset)
+	{
+		return;
+	}
+
+	UBodySetup::AddBoxFromMeshBounds(CreateBodySetup(), *MeshAsset);
+}
+
+void UStaticMesh::SerializeBodySetupCollision(FArchive& Ar)
+{
+	if (Ar.IsLoading())
+	{
+		CreateBodySetup();
+	}
+
+	if (BodySetup)
+	{
+		BodySetup->SerializeCollision(Ar);
+	}
+}
+
+void UStaticMesh::SerializeBodySetupCollisionLegacy(FArchive& Ar)
+{
+	bool bHasCollision = false;
+	Ar << bHasCollision;
+	if (!bHasCollision)
+	{
+		return;
+	}
+
+	CreateBodySetup();
+	if (BodySetup)
+	{
+		UBodySetup::SerializeAggGeom(Ar, BodySetup->GetAggGeom());
+	}
 }
 
 void UStaticMesh::EnsureMeshTrianglePickingBVHBuilt() const

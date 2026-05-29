@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "Physics/IPhysicsScene.h"
+#include "Physics/BodyInstance.h"
 #include "Core/Types/CoreTypes.h"
 #include <vector>
 
@@ -15,6 +16,7 @@ namespace physx
 	class PxDefaultCpuDispatcher;
 	class PxMaterial;
 	class PxRigidActor;
+	class PxRigidDynamic;
 	class PxShape;
 }
 
@@ -25,10 +27,9 @@ class FPhysXSimulationCallback;
 //
 // IPhysicsScene 인터페이스를 통해 Native와 교체 가능.
 //
-// 등록 단위는 Actor — 한 액터의 여러 PrimitiveComponent는 하나의
-// PxRigidActor에 compound shape로 합쳐진다. 각 shape의 LocalPose는
-// 액터 RootComponent에 대한 상대 transform. 이로써 차체 Box + 바퀴
-// Sphere 4개처럼 다중 콜라이더가 자연스럽게 한 강체로 동작한다.
+// 두 등록 경로가 공존한다.
+// 1) Unreal-style: UStaticMeshComponent + UBodySetup → 컴포넌트당 FBodyInstance / PxRigidActor
+// 2) Legacy compound: Shape component(Box/Sphere/Capsule) → 액터당 하나의 PxRigidActor에 shape 합침
 // ============================================================
 class FPhysXPhysicsScene : public IPhysicsScene
 {
@@ -84,10 +85,19 @@ private:
 	};
 	std::vector<FBodyMapping> BodyMappings;
 
+	// Unreal-style per-component bodies (UStaticMeshComponent + UBodySetup path).
+	TArray<UPrimitiveComponent*> BodyInstanceComponents;
+
 	bool bSharedPhysXAcquired = false;
 	bool bShutdownComplete = true;
 
 	// 내부 헬퍼
+	struct FBodyInstanceInitParams MakeBodyInstanceInitParams() const;
+	void ReleaseBodyInstances();
+	void PruneInvalidBodyInstanceComponents();
+	bool ShouldIgnoreActorForQuery(const physx::PxRigidActor* Actor, const AActor* IgnoreActor) const;
+	physx::PxRigidDynamic* GetDynamicActorForComponent(UPrimitiveComponent* Comp) const;
+	UPrimitiveComponent* GetMassReferenceComponent(UPrimitiveComponent* Comp) const;
 	void ClearPhysXActorUserData(physx::PxRigidActor* Actor) const;
 	void ReleaseBodyMappings();
 	FBodyMapping* FindMappingByActor(AActor* OwnerActor);

@@ -28,6 +28,7 @@ public:
 	virtual void AddObjectReferenceFixup(uint32 /*SourceUUID*/, std::function<void(UObject*)> /*Fixup*/) {}
 	virtual bool UsesCustomObjectReferenceSerialization() const { return false; }
 	virtual void SerializeObjectReference(UObject*& Object);
+	virtual bool HasRemaining() { return false; }
 
 	virtual void BeginObject() {}
 	virtual void EndObject() {}

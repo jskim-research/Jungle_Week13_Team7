@@ -1,11 +1,12 @@
 #pragma once
 
-#include "Object/Object.h"
 #include "Math/Vector.h"
 #include "Math/Rotator.h"
+#include "Core/Types/CoreTypes.h"
 
-#include "Source/Engine/Physics/BodySetup.generated.h"
+#include "Source/Engine/Physics/BodySetup/AggregateGeom.generated.h"
 
+// UE: Engine/Classes/PhysicsEngine/AggregateGeom.h (simple collision subset)
 USTRUCT()
 struct FKBoxElem
 {
@@ -62,30 +63,17 @@ struct FKAggregateGeom
 {
 	GENERATED_BODY()
 
-	TArray<FKBoxElem> BoxElems;
-
+	UPROPERTY(Save, Category="Collision")
 	TArray<FKSphereElem> SphereElems;
 
+	UPROPERTY(Save, Category="Collision")
+	TArray<FKBoxElem> BoxElems;
+
+	UPROPERTY(Save, Category="Collision")
 	TArray<FKSphylElem> SphylElems;
 
 	bool IsEmpty() const
 	{
 		return BoxElems.empty() && SphereElems.empty() && SphylElems.empty();
 	}
-};
-
-UCLASS()
-class UBodySetup : public UObject
-{
-public:
-	GENERATED_BODY()
-
-	FKAggregateGeom& GetAggGeom() { return AggGeom; }
-	const FKAggregateGeom& GetAggGeom() const { return AggGeom; }
-
-	bool HasSimpleCollision() const { return !AggGeom.IsEmpty(); }
-
-private:
-	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Aggregate Geometry", Type=Struct)
-	FKAggregateGeom AggGeom;
 };
