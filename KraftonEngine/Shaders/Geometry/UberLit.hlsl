@@ -181,24 +181,16 @@ UberPS_Output PS(UberVS_Output input)
         : texColor * input.color; // 텍스처 있음: 텍스처 색상 × SectionColor
 
 #if defined(WEIGHT_BONE_HEATMAP) && WEIGHT_BONE_HEATMAP
-float Heat = saturate(input.selectedBoneWeight);
+    float Heat = saturate(input.selectedBoneWeight);
+    float Hue = 0.78f * (1.0f - Heat);
+    float4 K = float4(1.0f, 2.0f / 3.0f, 1.0f / 3.0f, 3.0f);
+    float3 P = abs(frac(Hue.xxx + K.xyz) * 6.0f - K.www);
+    float3 HeatColor = saturate(P - K.xxx);
 
-float t0 = smoothstep(0.0f, 0.05f, Heat);   // 마젠타 ->  파랑
-float t1 = smoothstep(0.05f, 0.2f, Heat);   // 파랑   ->  시안
-float t2 = smoothstep(0.2f, 0.35f, Heat);   // 시안   ->  초록
-float t3 = smoothstep(0.35f, 0.5f, Heat);   // 초록   ->  노랑
-float t4 = smoothstep(0.5f, 1.0f, Heat);    // 노랑   ->  빨강
-
-float3 HeatColor = lerp(float3(1.0f, 0.0f, 1.0f),  float3(0.0f, 0.0f, 1.0f),  t0);
-HeatColor = lerp(HeatColor, float3(0.0f, 1.0f, 1.0f),  t1);
-HeatColor = lerp(HeatColor, float3(0.0f, 0.9f, 0.15f), t2);
-HeatColor = lerp(HeatColor, float3(1.0f, 1.0f, 0.0f),  t3);
-HeatColor = lerp(HeatColor, float3(1.0f, 0.05f, 0.0f), t4);
-
-output.Color = float4(HeatColor, 1.f);
-output.Normal = float4(normalize(input.normal), 1.0f);
-output.Culling = float4(0, 0, 0, 0);
-return output;
+    output.Color = float4(HeatColor, 1.f);
+    output.Normal = float4(normalize(input.normal), 1.0f);
+    output.Culling = float4(0, 0, 0, 0);
+    return output;
 #endif
 
     float3 N = normalize(input.normal);
