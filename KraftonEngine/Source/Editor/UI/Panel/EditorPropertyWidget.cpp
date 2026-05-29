@@ -631,7 +631,8 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 
 		char NameLabel[256];
 		snprintf(NameLabel, sizeof(NameLabel), "Name: %s (+%d)", PrimaryName.c_str(), SelectionCount - 1);
-		if (ImGui::Selectable(NameLabel, bActorSelected))
+		const ImVec2 NameLabelSize = ImGui::CalcTextSize(NameLabel);
+		if (ImGui::Selectable(NameLabel, bActorSelected, ImGuiSelectableFlags_None, NameLabelSize))
 		{
 			bActorSelected = true;
 			SelectedComponent = nullptr;
@@ -663,6 +664,11 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 			ImGui::End();
 			return;
 		}
+		ImGui::SameLine();
+		if (ImGui::Button("Add"))
+		{
+			bOpenAddComponentPopup = true;
+		}
 	}
 	else
 	{
@@ -670,15 +676,20 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 		if (PrimaryName.empty()) PrimaryName = PrimaryActor->GetClass()->GetName();
 
 		ImGui::SetWindowFontScale(1.5f);
-		const float ActorRowWidth = ImGui::GetContentRegionAvail().x;
-		if (ImGui::Selectable(PrimaryName.c_str(), bActorSelected, ImGuiSelectableFlags_None, ImVec2(ActorRowWidth, 0.0f)))
+		// size 미지정 Selectable 은 행 전체를 덮어 SameLine Add 버튼 클릭을 막는다.
+		const ImVec2 ActorLabelSize = ImGui::CalcTextSize(PrimaryName.c_str());
+		if (ImGui::Selectable(PrimaryName.c_str(), bActorSelected, ImGuiSelectableFlags_None, ActorLabelSize))
 		{
 			bActorSelected = true;
 			SelectedComponent = nullptr;
 			Selection.Select(PrimaryActor);
 		}
 		ImGui::SetWindowFontScale(1.0f);
-		//ImGui::SameLine();
+		ImGui::SameLine();
+		if (ImGui::Button("Add"))
+		{
+			bOpenAddComponentPopup = true;
+		}
 
 		//ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70.0f);
 		//ImGui::InputText("##Rename", RenameBuffer, sizeof(RenameBuffer));
@@ -1152,11 +1163,11 @@ void FEditorPropertyWidget::RenderComponentTree(AActor* Actor)
 			return strcmp(A->GetName(), B->GetName()) < 0;
 		});
 
-	ImGui::SameLine();
-
-	if (ImGui::Button("Add"))
+	// OpenPopup 은 BeginPopup 과 동일 ID 스코프에서 호출해야 한다 (버튼 쪽에서 직접 열면 매칭 실패).
+	if (bOpenAddComponentPopup)
 	{
 		ImGui::OpenPopup("##AddComponentPopup");
+		bOpenAddComponentPopup = false;
 	}
 
 	if (ImGui::BeginPopup("##AddComponentPopup"))
