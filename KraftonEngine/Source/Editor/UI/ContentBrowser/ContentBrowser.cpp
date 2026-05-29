@@ -526,17 +526,12 @@ void FEditorContentBrowserWidget::DrawContents()
 	const float ContentWidth = ImGui::GetContentRegionAvail().x;
 	const float ItemWidth = BrowserContext.ContentSize.x;
 	const float ItemHeight = BrowserContext.ContentSize.y;
+	constexpr float ItemGap = 12.0f;
 
-	int ColumnCount = static_cast<int>(ContentWidth / ItemWidth);
+	int ColumnCount = static_cast<int>((ContentWidth + ItemGap) / (ItemWidth + ItemGap));
 	if (ColumnCount < 1)
 	{
 		ColumnCount = 1;
-	}
-
-	float GapSize = 0.0f;
-	if (ColumnCount > 1)
-	{
-		GapSize = (ContentWidth - ItemWidth * ColumnCount) / (ColumnCount);
 	}
 
 	ImVec2 StartPos = ImGui::GetCursorPos();
@@ -546,15 +541,18 @@ void FEditorContentBrowserWidget::DrawContents()
 		int Column = i % ColumnCount;
 		int Row = i / ColumnCount;
 
-		float X = StartPos.x + Column * (ItemWidth + GapSize);
-		float Y = StartPos.y + Row * (ItemHeight + GapSize * 2.f);
+		float X = StartPos.x + Column * (ItemWidth + ItemGap);
+		float Y = StartPos.y + Row * (ItemHeight + ItemGap);
 
 		ImGui::SetCursorPos(ImVec2(X, Y));
 		CachedBrowserElements[i]->Render(BrowserContext);
 	}
 
 	int RowCount = (ElementCount + ColumnCount - 1) / ColumnCount;
-	ImGui::SetCursorPos(ImVec2(StartPos.x, StartPos.y + RowCount * ItemHeight));
+	const float ContentHeight = RowCount > 0
+		? RowCount * ItemHeight + (RowCount - 1) * ItemGap
+		: 0.0f;
+	ImGui::SetCursorPos(ImVec2(StartPos.x, StartPos.y + ContentHeight));
 
 	if (ImGui::BeginPopupContextWindow("##ContentBrowserBackgroundContext", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
