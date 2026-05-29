@@ -1,4 +1,5 @@
 #include "Mesh/Static/StaticMesh.h"
+#include "Physics/BodySetup.h"
 #include "Object/GarbageCollection.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Mesh/MeshManager.h"
@@ -28,6 +29,7 @@ void UStaticMesh::AddReferencedObjects(FReferenceCollector& Collector)
 	{
 		Collector.AddReferencedObject(MaterialSlot.MaterialInterface);
 	}
+	Collector.AddReferencedObject(BodySetup, "UStaticMesh.BodySetup");
 }
 
 void UStaticMesh::Serialize(FArchive& Ar)
@@ -161,6 +163,15 @@ void UStaticMesh::SetStaticMaterials(TArray<FStaticMaterial>&& InMaterials)
 const TArray<FStaticMaterial>& UStaticMesh::GetStaticMaterials() const
 {
 	return StaticMaterials;
+}
+
+UBodySetup* UStaticMesh::CreateBodySetup()
+{
+	if (!BodySetup)
+	{
+		BodySetup = UObjectManager::Get().CreateObject<UBodySetup>(this);
+	}
+	return BodySetup.Get();
 }
 
 void UStaticMesh::EnsureMeshTrianglePickingBVHBuilt() const

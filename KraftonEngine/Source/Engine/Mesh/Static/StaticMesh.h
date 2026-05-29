@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Object/Object.h"
+#include "Object/Ptr/ObjectPtr.h"
 #include "Collision/BVH/MeshTriangleBVH.h"
 #include "Mesh/Static/StaticMeshAsset.h"
 #include "Serialization/Archive.h"
@@ -9,6 +10,7 @@
 #include <memory>
 
 struct ID3D11Device;
+class UBodySetup;
 
 // LOD 단계별 GPU 리소스
 struct FLODMeshData
@@ -38,6 +40,8 @@ public:
 	FStaticMesh* GetStaticMeshAsset() const;
 	void SetStaticMaterials(TArray<FStaticMaterial>&& InMaterials);
 	const TArray<FStaticMaterial>& GetStaticMaterials() const;
+	UBodySetup* GetBodySetup() const { return BodySetup.Get(); }
+	UBodySetup* CreateBodySetup();
 
 	void InitResources(ID3D11Device* InDevice);
 
@@ -54,6 +58,8 @@ private:
 	FString AssetPathFileName = "None";
 
 	FStaticMesh* StaticMeshAsset = nullptr;
+	UPROPERTY(Transient, Category="Physics")
+	TObjectPtr<UBodySetup> BodySetup = nullptr;
 	TArray<FStaticMaterial> StaticMaterials; // 슬롯 이름과 머티리얼 인터페이스를 묶어서 저장하는 배열
 	mutable FMeshTriangleBVH MeshTrianglePickingBVH; // 빠른 picking을 위해 메시 내부에 트리 형태로 만들어지는 자료구조
 

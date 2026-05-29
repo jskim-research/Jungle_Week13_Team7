@@ -1,4 +1,4 @@
-#include "Engine/Platform/WindowsApplication.h"
+﻿#include "Engine/Platform/WindowsApplication.h"
 #include "Engine/Platform/resource.h"
 
 #include <dwmapi.h>
@@ -129,7 +129,7 @@ LRESULT FWindowsApplication::WndProc(HWND hWnd, unsigned int Msg, WPARAM wParam,
 
 	return DefWindowProc(hWnd, Msg, wParam, lParam);
 }
-
+  
 bool FWindowsApplication::Init(HINSTANCE InHInstance)
 {
 	HInstance = InHInstance;
