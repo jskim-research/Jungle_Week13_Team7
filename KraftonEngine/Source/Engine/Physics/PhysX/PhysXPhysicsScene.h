@@ -52,6 +52,8 @@ public:
 	FVector GetAngularVelocity(UPrimitiveComponent* Comp) const override;
 	void SetAngularVelocity(UPrimitiveComponent* Comp, const FVector& Vel) override;
 
+	void SetEnableGravity(UPrimitiveComponent* Comp, bool bEnable) override;
+
 	void SetMass(UPrimitiveComponent* Comp, float Mass) override;
 	float GetMass(UPrimitiveComponent* Comp) const override;
 	void SetCenterOfMass(UPrimitiveComponent* Comp, const FVector& LocalOffset) override;

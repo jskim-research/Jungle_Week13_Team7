@@ -111,6 +111,48 @@ namespace
 		return BodySetup && BodySetup->HasSimpleCollision();
 	}
 
+	// Compound actor는 PxRigidActor 하나를 공유한다. Root만 보면 자식 BoxComponent의
+	// Simulate Physics가 무시되어 Static actor로 남는 버그를 막기 위해 액터 전체를 검사한다.
+	bool ActorShouldSimulatePhysics(AActor* OwnerActor, UPrimitiveComponent* Comp)
+	{
+		if (!IsValid(OwnerActor))
+		{
+			return IsValid(Comp) && Comp->GetSimulatePhysics();
+		}
+
+		if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent()))
+		{
+			if (RootPrim->GetSimulatePhysics())
+			{
+				return true;
+			}
+		}
+
+		if (IsValid(Comp) && Comp->GetSimulatePhysics())
+		{
+			return true;
+		}
+
+		for (UActorComponent* Owned : OwnerActor->GetComponents())
+		{
+			UPrimitiveComponent* Prim = Cast<UPrimitiveComponent>(Owned);
+			if (!IsValid(Prim))
+			{
+				continue;
+			}
+			if (!Prim->IsCollisionEnabled())
+			{
+				continue;
+			}
+			if (Prim->GetSimulatePhysics())
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	bool ShouldIgnoreActorForQuery(
 		const PxRigidActor* Actor,
 		const AActor* IgnoreActor,
@@ -442,6 +484,20 @@ static void ApplyRootMassAndCOM(PxRigidDynamic* Dyn, UPrimitiveComponent* Root)
 	const float MassKg = (Root->GetMass() > 0.0f) ? Root->GetMass() : 1.0f;
 	PxRigidBodyExt::setMassAndUpdateInertia(*Dyn, MassKg);
 	Dyn->setCMassLocalPose(PxTransform(ToPxVec3(Root->GetCenterOfMass())));
+}
+
+static void ApplyGravityFlag(PxRigidDynamic* Dyn, UPrimitiveComponent* Root)
+{
+	if (!Dyn || !IsValid(Root)) return;
+	Dyn->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !Root->GetEnableGravity());
+}
+
+static void ApplyDynamicBodySettings(PxRigidDynamic* Dyn, UPrimitiveComponent* Root)
+{
+	if (!Dyn || !IsValid(Root)) return;
+	ApplyRootMassAndCOM(Dyn, Root);
+	ApplyGravityFlag(Dyn, Root);
+	Dyn->wakeUp();
 }
 
 // ============================================================
@@ -799,7 +855,7 @@ void FPhysXPhysicsScene::RegisterComponent(UPrimitiveComponent* Comp)
 		UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent());
 		if (!IsValid(RootPrim)) RootPrim = Comp;
 
-		const bool bDynamic = RootPrim->GetSimulatePhysics();
+		const bool bDynamic = ActorShouldSimulatePhysics(OwnerActor, Comp);
 		PxTransform BodyXf = GetPxTransform(RootPrim);
 
 		PxRigidActor* Body = bDynamic
@@ -823,12 +879,18 @@ void FPhysXPhysicsScene::RegisterComponent(UPrimitiveComponent* Comp)
 	if (!Shape) return;
 	Mapping->Components.push_back(Comp);
 
-	// Dynamic이면 RootComp의 Mass / CenterOfMass로 갱신 (shape 추가될 때마다 inertia 재계산).
+	if (ActorShouldSimulatePhysics(OwnerActor, Comp) && !Mapping->Actor->is<PxRigidDynamic>())
+	{
+		RebuildBody(Comp);
+		return;
+	}
+
+	// Dynamic이면 RootComp의 Mass / CenterOfMass / Gravity로 갱신 (shape 추가될 때마다 inertia 재계산).
 	if (Mapping->Actor && IsValid(Mapping->RootComp))
 	{
 		if (PxRigidDynamic* Dyn = Mapping->Actor->is<PxRigidDynamic>())
 		{
-			ApplyRootMassAndCOM(Dyn, Mapping->RootComp);
+			ApplyDynamicBodySettings(Dyn, Mapping->RootComp);
 		}
 	}
 }
@@ -882,7 +944,7 @@ void FPhysXPhysicsScene::UnregisterComponent(UPrimitiveComponent* Comp)
 	{
 		if (PxRigidDynamic* Dyn = Mapping->Actor->is<PxRigidDynamic>())
 		{
-			ApplyRootMassAndCOM(Dyn, Mapping->RootComp);
+			ApplyDynamicBodySettings(Dyn, Mapping->RootComp);
 		}
 	}
 }
@@ -1046,7 +1108,6 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 		PxRigidDynamic* Dynamic = Mapping.Actor->is<PxRigidDynamic>();
 		if (!Dynamic) continue;
 		if (Dynamic->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC) continue;
-		if (Dynamic->isSleeping()) continue;
 
 		PxTransform Pose = Dynamic->getGlobalPose();
 		FVector NewPos = ToFVector(Pose.p);
@@ -1075,10 +1136,6 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 			continue;
 		}
 		if (Dynamic->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)
-		{
-			continue;
-		}
-		if (Dynamic->isSleeping())
 		{
 			continue;
 		}
@@ -1387,6 +1444,25 @@ void FPhysXPhysicsScene::SetAngularVelocity(UPrimitiveComponent* Comp, const FVe
 	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 	Dyn->setAngularVelocity(ToPxVec3(Vel));
+}
+
+// ============================================================
+// Gravity
+// ============================================================
+
+void FPhysXPhysicsScene::SetEnableGravity(UPrimitiveComponent* Comp, bool /*bEnable*/)
+{
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
+	if (!Dyn) return;
+
+	UPrimitiveComponent* GravityRef = GetMassReferenceComponent(Comp);
+	if (!IsValid(GravityRef))
+	{
+		GravityRef = Comp;
+	}
+
+	Dyn->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !GravityRef->GetEnableGravity());
+	Dyn->wakeUp();
 }
 
 // ============================================================
