@@ -1,5 +1,6 @@
 #include "Editor/UI/Panel/EditorPropertyWidget.h"
 #include "Editor/EditorEngine.h"
+#include "Editor/Selection/SelectionManager.h"
 #include "Editor/Settings/EditorSettings.h"
 
 #include "ImGui/imgui.h"
@@ -705,6 +706,89 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 	ImGui::End();
 }
 
+bool FEditorPropertyWidget::CanDeleteSelectedComponent(AActor* Actor, UActorComponent* Comp) const
+{
+	if (!IsValid(Actor) || !IsValid(Comp) || bActorSelected)
+	{
+		return false;
+	}
+
+	if (Comp == Actor->GetRootComponent())
+	{
+		return false;
+	}
+
+	return Comp->GetOwner() == Actor;
+}
+
+void FEditorPropertyWidget::DeleteSelectedComponent(AActor* Actor, UActorComponent* Comp)
+{
+	if (!CanDeleteSelectedComponent(Actor, Comp))
+	{
+		return;
+	}
+
+	Actor->RemoveComponent(Comp);
+	SelectedComponent = nullptr;
+
+	if (EditorEngine)
+	{
+		EditorEngine->GetSelectionManager().SelectComponent(nullptr);
+		if (EditorEngine->GetGizmo())
+		{
+			EditorEngine->GetGizmo()->UpdateGizmoTransform();
+		}
+		EditorEngine->InvalidateOcclusionResults();
+	}
+}
+
+bool FEditorPropertyWidget::TryDeleteSelectedComponent()
+{
+	if (!EditorEngine)
+	{
+		return false;
+	}
+
+	AActor* PrimaryActor = EditorEngine->GetSelectionManager().GetPrimarySelection();
+	if (!CanDeleteSelectedComponent(PrimaryActor, SelectedComponent))
+	{
+		return false;
+	}
+
+	DeleteSelectedComponent(PrimaryActor, SelectedComponent);
+	return true;
+}
+
+void FEditorPropertyWidget::DrawComponentDeleteContextMenu(AActor* Actor, UActorComponent* Comp)
+{
+	if (!ImGui::BeginPopupContextItem())
+	{
+		return;
+	}
+
+	const bool bCanDelete = CanDeleteSelectedComponent(Actor, Comp);
+	if (!bCanDelete)
+	{
+		ImGui::BeginDisabled();
+	}
+
+	if (ImGui::MenuItem("Delete", "Del"))
+	{
+		SelectedComponent = Comp;
+		bActorSelected = false;
+		EditorEngine->GetSelectionManager().SelectComponent(
+			Cast<USceneComponent>(Comp));
+		DeleteSelectedComponent(Actor, Comp);
+	}
+
+	if (!bCanDelete)
+	{
+		ImGui::EndDisabled();
+	}
+
+	ImGui::EndPopup();
+}
+
 void FEditorPropertyWidget::RenameActor(AActor* PrimaryActor)
 {
 	FString NewName(RenameBuffer);
@@ -1104,12 +1188,24 @@ void FEditorPropertyWidget::RenderComponentTree(AActor* Actor)
 			}
 
 			ImGui::TreeNodeEx(Comp, Flags, "%s", Label);
-		
+
 			if (ImGui::IsItemClicked())
 			{
 				SelectedComponent = Comp;
 				bActorSelected = false;
 			}
+
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+			{
+				SelectedComponent = Comp;
+				bActorSelected = false;
+				if (USceneComponent* SceneComp = Cast<USceneComponent>(Comp))
+				{
+					EditorEngine->GetSelectionManager().SelectComponent(SceneComp);
+				}
+			}
+
+			DrawComponentDeleteContextMenu(Actor, Comp);
 		}
 	}
 
@@ -1186,6 +1282,16 @@ void FEditorPropertyWidget::RenderSceneComponentNode(USceneComponent* Comp)
 		EditorEngine->GetSelectionManager().SelectComponent(Comp);
 	}
 
+	if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+	{
+		SelectedComponent = Comp;
+		bActorSelected = false;
+		EditorEngine->GetSelectionManager().SelectComponent(Comp);
+	}
+
+	AActor* OwnerActor = Comp->GetOwner();
+	DrawComponentDeleteContextMenu(OwnerActor, Comp);
+
 	// 컴포넌트 트리에서 간단하게 드래그 앤 드랍으로 부모-자식 관계 변경 가능하도록 지원
 	if (ImGui::BeginDragDropSource())
 	{
@@ -1240,21 +1346,6 @@ void FEditorPropertyWidget::RenderSceneComponentNode(USceneComponent* Comp)
 void FEditorPropertyWidget::RenderComponentProperties(AActor* Actor, const TArray<AActor*>& SelectedActors)
 {
 	if (!IsValid(Actor) || !IsValid(SelectedComponent)) return;
-
-	if (SelectedComponent != Actor->GetRootComponent())
-	{
-		if (ImGui::Button("Remove"))
-		{
-			if (SelectedComponent != nullptr)
-			{
-				Actor->RemoveComponent(SelectedComponent);
-				SelectedComponent = nullptr;
-				return;
-			}
-		}
-	}
-
-	ImGui::Separator();
 
 	// reflected property 기반 자동 위젯 렌더링
 	TArray<FPropertyValue> Props;

@@ -319,6 +319,11 @@ void FSelectionManager::SelectComponent(USceneComponent* Component)
 
     if (!IsValid(Component))
     {
+        if (SelectedComponent != nullptr)
+        {
+            SelectedComponent = nullptr;
+            SyncGizmo();
+        }
         return;
     }
 

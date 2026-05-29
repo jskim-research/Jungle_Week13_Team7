@@ -25,6 +25,12 @@ class UGizmoComponent : public UPrimitiveComponent
 {
 public:
 	GENERATED_BODY()
+
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override
+	{
+		return ECollisionPropertyExposure::Hidden;
+	}
+
 	UGizmoComponent();
 
 	bool LineTraceComponent(const FRay& Ray, FHitResult& OutHitResult) override;

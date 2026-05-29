@@ -17,6 +17,7 @@
 #include "Engine/Input/InputSystem.h"
 
 #include "Editor/Slate/SlateApplication.h"
+#include "Editor/Selection/SelectionManager.h"
 #include "Editor/UI/Util/ImGuiSetting.h"
 #include "Editor/UI/Util/NotificationToast.h"
 
@@ -874,6 +875,7 @@ void FEditorMainPanel::RenderFooterOverlay(float DeltaTime)
 void FEditorMainPanel::Update()
 {
 	HandleGlobalShortcuts();
+	HandleEditorDeleteShortcut();
 	ProcessPendingDebugActions();
 
 	ImGuiIO& IO = ImGui::GetIO();
@@ -1010,6 +1012,44 @@ void FEditorMainPanel::HandleGlobalShortcuts()
 	else if (!bShift && Input.GetKeyDown(VK_SPACE))
 	{
 		ToggleContentBrowserDrawer();
+	}
+}
+
+void FEditorMainPanel::HandleEditorDeleteShortcut()
+{
+	if (!EditorEngine || EditorEngine->IsPIEPossessedMode())
+	{
+		return;
+	}
+
+	ImGuiIO& IO = ImGui::GetIO();
+	if (IO.WantTextInput)
+	{
+		return;
+	}
+
+	if (!InputSystem::Get().GetKeyDown(VK_DELETE))
+	{
+		return;
+	}
+
+	// 레벨 뷰포트가 키보드 포커스일 때는 FEditorViewportClient::TickEditorShortcuts 가 처리한다.
+	if (FSlateApplication::Get().GetFocusedViewportClient() != nullptr)
+	{
+		return;
+	}
+
+	FSelectionManager& Selection = EditorEngine->GetSelectionManager();
+
+	if (PropertyWidget.TryDeleteSelectedComponent())
+	{
+		return;
+	}
+
+	if (!Selection.GetSelectedActors().empty())
+	{
+		Selection.DeleteSelectedActors();
+		EditorEngine->InvalidateOcclusionResults();
 	}
 }
 

@@ -7,6 +7,7 @@
 
 UBoneDebugComponent::UBoneDebugComponent()
 {
+	SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 UBoneDebugComponent::~UBoneDebugComponent()

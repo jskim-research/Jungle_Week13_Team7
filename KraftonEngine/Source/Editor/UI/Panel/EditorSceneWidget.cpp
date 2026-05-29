@@ -87,6 +87,39 @@ void FEditorSceneWidget::RenderActorOutliner()
 					Selection.Select(Actor);
 				}
 			}
+
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Right)
+				&& !ImGui::GetIO().KeyCtrl
+				&& !ImGui::GetIO().KeyShift)
+			{
+				Selection.Select(Actor);
+			}
+
+			if (ImGui::BeginPopupContextItem())
+			{
+				const bool bCanDelete = !Selection.IsEmpty();
+				if (!bCanDelete)
+				{
+					ImGui::BeginDisabled();
+				}
+
+				if (ImGui::MenuItem("Delete", "Del"))
+				{
+					Selection.DeleteSelectedActors();
+					if (EditorEngine)
+					{
+						EditorEngine->InvalidateOcclusionResults();
+					}
+				}
+
+				if (!bCanDelete)
+				{
+					ImGui::EndDisabled();
+				}
+
+				ImGui::EndPopup();
+			}
+
 			ImGui::PopID();
 		}
 	}
