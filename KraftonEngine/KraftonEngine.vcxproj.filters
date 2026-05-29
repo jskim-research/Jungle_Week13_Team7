@@ -85,6 +85,9 @@
     <Filter Include="Source\Editor\UI\Asset\Particle">
       <UniqueIdentifier>{ebf11781-61db-1727-e031-70fd890518c6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Editor\UI\Asset\Physics">
+      <UniqueIdentifier>{58e05f96-203f-4f23-9501-991afae9471c}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Editor\UI\ContentBrowser">
       <UniqueIdentifier>{09a2ea7f-e891-b580-bef0-471bcd9b5d4b}</UniqueIdentifier>
     </Filter>
@@ -781,6 +784,9 @@
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\Asset\Particle\ParticleSystemEditorWidget.cpp">
       <Filter>Source\Editor\UI\Asset\Particle</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Asset\Physics\PhysicsAssetEditorWidget.cpp">
+      <Filter>Source\Editor\UI\Asset\Physics</Filter>
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\ContentBrowser\ContentBrowser.cpp">
       <Filter>Source\Editor\UI\ContentBrowser</Filter>
@@ -1927,6 +1933,9 @@
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Asset\Particle\ParticleSystemEditorWidget.h">
       <Filter>Source\Editor\UI\Asset\Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Asset\Physics\PhysicsAssetEditorWidget.h">
+      <Filter>Source\Editor\UI\Asset\Physics</Filter>
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\ContentBrowser\ContentBrowser.h">
       <Filter>Source\Editor\UI\ContentBrowser</Filter>
