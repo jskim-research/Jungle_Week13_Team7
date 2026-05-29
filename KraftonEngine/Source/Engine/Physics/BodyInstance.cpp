@@ -263,7 +263,7 @@ void FBodyInstance::CreateShapesFromBodySetup(const FBodyInstanceInitParams& Ini
 		}
 
 		PxTransform LocalPose = GetElemTransform(Elem.Center, Elem.Rotation, Scale);
-		LocalPose.q = LocalPose.q * PxQuat(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f));
+		LocalPose.q = LocalPose.q * PhysXShapeUtils::GetCapsuleAxisCorrectionQuat();
 		Shape->setLocalPose(LocalPose);
 		PhysXShapeUtils::FinalizeShape(Shape, OwnerComponent);
 	}
@@ -299,7 +299,7 @@ void FBodyInstance::CreateShapesFromComponent(const FBodyInstanceInitParams& Ini
 		const float Radius = (std::max)(0.001f, Capsule->GetScaledCapsuleRadius());
 		const float HalfHeight = (std::max)(0.001f, Capsule->GetScaledCapsuleHalfHeight());
 		Geom = PxCapsuleGeometry(Radius, HalfHeight - Radius);
-		ShapeAxisRot = PxQuat(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f));
+		ShapeAxisRot = PhysXShapeUtils::GetCapsuleAxisCorrectionQuat();
 		bHasGeom = true;
 	}
 

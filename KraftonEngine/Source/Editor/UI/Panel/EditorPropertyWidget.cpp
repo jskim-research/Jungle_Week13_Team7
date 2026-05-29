@@ -585,6 +585,19 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 		LastSelectedActor = PrimaryActor;
 		bActorSelected = true;
 		bShowDuplicateWarning = false;
+		bPendingDetailsScrollRestore = false;
+	}
+
+	const bool bDetailsSelectionChanged =
+		PrimaryActor != LastDetailsScrollActor ||
+		SelectedComponent != LastDetailsScrollComponent ||
+		bActorSelected != LastDetailsScrollActorMode;
+	if (bDetailsSelectionChanged)
+	{
+		bPendingDetailsScrollRestore = false;
+		LastDetailsScrollActor = PrimaryActor;
+		LastDetailsScrollComponent = SelectedComponent;
+		LastDetailsScrollActorMode = bActorSelected;
 	}
 
 	const TArray<AActor*>& SelectedActors = Selection.GetSelectedActors();
@@ -667,12 +680,25 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 	RenderComponentTree(PrimaryActor);
 
 	// ========== 스크롤 영역: Details ==========
-	float ScrollHeight = ImGui::GetContentRegionAvail().y;
-	if (ScrollHeight < 50.0f) ScrollHeight = 50.0f;
-
-	ImGui::BeginChild("##Details", ImVec2(0, ScrollHeight), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+	// ImVec2(0,0) = 남은 높이 자동 사용. 매 frame GetContentRegionAvail 로 고정 높이를 주면
+	// 스크롤바 표시 여부에 따라 1px 단위 레이아웃이 흔들릴 수 있다.
+	ImGui::BeginChild("##Details", ImVec2(0.0f, 0.0f), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
 	{
+		if (bPendingDetailsScrollRestore)
+		{
+			ImGui::SetScrollY(CachedDetailsScrollY);
+			bPendingDetailsScrollRestore = false;
+		}
+
+		const float ScrollYAtChildStart = ImGui::GetScrollY();
+		bDeferDetailsScrollRestore = false;
 		RenderDetails(PrimaryActor, SelectedActors);
+
+		if (bDeferDetailsScrollRestore)
+		{
+			CachedDetailsScrollY = ScrollYAtChildStart;
+			bPendingDetailsScrollRestore = true;
+		}
 	}
 	ImGui::EndChild();
 
@@ -1261,13 +1287,19 @@ void FEditorPropertyWidget::RenderComponentProperties(AActor* Actor, const TArra
 	// 변경이 발생하면 즉시 외부 루프까지 빠져나와 다음 프레임에 Props를 새로 수집해 렌더한다.
 	bool bPropsInvalidated = false;
 
-	for (const auto& Cat : CategoryOrder)
+	for (int32 CatIndex = 0; CatIndex < static_cast<int32>(CategoryOrder.size()); ++CatIndex)
 	{
 		if (bPropsInvalidated) break;
 
+		const std::string& Cat = CategoryOrder[CatIndex];
+		ImGui::PushID(CatIndex);
+
 		// Root 컴포넌트는 Transform 카테고리 스킵
 		if (bIsRoot && Cat == "Transform")
+		{
+			ImGui::PopID();
 			continue;
+		}
 
 		// 카테고리 헤더 (빈 문자열이면 헤더 없이 렌더)
 		bool bInTreeNode = false;
@@ -1283,7 +1315,11 @@ void FEditorPropertyWidget::RenderComponentProperties(AActor* Actor, const TArra
 			ImGui::PopStyleVar();
 			ImGui::PopStyleColor(3);
 
-			if (!bOpen) continue;
+			if (!bOpen)
+			{
+				ImGui::PopID();
+				continue;
+			}
 		}
 
 		if (ImGui::BeginTable("##PropertyTable", 2,
@@ -1301,7 +1337,8 @@ void FEditorPropertyWidget::RenderComponentProperties(AActor* Actor, const TArra
 					continue;
 
 				ImGui::TableNextRow();
-				ImGui::PushID(i);
+				const char* PropIdName = Props[i].GetName();
+				ImGui::PushID(PropIdName ? PropIdName : "");
 
 				ImGui::TableSetColumnIndex(0);
 				
@@ -1326,8 +1363,10 @@ void FEditorPropertyWidget::RenderComponentProperties(AActor* Actor, const TArra
 					// 참조하는 케이스 방지. 예: SkeletalMeshComponent 의 AnimationMode/AnimInstanceClass
 					// 변경 시 InitializeAnimation 이 AnimInstance 를 swap 하므로, forward 됐던
 					// AnimInstance 의 prop 들의 ContainerPtr 가 destroyed 인스턴스를 가리키게 된다.
-					// 사용자는 frame 당 1 prop 변경이 일반적이라 UX 영향 거의 없음.
+					// partial render 로 Details child 높이가 줄면 scroll 이 top 으로 clamp 되므로
+					// 이번 frame 은 scroll 캐시를 갱신하지 않는다 (다음 frame full render 후 복원).
 					bPropsInvalidated = true;
+					bDeferDetailsScrollRestore = true;
 					ImGui::PopID();
 					break;
 				}
@@ -1337,6 +1376,8 @@ void FEditorPropertyWidget::RenderComponentProperties(AActor* Actor, const TArra
 			ImGui::EndTable();
 			ImGui::PopStyleColor(2);
 		}
+
+		ImGui::PopID();
 	}
 
 	RenderCallInEditorFunctions(SelectedComponent);
