@@ -82,6 +82,7 @@ private:
 	bool bFocusConsoleButtonNextFrame = false;
 	bool bContentBrowserDrawerVisible = false;
 	bool bBringContentBrowserDrawerToFrontNextFrame = false;
+	bool bContentBrowserDrawerResizing = false;
 	int32 ConsoleBacktickCycleState = 0;
 	float ConsoleDrawerAnim = 0.0f;
 	float ContentBrowserDrawerAnim = 0.0f;
