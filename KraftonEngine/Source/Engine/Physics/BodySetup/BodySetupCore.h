@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Object/Object.h"
 #include "Object/FName.h"
@@ -20,6 +20,9 @@ public:
 	EBodyCollisionResponse GetCollisionResponse() const { return CollisionResponse; }
 
 	static void SerializeCore(FArchive& Ar, UBodySetupCore& BodySetupCore);
+
+	FName GetBoneName() const { return BoneName; }
+	void SetBoneName(FName InBoneName) { BoneName = InBoneName; }
 
 protected:
 	UPROPERTY(Edit, Save, Category="BodySetup", DisplayName="Bone Name")

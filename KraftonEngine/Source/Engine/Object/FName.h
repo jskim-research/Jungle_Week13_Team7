@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Core/Types/CoreTypes.h"
 #include "Core/Singleton.h"
@@ -25,6 +25,7 @@ public:
 
 	// 유효 여부
 	bool IsValid() const;
+	bool IsNone() const;
 
 	// None 이름
 	static const FName None;
@@ -54,3 +55,16 @@ private:
 	TArray<FString> Entries;
 	TMap<FString, uint32> LookupMap;
 };
+
+// TMap 에서 hash 함수 특수화
+namespace std
+{
+	template<>
+	struct hash<FName>
+	{
+		size_t operator()(const FName& Name) const noexcept
+		{
+			return FName::Hash{}(Name);
+		}
+	};
+}
