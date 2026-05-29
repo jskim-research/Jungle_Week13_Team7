@@ -374,6 +374,8 @@ static bool RemapSkeletalMeshToSkeleton(
 
 		Bone.Name                  = TargetRef.Bones[TargetIndex].Name;
 		Bone.ParentIndex           = TargetRef.Bones[TargetIndex].ParentIndex;
+		Bone.bOverrideTranslationRetargetMode = TargetRef.Bones[TargetIndex].bOverrideTranslationRetargetMode;
+		Bone.TranslationRetargetMode          = TargetRef.Bones[TargetIndex].TranslationRetargetMode;
 		RemappedBones[TargetIndex] = Bone;
 	}
 

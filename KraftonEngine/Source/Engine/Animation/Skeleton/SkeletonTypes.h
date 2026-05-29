@@ -9,6 +9,31 @@ inline void SerializeReferenceSkeletonMatrix(FArchive& Ar, FMatrix& Matrix)
     Ar.Serialize(Matrix.Data, sizeof(float) * 16);
 }
 
+enum class ETranslationRetargetMode : uint8
+{
+    Animation,
+    Skeleton,
+    AnimationRelative,
+    AnimationScaled, // TODO: implement scaled translation retargeting.
+};
+
+inline const char* TranslationRetargetModeToString(ETranslationRetargetMode Mode)
+{
+    switch (Mode)
+    {
+    case ETranslationRetargetMode::Animation:
+        return "Animation";
+    case ETranslationRetargetMode::Skeleton:
+        return "Skeleton";
+    case ETranslationRetargetMode::AnimationRelative:
+        return "AnimationRelative";
+    case ETranslationRetargetMode::AnimationScaled:
+        return "AnimationScaled";
+    default:
+        return "Unknown";
+    }
+}
+
 struct FReferenceBone
 {
     FString Name;
@@ -17,6 +42,9 @@ struct FReferenceBone
     FMatrix LocalBindPose   = FMatrix::Identity;
     FMatrix GlobalBindPose  = FMatrix::Identity;
     FMatrix InverseBindPose = FMatrix::Identity;
+
+    bool                     bOverrideTranslationRetargetMode = false;
+    ETranslationRetargetMode TranslationRetargetMode          = ETranslationRetargetMode::Skeleton;
 
     friend FArchive& operator<<(FArchive& Ar, FReferenceBone& Bone)
     {
