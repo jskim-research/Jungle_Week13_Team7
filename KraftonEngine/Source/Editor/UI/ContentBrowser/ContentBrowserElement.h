@@ -14,7 +14,7 @@ public:
 	virtual void Render(ContentBrowserContext& Context);
 	virtual void RenderDetail();
 
-	virtual void RenderContextMenu(ContentBrowserContext& Context) {}
+	virtual void RenderContextMenu(ContentBrowserContext& Context);
 
 	void SetIcon(ID3D11ShaderResourceView* InIcon) { Icon = InIcon; }
 	void SetContent(FContentItem InContent) { ContentItem = InContent; }
