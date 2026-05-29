@@ -89,10 +89,9 @@ namespace
 			return false;
 		}
 
-		// Shape component는 legacy compound 경로 유지.
 		if (Cast<UBoxComponent>(Comp) || Cast<USphereComponent>(Comp) || Cast<UCapsuleComponent>(Comp))
 		{
-			return false;
+			return true;
 		}
 
 		UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(Comp);
@@ -109,48 +108,6 @@ namespace
 
 		const UBodySetup* BodySetup = StaticMesh->GetBodySetup();
 		return BodySetup && BodySetup->HasSimpleCollision();
-	}
-
-	// Compound actor는 PxRigidActor 하나를 공유한다. Root만 보면 자식 BoxComponent의
-	// Simulate Physics가 무시되어 Static actor로 남는 버그를 막기 위해 액터 전체를 검사한다.
-	bool ActorShouldSimulatePhysics(AActor* OwnerActor, UPrimitiveComponent* Comp)
-	{
-		if (!IsValid(OwnerActor))
-		{
-			return IsValid(Comp) && Comp->GetSimulatePhysics();
-		}
-
-		if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent()))
-		{
-			if (RootPrim->GetSimulatePhysics())
-			{
-				return true;
-			}
-		}
-
-		if (IsValid(Comp) && Comp->GetSimulatePhysics())
-		{
-			return true;
-		}
-
-		for (UActorComponent* Owned : OwnerActor->GetComponents())
-		{
-			UPrimitiveComponent* Prim = Cast<UPrimitiveComponent>(Owned);
-			if (!IsValid(Prim))
-			{
-				continue;
-			}
-			if (!Prim->IsCollisionEnabled())
-			{
-				continue;
-			}
-			if (Prim->GetSimulatePhysics())
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	bool ShouldIgnoreActorForQuery(
@@ -475,31 +432,6 @@ static PxTransform GetPxTransform(UPrimitiveComponent* Comp)
 	return PxTransform(ToPxVec3(Pos), ToPxQuat(Rot));
 }
 
-// Compound body의 mass와 center-of-mass를 RootComponent의 값으로 갱신.
-// shape 추가/제거 후 inertia 재계산이 필요하므로 RegisterComponent /
-// UnregisterComponent 끝에서 호출된다.
-static void ApplyRootMassAndCOM(PxRigidDynamic* Dyn, UPrimitiveComponent* Root)
-{
-	if (!Dyn || !IsValid(Root)) return;
-	const float MassKg = (Root->GetMass() > 0.0f) ? Root->GetMass() : 1.0f;
-	PxRigidBodyExt::setMassAndUpdateInertia(*Dyn, MassKg);
-	Dyn->setCMassLocalPose(PxTransform(ToPxVec3(Root->GetCenterOfMass())));
-}
-
-static void ApplyGravityFlag(PxRigidDynamic* Dyn, UPrimitiveComponent* Root)
-{
-	if (!Dyn || !IsValid(Root)) return;
-	Dyn->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !Root->GetEnableGravity());
-}
-
-static void ApplyDynamicBodySettings(PxRigidDynamic* Dyn, UPrimitiveComponent* Root)
-{
-	if (!Dyn || !IsValid(Root)) return;
-	ApplyRootMassAndCOM(Dyn, Root);
-	ApplyGravityFlag(Dyn, Root);
-	Dyn->wakeUp();
-}
-
 // ============================================================
 // Collision Filtering
 // ============================================================
@@ -649,7 +581,6 @@ void FPhysXPhysicsScene::Shutdown()
 	}
 
 	ReleaseBodyInstances();
-	ReleaseBodyMappings();
 
 	if (Scene)
 	{
@@ -684,58 +615,6 @@ void FPhysXPhysicsScene::Shutdown()
 		bSharedPhysXAcquired = false;
 		ReleaseSharedPhysX();
 	}
-}
-
-void FPhysXPhysicsScene::ClearPhysXActorUserData(PxRigidActor* Actor) const
-{
-	if (!Actor)
-	{
-		return;
-	}
-
-	Actor->userData = nullptr;
-
-	const PxU32 NumShapes = Actor->getNbShapes();
-	if (NumShapes == 0)
-	{
-		return;
-	}
-
-	std::vector<PxShape*> Shapes(NumShapes);
-	Actor->getShapes(Shapes.data(), NumShapes);
-	for (PxShape* Shape : Shapes)
-	{
-		if (Shape)
-		{
-			Shape->userData = nullptr;
-		}
-	}
-}
-
-void FPhysXPhysicsScene::ReleaseBodyMappings()
-{
-	for (FBodyMapping& Mapping : BodyMappings)
-	{
-		PxRigidActor* Actor = Mapping.Actor;
-		Mapping.OwnerActor = nullptr;
-		Mapping.RootComp = nullptr;
-		Mapping.Components.clear();
-		Mapping.Actor = nullptr;
-
-		if (!Actor)
-		{
-			continue;
-		}
-
-		ClearPhysXActorUserData(Actor);
-		if (Scene)
-		{
-			Scene->removeActor(*Actor);
-		}
-		Actor->release();
-	}
-
-	BodyMappings.clear();
 }
 
 FBodyInstanceInitParams FPhysXPhysicsScene::MakeBodyInstanceInitParams() const
@@ -788,110 +667,41 @@ PxRigidDynamic* FPhysXPhysicsScene::GetDynamicActorForComponent(UPrimitiveCompon
 	}
 
 	const FBodyInstance* BodyInstance = Comp->GetBodyInstance();
-	if (BodyInstance && BodyInstance->IsValidBodyInstance() && BodyInstance->Actor)
-	{
-		return BodyInstance->Actor->is<PxRigidDynamic>();
-	}
-
-	const FBodyMapping* Mapping = FindMappingByComponent(Comp);
-	if (!Mapping || !Mapping->Actor)
+	if (!BodyInstance || !BodyInstance->IsValidBodyInstance() || !BodyInstance->Actor)
 	{
 		return nullptr;
 	}
 
-	return Mapping->Actor->is<PxRigidDynamic>();
-}
-
-UPrimitiveComponent* FPhysXPhysicsScene::GetMassReferenceComponent(UPrimitiveComponent* Comp) const
-{
-	const FBodyMapping* Mapping = FindMappingByComponent(Comp);
-	if (Mapping && IsValid(Mapping->RootComp))
-	{
-		return Mapping->RootComp;
-	}
-
-	return Comp;
+	return BodyInstance->Actor->is<PxRigidDynamic>();
 }
 
 // ============================================================
-// Body 관리 — Actor 단위 compound (legacy)
-//
-// 한 액터의 여러 PrimitiveComponent는 같은 PxRigidActor에 shape로 합쳐진다.
-// shape의 LocalPose는 액터 RootComponent에 대한 상대 transform.
-// userData: PxActor → AActor, PxShape → UPrimitiveComponent.
+// Body 관리 — UE-style per-component FBodyInstance
 // ============================================================
 
 void FPhysXPhysicsScene::RegisterComponent(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene || !Physics || !DefaultMaterial) return;
+	if (!ShouldUseBodyInstancePath(Comp)) return;
+	if (Comp->GetBodyInstance()->IsValidBodyInstance()) return;
 
-	if (ShouldUseBodyInstancePath(Comp))
+	UBodySetup* BodySetup = nullptr;
+	if (UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(Comp))
 	{
-		if (Comp->GetBodyInstance()->IsValidBodyInstance()) return;
-
-		UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(Comp);
-		UBodySetup* BodySetup = StaticMeshComp->GetStaticMesh()->GetBodySetup();
-		Comp->GetBodyInstance()->InitBody(
-			BodySetup,
-			Comp,
-			MakeBodyInstanceInitParams(),
-			FInitBodySpawnParams(Comp));
-		if (Comp->GetBodyInstance()->IsValidBodyInstance())
+		if (UStaticMesh* StaticMesh = StaticMeshComp->GetStaticMesh())
 		{
-			BodyInstanceComponents.push_back(Comp);
+			BodySetup = StaticMesh->GetBodySetup();
 		}
-		return;
 	}
 
-	if (FindMappingByComponent(Comp)) return; // 이미 등록됨
-
-	AActor* OwnerActor = Comp->GetOwner();
-	if (!IsValid(OwnerActor)) return;
-
-	FBodyMapping* Mapping = FindMappingByActor(OwnerActor);
-
-	if (!Mapping)
+	Comp->GetBodyInstance()->InitBody(
+		BodySetup,
+		Comp,
+		MakeBodyInstanceInitParams(),
+		FInitBodySpawnParams(Comp));
+	if (Comp->GetBodyInstance()->IsValidBodyInstance())
 	{
-		UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent());
-		if (!IsValid(RootPrim)) RootPrim = Comp;
-
-		const bool bDynamic = ActorShouldSimulatePhysics(OwnerActor, Comp);
-		PxTransform BodyXf = GetPxTransform(RootPrim);
-
-		PxRigidActor* Body = bDynamic
-			? static_cast<PxRigidActor*>(Physics->createRigidDynamic(BodyXf))
-			: static_cast<PxRigidActor*>(Physics->createRigidStatic(BodyXf));
-		if (!Body) return;
-
-		Body->userData = OwnerActor;
-		Scene->addActor(*Body);
-
-		FBodyMapping NewMapping;
-		NewMapping.OwnerActor = OwnerActor;
-		NewMapping.Actor = Body;
-		NewMapping.RootComp = RootPrim;
-		BodyMappings.push_back(NewMapping);
-		Mapping = &BodyMappings.back();
-	}
-
-	// shape 추가
-	PxShape* Shape = AddShapeForComponent(*Mapping, Comp);
-	if (!Shape) return;
-	Mapping->Components.push_back(Comp);
-
-	if (ActorShouldSimulatePhysics(OwnerActor, Comp) && !Mapping->Actor->is<PxRigidDynamic>())
-	{
-		RebuildBody(Comp);
-		return;
-	}
-
-	// Dynamic이면 RootComp의 Mass / CenterOfMass / Gravity로 갱신 (shape 추가될 때마다 inertia 재계산).
-	if (Mapping->Actor && IsValid(Mapping->RootComp))
-	{
-		if (PxRigidDynamic* Dyn = Mapping->Actor->is<PxRigidDynamic>())
-		{
-			ApplyDynamicBodySettings(Dyn, Mapping->RootComp);
-		}
+		BodyInstanceComponents.push_back(Comp);
 	}
 }
 
@@ -899,88 +709,25 @@ void FPhysXPhysicsScene::UnregisterComponent(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene) return;
 
-	if (Comp->GetBodyInstance()->IsValidBodyInstance())
+	if (!Comp->GetBodyInstance()->IsValidBodyInstance())
 	{
-		Comp->GetBodyInstance()->TermBody(MakeBodyInstanceInitParams());
-		BodyInstanceComponents.erase(
-			std::remove(BodyInstanceComponents.begin(), BodyInstanceComponents.end(), Comp),
-			BodyInstanceComponents.end());
 		return;
 	}
 
-	FBodyMapping* Mapping = FindMappingByComponent(Comp);
-	if (!Mapping) return;
-
-	// 해당 컴포넌트의 shape detach
-	DetachShapeForComponent(*Mapping, Comp);
-
-	// Components 배열에서 제거
-	Mapping->Components.erase(
-		std::remove(Mapping->Components.begin(), Mapping->Components.end(), Comp),
-		Mapping->Components.end());
-
-	// 마지막 컴포넌트가 빠지면 actor 자체도 release
-	if (Mapping->Components.empty())
-	{
-		if (Mapping->Actor)
-		{
-			ClearPhysXActorUserData(Mapping->Actor);
-			Scene->removeActor(*Mapping->Actor);
-			Mapping->Actor->release();
-		}
-
-		Mapping->OwnerActor = nullptr;
-		Mapping->RootComp = nullptr;
-		Mapping->Actor = nullptr;
-
-		// swap-and-pop
-		*Mapping = BodyMappings.back();
-		BodyMappings.pop_back();
-		return;
-	}
-
-	// 남은 shape가 있으면 mass/inertia 재계산
-	if (Mapping->Actor && IsValid(Mapping->RootComp))
-	{
-		if (PxRigidDynamic* Dyn = Mapping->Actor->is<PxRigidDynamic>())
-		{
-			ApplyDynamicBodySettings(Dyn, Mapping->RootComp);
-		}
-	}
+	Comp->GetBodyInstance()->TermBody(MakeBodyInstanceInitParams());
+	BodyInstanceComponents.erase(
+		std::remove(BodyInstanceComponents.begin(), BodyInstanceComponents.end(), Comp),
+		BodyInstanceComponents.end());
 }
 
 void FPhysXPhysicsScene::RebuildBody(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene) return;
 
-	if (ShouldUseBodyInstancePath(Comp) || Comp->GetBodyInstance()->IsValidBodyInstance())
+	UnregisterComponent(Comp);
+	if (ShouldUseBodyInstancePath(Comp))
 	{
-		UnregisterComponent(Comp);
-		if (ShouldUseBodyInstancePath(Comp))
-		{
-			RegisterComponent(Comp);
-		}
-		return;
-	}
-
-	// SimulatePhysics 변경(Dynamic ↔ Static)은 PxActor type 변경이라 actor를 통째 재생성해야 한다.
-
-	AActor* OwnerActor = Comp->GetOwner();
-	if (!IsValid(OwnerActor)) return;
-
-	FBodyMapping* Mapping = FindMappingByActor(OwnerActor);
-	if (!Mapping) return; // 등록 안 됨 — skip
-
-	// 같은 actor의 모든 컴포넌트 캐시 (unregister가 mapping을 제거할 수 있어 미리 복사)
-	TArray<UPrimitiveComponent*> CompList = Mapping->Components;
-
-	for (UPrimitiveComponent* C : CompList)
-	{
-		UnregisterComponent(C);
-	}
-	for (UPrimitiveComponent* C : CompList)
-	{
-		RegisterComponent(C);
+		RegisterComponent(Comp);
 	}
 }
 
@@ -1004,54 +751,9 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 
 	PruneInvalidBodyInstanceComponents();
 
-	// ── Pre-simulate: Engine → PhysX Transform 동기화 ──
-	// 한 PxActor가 여러 컴포넌트를 가지므로 RootComp 기준으로만 한 번 동기화.
-	//
-	// Dynamic actor도 Engine 측 transform이 PhysX와 충분히 크게 다르면 teleport한다.
-	// (lua spawn 직후 m.Location = pos 같은 외부 변경 흡수용)
-	//
-	// 정상 시뮬레이션 흐름에서는 post-simulate가 Engine = PhysX로 맞춰주므로
-	// 다음 frame pre에서 차이 ≈ 0 → skip. 단 round-trip의 부동소수 오차로 작은
-	// 차이는 매 frame 발생할 수 있어 threshold를 충분히 크게 잡아 false-positive
-	// teleport를 막는다.
-	//
-	// velocity는 의도적으로 보존 — PhysX의 정상 시뮬레이션 momentum 유지.
-	constexpr float TeleportPosThresholdSq = 1.0f;   // 1m² (1m 이상 차이 시만 teleport)
-	constexpr float TeleportRotThreshold = 0.99f;    // ~8° 차이 시만 teleport
-
-	for (auto& Mapping : BodyMappings)
-	{
-		if (!IsValid(Mapping.RootComp) || !Mapping.Actor) continue;
-
-		PxTransform NewPose = GetPxTransform(Mapping.RootComp);
-
-		if (PxRigidDynamic* Dynamic = Mapping.Actor->is<PxRigidDynamic>())
-		{
-			if (Dynamic->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)
-			{
-				Dynamic->setKinematicTarget(NewPose);
-			}
-			else
-			{
-				PxTransform PxPose = Dynamic->getGlobalPose();
-				PxVec3 dp = NewPose.p - PxPose.p;
-				const float DistSq = dp.x * dp.x + dp.y * dp.y + dp.z * dp.z;
-				const float QDot = std::abs(
-					NewPose.q.x * PxPose.q.x + NewPose.q.y * PxPose.q.y +
-					NewPose.q.z * PxPose.q.z + NewPose.q.w * PxPose.q.w);
-
-				if (DistSq > TeleportPosThresholdSq || QDot < TeleportRotThreshold)
-				{
-					// 큰 외부 변경 → teleport. velocity는 보존.
-					Dynamic->setGlobalPose(NewPose);
-				}
-			}
-		}
-		else if (Mapping.Actor->is<PxRigidStatic>())
-		{
-			Mapping.Actor->setGlobalPose(NewPose);
-		}
-	}
+	// ── Pre-simulate: Engine → PhysX Transform 동기화 (per-component) ──
+	constexpr float TeleportPosThresholdSq = 1.0f;
+	constexpr float TeleportRotThreshold = 0.99f;
 
 	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
 	{
@@ -1099,24 +801,7 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 	Scene->simulate(DeltaTime);
 	Scene->fetchResults(true);
 
-	// ── Post-simulate: PhysX → Engine Transform 동기화 ──
-	// RootComp에만 transform 적용 → 자식 컴포넌트는 attach로 자동 따라감.
-	for (auto& Mapping : BodyMappings)
-	{
-		if (!IsValid(Mapping.RootComp) || !Mapping.Actor) continue;
-
-		PxRigidDynamic* Dynamic = Mapping.Actor->is<PxRigidDynamic>();
-		if (!Dynamic) continue;
-		if (Dynamic->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC) continue;
-
-		PxTransform Pose = Dynamic->getGlobalPose();
-		FVector NewPos = ToFVector(Pose.p);
-		FQuat NewRot = ToFQuat(Pose.q);
-
-		Mapping.RootComp->SetWorldLocation(NewPos);
-		Mapping.RootComp->SetRelativeRotation(NewRot);
-	}
-
+	// ── Post-simulate: PhysX → Engine Transform 동기화 (per-component) ──
 	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
 	{
 		if (!IsValid(Comp))
@@ -1150,93 +835,6 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 	if (EventCallback)
 	{
 		EventCallback->DispatchPendingEvents();
-	}
-}
-
-// ============================================================
-// Internal helpers
-// ============================================================
-
-PxShape* FPhysXPhysicsScene::AddShapeForComponent(FBodyMapping& Mapping, UPrimitiveComponent* Comp)
-{
-	if (!Mapping.Actor || !DefaultMaterial || !IsValid(Comp)) return nullptr;
-
-	// Shape Component 타입에 따라 PxGeometry 결정
-	PxGeometryHolder Geom;
-	bool bHasGeom = false;
-
-	// Capsule은 PhysX에서 X축 기준이므로 로컬 회전 보정 필요
-	PxQuat ShapeAxisRot = PxQuat(PxIdentity);
-
-	if (auto* Box = Cast<UBoxComponent>(Comp))
-	{
-		FVector Ext = Box->GetScaledBoxExtent();
-		Geom = PxBoxGeometry(Ext.X, Ext.Y, Ext.Z);
-		bHasGeom = true;
-	}
-	else if (auto* Sphere = Cast<USphereComponent>(Comp))
-	{
-		Geom = PxSphereGeometry(Sphere->GetScaledSphereRadius());
-		bHasGeom = true;
-	}
-	else if (auto* Capsule = Cast<UCapsuleComponent>(Comp))
-	{
-		float Radius = Capsule->GetScaledCapsuleRadius();
-		float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
-		Geom = PxCapsuleGeometry(Radius, HalfHeight - Radius);
-		ShapeAxisRot = PxQuat(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f));
-		bHasGeom = true;
-	}
-
-	if (!bHasGeom) return nullptr;
-
-	PxShape* Shape = PxRigidActorExt::createExclusiveShape(*Mapping.Actor, Geom.any(), *DefaultMaterial);
-	if (!Shape) return nullptr;
-
-	// Local pose: Comp의 RootComp 대비 상대 transform.
-	// Compound shape에서 자식 컴포넌트가 부모(=PxActor 기준)에 정확히 박혀있도록.
-	PxTransform LocalPose = PxTransform(PxIdentity);
-	if (Comp != Mapping.RootComp && IsValid(Mapping.RootComp))
-	{
-		FVector RootPos = Mapping.RootComp->GetWorldLocation();
-		FQuat RootRot = Mapping.RootComp->GetWorldMatrix().ToQuat();
-		FVector CompPos = Comp->GetWorldLocation();
-		FQuat CompRot = Comp->GetWorldMatrix().ToQuat();
-
-		FQuat InvRootRot = RootRot.Inverse();
-		FVector LocalPos = InvRootRot.RotateVector(CompPos - RootPos);
-		FQuat LocalRot = InvRootRot * CompRot;
-
-		LocalPose = PxTransform(ToPxVec3(LocalPos), ToPxQuat(LocalRot));
-	}
-
-	// Capsule 등 축 보정을 LocalPose의 회전 부분에 합성
-	LocalPose.q = LocalPose.q * ShapeAxisRot;
-	Shape->setLocalPose(LocalPose);
-
-	PhysXShapeUtils::FinalizeShape(Shape, Comp);
-
-	return Shape;
-}
-
-void FPhysXPhysicsScene::DetachShapeForComponent(FBodyMapping& Mapping, UPrimitiveComponent* Comp)
-{
-	if (!Mapping.Actor || !Comp) return;
-
-	const PxU32 NumShapes = Mapping.Actor->getNbShapes();
-	if (NumShapes == 0) return;
-
-	std::vector<PxShape*> Shapes(NumShapes);
-	Mapping.Actor->getShapes(Shapes.data(), NumShapes);
-
-	for (PxShape* Shape : Shapes)
-	{
-		if (Shape && Shape->userData == Comp)
-		{
-			Shape->userData = nullptr;
-			Mapping.Actor->detachShape(*Shape);
-			break;
-		}
 	}
 }
 
@@ -1342,53 +940,6 @@ bool FPhysXPhysicsScene::Sweep(const FVector& Start, const FVector& Dir, float M
 	return true;
 }
 
-FPhysXPhysicsScene::FBodyMapping* FPhysXPhysicsScene::FindMappingByActor(AActor* OwnerActor)
-{
-	for (auto& M : BodyMappings)
-	{
-		if (M.OwnerActor == OwnerActor) return &M;
-	}
-	return nullptr;
-}
-
-const FPhysXPhysicsScene::FBodyMapping* FPhysXPhysicsScene::FindMappingByActor(AActor* OwnerActor) const
-{
-	for (const auto& M : BodyMappings)
-	{
-		if (M.OwnerActor == OwnerActor) return &M;
-	}
-	return nullptr;
-}
-
-// "이 컴포넌트가 shape로 추가된 mapping" 검색 — 등록 가드 + Force/Velocity API 라우팅용.
-// owner 기반 lookup과 다름: 같은 owner라도 컴포넌트가 아직 Components에 push되지 않았으면
-// 다른 컴포넌트의 shape를 통해 force가 잘못 적용되지 않도록 nullptr 반환.
-FPhysXPhysicsScene::FBodyMapping* FPhysXPhysicsScene::FindMappingByComponent(UPrimitiveComponent* Comp)
-{
-	if (!Comp) return nullptr;
-	for (auto& M : BodyMappings)
-	{
-		for (UPrimitiveComponent* C : M.Components)
-		{
-			if (C == Comp) return &M;
-		}
-	}
-	return nullptr;
-}
-
-const FPhysXPhysicsScene::FBodyMapping* FPhysXPhysicsScene::FindMappingByComponent(UPrimitiveComponent* Comp) const
-{
-	if (!Comp) return nullptr;
-	for (const auto& M : BodyMappings)
-	{
-		for (UPrimitiveComponent* C : M.Components)
-		{
-			if (C == Comp) return &M;
-		}
-	}
-	return nullptr;
-}
-
 // ============================================================
 // Force / Torque
 // ============================================================
@@ -1450,18 +1001,12 @@ void FPhysXPhysicsScene::SetAngularVelocity(UPrimitiveComponent* Comp, const FVe
 // Gravity
 // ============================================================
 
-void FPhysXPhysicsScene::SetEnableGravity(UPrimitiveComponent* Comp, bool /*bEnable*/)
+void FPhysXPhysicsScene::SetEnableGravity(UPrimitiveComponent* Comp, bool bEnable)
 {
 	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 
-	UPrimitiveComponent* GravityRef = GetMassReferenceComponent(Comp);
-	if (!IsValid(GravityRef))
-	{
-		GravityRef = Comp;
-	}
-
-	Dyn->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !GravityRef->GetEnableGravity());
+	Dyn->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !bEnable);
 	Dyn->wakeUp();
 }
 
@@ -1474,8 +1019,7 @@ void FPhysXPhysicsScene::SetMass(UPrimitiveComponent* Comp, float NewMass)
 	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 
-	UPrimitiveComponent* MassRef = GetMassReferenceComponent(Comp);
-	PxVec3 LocalCOM = MassRef ? ToPxVec3(MassRef->GetCenterOfMass()) : PxVec3(0);
+	PxVec3 LocalCOM = ToPxVec3(Comp->GetCenterOfMass());
 	PxRigidBodyExt::setMassAndUpdateInertia(*Dyn, NewMass, &LocalCOM);
 }
 

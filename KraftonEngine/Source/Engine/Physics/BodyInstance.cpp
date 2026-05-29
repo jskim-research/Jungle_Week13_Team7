@@ -1,7 +1,12 @@
 ﻿#include "Physics/BodyInstance.h"
 
 #include "Component/PrimitiveComponent.h"
+#include "Component/SceneComponent.h"
+#include "Component/Shape/BoxComponent.h"
+#include "Component/Shape/CapsuleComponent.h"
+#include "Component/Shape/SphereComponent.h"
 #include "GameFramework/AActor.h"
+#include "Math/MathUtils.h"
 #include "Physics/BodySetup/BodySetup.h"
 #include "Physics/PhysX/PhysXShapeUtils.h"
 
@@ -148,7 +153,25 @@ void FBodyInstance::InitBody(
 	}
 
 	Actor->userData = this;
-	CreateShapesFromBodySetup(InitParams);
+
+	if (bEnableCollision)
+	{
+		if (BodySetup && BodySetup->HasSimpleCollision())
+		{
+			CreateShapesFromBodySetup(InitParams);
+		}
+		else
+		{
+			CreateShapesFromComponent(InitParams);
+		}
+	}
+
+	if (Actor->getNbShapes() == 0)
+	{
+		Actor->release();
+		Actor = nullptr;
+		return;
+	}
 
 	if (PxRigidDynamic* DynamicActor = Actor->is<PxRigidDynamic>())
 	{
@@ -246,6 +269,57 @@ void FBodyInstance::CreateShapesFromBodySetup(const FBodyInstanceInitParams& Ini
 	}
 }
 
+void FBodyInstance::CreateShapesFromComponent(const FBodyInstanceInitParams& InitParams)
+{
+	if (!Actor || !OwnerComponent || !InitParams.DefaultMaterial || !bEnableCollision)
+	{
+		return;
+	}
+
+	PxQuat ShapeAxisRot = PxQuat(PxIdentity);
+	PxGeometryHolder Geom;
+	bool bHasGeom = false;
+
+	if (const UBoxComponent* Box = Cast<UBoxComponent>(OwnerComponent))
+	{
+		const FVector Ext = Box->GetScaledBoxExtent();
+		Geom = PxBoxGeometry(
+			(std::max)(0.001f, Ext.X),
+			(std::max)(0.001f, Ext.Y),
+			(std::max)(0.001f, Ext.Z));
+		bHasGeom = true;
+	}
+	else if (const USphereComponent* Sphere = Cast<USphereComponent>(OwnerComponent))
+	{
+		Geom = PxSphereGeometry((std::max)(0.001f, Sphere->GetScaledSphereRadius()));
+		bHasGeom = true;
+	}
+	else if (const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(OwnerComponent))
+	{
+		const float Radius = (std::max)(0.001f, Capsule->GetScaledCapsuleRadius());
+		const float HalfHeight = (std::max)(0.001f, Capsule->GetScaledCapsuleHalfHeight());
+		Geom = PxCapsuleGeometry(Radius, HalfHeight - Radius);
+		ShapeAxisRot = PxQuat(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f));
+		bHasGeom = true;
+	}
+
+	if (!bHasGeom)
+	{
+		return;
+	}
+
+	PxShape* Shape = PxRigidActorExt::createExclusiveShape(*Actor, Geom.any(), *InitParams.DefaultMaterial);
+	if (!Shape)
+	{
+		return;
+	}
+
+	PxTransform LocalPose(PxIdentity);
+	LocalPose.q = ShapeAxisRot;
+	Shape->setLocalPose(LocalPose);
+	PhysXShapeUtils::FinalizeShape(Shape, OwnerComponent);
+}
+
 void FBodyInstance::SyncBodyToComponent()
 {
 	if (!Actor || !OwnerComponent)
@@ -254,8 +328,48 @@ void FBodyInstance::SyncBodyToComponent()
 	}
 
 	const PxTransform Pose = Actor->getGlobalPose();
-	OwnerComponent->SetWorldLocation(ToFVector(Pose.p));
-	OwnerComponent->SetRelativeRotation(ToFQuat(Pose.q).ToRotator());
+	const FVector NewWorldPos = ToFVector(Pose.p);
+	const FQuat NewWorldRot = ToFQuat(Pose.q);
+
+	AActor* OwnerActor = OwnerComponent->GetOwner();
+	USceneComponent* Root = OwnerActor ? OwnerActor->GetRootComponent() : nullptr;
+
+	// 시뮬레이션 body가 Root가 아닌 자식(ShapeComponent 등)에 있으면, 해당 컴포넌트만
+	// SetWorldLocation 하면 부모 StaticMesh는 제자리에 남고 collider만 떨어져 나간다.
+	// PhysX pose delta를 Actor Root에 적용해 attach된 비주얼 전체가 함께 이동하게 한다.
+	if (IsValid(OwnerActor) && IsValid(Root) && OwnerComponent != Root)
+	{
+		const FVector OldWorldPos = OwnerComponent->GetWorldLocation();
+		const FQuat OldWorldRot = OwnerComponent->GetWorldMatrix().ToQuat();
+
+		const FVector PosDelta = NewWorldPos - OldWorldPos;
+		if (!PosDelta.IsNearlyZero())
+		{
+			OwnerActor->AddActorWorldOffset(PosDelta);
+		}
+
+		const FQuat RotDelta = (NewWorldRot * OldWorldRot.Inverse()).GetNormalized();
+		if (std::abs(RotDelta.W) < 0.999f)
+		{
+			const FVector Pivot = NewWorldPos;
+			const FVector RootPos = Root->GetWorldLocation();
+			Root->SetWorldLocation(Pivot + RotDelta.RotateVector(RootPos - Pivot));
+
+			const FQuat RootWorldRot = Root->GetWorldMatrix().ToQuat();
+			Root->SetRelativeRotation((RotDelta * RootWorldRot).GetNormalized());
+		}
+		return;
+	}
+
+	OwnerComponent->SetWorldLocation(NewWorldPos);
+	if (IsValid(Root) && OwnerComponent == Root)
+	{
+		Root->SetRelativeRotation(NewWorldRot);
+	}
+	else
+	{
+		OwnerComponent->SetRelativeRotation(NewWorldRot.ToRotator());
+	}
 }
 
 void FBodyInstance::SyncComponentToBody()

@@ -50,6 +50,7 @@ struct FBodyInstance
 	void TermBody(const FBodyInstanceInitParams& InitParams);
 
 	void CreateShapesFromBodySetup(const FBodyInstanceInitParams& InitParams);
+	void CreateShapesFromComponent(const FBodyInstanceInitParams& InitParams);
 
 	void SyncBodyToComponent();
 	void SyncComponentToBody();
