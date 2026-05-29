@@ -53,6 +53,7 @@ private:
 	void RenderContentBrowserDrawer(float DeltaTime);
 	void RenderFooterOverlay(float DeltaTime);
 	void HandleGlobalShortcuts();
+	void HandleEditorDeleteShortcut();
 	void ToggleConsoleDrawer(bool bFocusInput);
 	void ToggleContentBrowserDrawer();
 	void ProcessPendingDebugActions();

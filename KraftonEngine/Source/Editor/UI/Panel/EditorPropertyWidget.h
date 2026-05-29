@@ -15,7 +15,14 @@ public:
 	void SetShowEditorOnlyComponents(bool bEnable) { bShowEditorOnlyComponents = bEnable; }
 	bool IsShowingEditorOnlyComponents() const { return bShowEditorOnlyComponents; }
 
+	// Property Window / Scene Manager 에서 Delete 키 — 선택 컴포넌트(루트 제외) 제거.
+	bool TryDeleteSelectedComponent();
+
 private:
+	bool CanDeleteSelectedComponent(AActor* Actor, UActorComponent* Comp) const;
+	void DeleteSelectedComponent(AActor* Actor, UActorComponent* Comp);
+	void DrawComponentDeleteContextMenu(AActor* Actor, UActorComponent* Comp);
+
 	void RenameActor(AActor* PrimaryActor);
 	void RenderComponentTree(AActor* Actor);
 	void RenderSceneComponentNode(class USceneComponent* Comp);
