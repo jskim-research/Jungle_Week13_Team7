@@ -1,5 +1,6 @@
 #include "Editor/UI/Panel/EditorConsoleWidget.h"
 #include "Editor/EditorEngine.h"
+#include "Editor/Settings/EditorSettings.h"
 #include "Editor/Viewport/Level/LevelEditorViewportClient.h"
 #include "Editor/Viewport/EditorPreviewViewportClient.h"
 #include "Editor/Subsystem/OverlayStatSystem.h"
@@ -638,7 +639,7 @@ void FEditorConsoleWidget::Render(float DeltaTime)
 	(void)DeltaTime;
 
 	ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("Console"))
+	if (!ImGui::Begin("Console", &FEditorSettings::Get().UI.bConsole))
 	{
 		ImGui::End();
 		return;

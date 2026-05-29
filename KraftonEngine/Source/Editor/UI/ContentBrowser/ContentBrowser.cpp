@@ -1,4 +1,4 @@
-#include "ContentBrowser.h"
+﻿#include "ContentBrowser.h"
 
 #include "Asset/AssetPackage.h"
 #include "Animation/Graph/AnimGraphAsset.h"
@@ -132,12 +132,24 @@ void FEditorContentBrowserWidget::Initialize(UEditorEngine* InEditor, ID3D11Devi
 
 void FEditorContentBrowserWidget::Render(float DeltaTime)
 {
-	if (!ImGui::Begin("ContentBrowser"))
+	if (!ImGui::Begin("ContentBrowser", &FEditorSettings::Get().UI.bContentBrowser))
 	{
 		ImGui::End();
 		return;
 	}
 
+	RenderBody(DeltaTime);
+
+	ImGui::End();
+}
+
+void FEditorContentBrowserWidget::RenderDrawerContents(float DeltaTime)
+{
+	RenderBody(DeltaTime);
+}
+
+void FEditorContentBrowserWidget::RenderBody(float DeltaTime)
+{
 	(void)DeltaTime;
 
 	if (BrowserContext.bPendingContentRefresh)
@@ -231,7 +243,6 @@ void FEditorContentBrowserWidget::Render(float DeltaTime)
 
 	if (!ImGui::BeginTable("ContentBrowserLayout", 3, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV))
 	{
-		ImGui::End();
 		return;
 	}
 
@@ -273,8 +284,6 @@ void FEditorContentBrowserWidget::Render(float DeltaTime)
 	ImGui::EndTable();
 
 	RenderFbxImportOptionsPopup();
-
-	ImGui::End();
 }
 
 void FEditorContentBrowserWidget::RenderFbxImportOptionsPopup()
@@ -327,7 +336,7 @@ void FEditorContentBrowserWidget::RenderFbxImportOptionsPopup()
 
 void FEditorContentBrowserWidget::Refresh()
 {
-	RootNode = BuildDirectoryTree(FPaths::RootDir());
+	RootNode = BuildDirectoryTree(std::filesystem::path(FPaths::AssetDir()).lexically_normal());
 	RefreshContent();
 
 	BrowserContext.bPendingContentRefresh = false;
@@ -342,6 +351,11 @@ void FEditorContentBrowserWidget::SetIconSize(float Size)
 void FEditorContentBrowserWidget::LoadFromSettings()
 {
 	BrowserContext.CurrentPath = ResolveContentBrowserSettingsPath(FEditorSettings::Get().ContentBrowserPath);
+	const std::filesystem::path BrowserRootPath = std::filesystem::path(FPaths::AssetDir()).lexically_normal();
+	if (!IsSubPath(BrowserRootPath, BrowserContext.CurrentPath))
+	{
+		BrowserContext.CurrentPath = BrowserRootPath.wstring();
+	}
 	BrowserContext.PendingRevealPath = BrowserContext.CurrentPath;
 }
 
@@ -517,17 +531,12 @@ void FEditorContentBrowserWidget::DrawContents()
 	const float ContentWidth = ImGui::GetContentRegionAvail().x;
 	const float ItemWidth = BrowserContext.ContentSize.x;
 	const float ItemHeight = BrowserContext.ContentSize.y;
+	constexpr float ItemGap = 12.0f;
 
-	int ColumnCount = static_cast<int>(ContentWidth / ItemWidth);
+	int ColumnCount = static_cast<int>((ContentWidth + ItemGap) / (ItemWidth + ItemGap));
 	if (ColumnCount < 1)
 	{
 		ColumnCount = 1;
-	}
-
-	float GapSize = 0.0f;
-	if (ColumnCount > 1)
-	{
-		GapSize = (ContentWidth - ItemWidth * ColumnCount) / (ColumnCount);
 	}
 
 	ImVec2 StartPos = ImGui::GetCursorPos();
@@ -537,15 +546,18 @@ void FEditorContentBrowserWidget::DrawContents()
 		int Column = i % ColumnCount;
 		int Row = i / ColumnCount;
 
-		float X = StartPos.x + Column * (ItemWidth + GapSize);
-		float Y = StartPos.y + Row * (ItemHeight + GapSize * 2.f);
+		float X = StartPos.x + Column * (ItemWidth + ItemGap);
+		float Y = StartPos.y + Row * (ItemHeight + ItemGap);
 
 		ImGui::SetCursorPos(ImVec2(X, Y));
 		CachedBrowserElements[i]->Render(BrowserContext);
 	}
 
 	int RowCount = (ElementCount + ColumnCount - 1) / ColumnCount;
-	ImGui::SetCursorPos(ImVec2(StartPos.x, StartPos.y + RowCount * ItemHeight));
+	const float ContentHeight = RowCount > 0
+		? RowCount * ItemHeight + (RowCount - 1) * ItemGap
+		: 0.0f;
+	ImGui::SetCursorPos(ImVec2(StartPos.x, StartPos.y + ContentHeight));
 
 	if (ImGui::BeginPopupContextWindow("##ContentBrowserBackgroundContext", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
@@ -669,12 +681,6 @@ TArray<FContentItem> FEditorContentBrowserWidget::ReadDirectory(std::wstring Pat
 	for (const auto& Entry : std::filesystem::directory_iterator(Path))
 	{
 		std::wstring Name = Entry.path().filename().wstring();
-		if (Entry.is_directory())
-		{
-			if (Name == L"Bin" || Name == L"Build" || Name == L".git" || Name == L".vs")
-				continue;
-		}
-
 		FContentItem Item;
 		Item.Path = Entry.path();
 		Item.Name = Name;
@@ -707,15 +713,11 @@ FEditorContentBrowserWidget::FDirNode FEditorContentBrowserWidget::BuildDirector
 		if (!Entry.is_directory())
 			continue;
 
-		std::wstring DirName = Entry.path().filename().wstring();
-		if (DirName == L"Bin" || DirName == L"Build" || DirName == L".git" || DirName == L".vs")
-			continue;
-
 		Node.Children.push_back(BuildDirectoryTree(Entry.path()));
 	}
 
 	if (Node.Self.Name.empty())
-		Node.Self.Name = FPaths::ToWide("Project");
+		Node.Self.Name = FPaths::ToWide("Content");
 
 	return Node;
 }

@@ -1,5 +1,6 @@
 #include "Editor/UI/Debug/EditorShadowMapDebugWidget.h"
 #include "Editor/EditorEngine.h"
+#include "Editor/Settings/EditorSettings.h"
 #include "Runtime/Engine.h"
 #include "Render/Pipeline/Renderer.h"
 #include "Render/Resource/RenderResources.h"
@@ -258,7 +259,7 @@ void EditorShadowMapDebugWidget::RenderVizPass(
 
 void EditorShadowMapDebugWidget::Render(float DeltaTime)
 {
-	if (!ImGui::Begin("Shadow Map Debug"))
+	if (!ImGui::Begin("Shadow Map Debug", &FEditorSettings::Get().UI.bShadowMapDebug))
 	{
 		ImGui::End();
 		return;

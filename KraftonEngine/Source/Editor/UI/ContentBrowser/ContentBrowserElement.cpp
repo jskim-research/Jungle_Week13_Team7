@@ -352,6 +352,13 @@ bool ContentBrowserElement::RenderSelectSpace(ContentBrowserContext& Context)
 
 	if (Icon && IconMax.y > IconMin.y)
 	{
+		const float IconWidth = IconMax.x - IconMin.x;
+		const float IconHeight = IconMax.y - IconMin.y;
+		const float IconSize = (std::min)(IconWidth, IconHeight);
+		const float IconOffsetX = (IconWidth - IconSize) * 0.5f;
+		const float IconOffsetY = (IconHeight - IconSize) * 0.5f;
+		IconMin = ImVec2(IconMin.x + IconOffsetX, IconMin.y + IconOffsetY);
+		IconMax = ImVec2(IconMin.x + IconSize, IconMin.y + IconSize);
 		DrawList->AddImage(Icon, IconMin, IconMax);
 	}
 

@@ -1,10 +1,43 @@
 #include "Engine/Platform/WindowsApplication.h"
 #include "Engine/Platform/resource.h"
 
+#include <dwmapi.h>
 #include <windowsx.h>
 #include <vector>
 
 #include "Engine/Input/InputSystem.h"
+
+#pragma comment(lib, "Dwmapi.lib")
+
+namespace
+{
+	constexpr DWORD EditorDwmUseImmersiveDarkMode = 20;
+	constexpr DWORD EditorDwmCaptionColor = 35;
+	constexpr DWORD EditorDwmTextColor = 36;
+
+	void ApplyEditorWindowFrameTheme(HWND HWindow)
+	{
+		const BOOL bUseDarkMode = TRUE;
+		DwmSetWindowAttribute(
+			HWindow,
+			EditorDwmUseImmersiveDarkMode,
+			&bUseDarkMode,
+			sizeof(bUseDarkMode));
+
+		const COLORREF TitleBarColor = RGB(6, 6, 7);
+		const COLORREF TitleTextColor = RGB(230, 230, 230);
+		DwmSetWindowAttribute(
+			HWindow,
+			EditorDwmCaptionColor,
+			&TitleBarColor,
+			sizeof(TitleBarColor));
+		DwmSetWindowAttribute(
+			HWindow,
+			EditorDwmTextColor,
+			&TitleTextColor,
+			sizeof(TitleTextColor));
+	}
+}
 
 // ImGui Win32 메시지 핸들러
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, unsigned int Msg, WPARAM wParam, LPARAM lParam);
@@ -127,6 +160,7 @@ bool FWindowsApplication::Init(HINSTANCE InHInstance)
 	{
 		return false;
 	}
+	ApplyEditorWindowFrameTheme(HWindow);
 
 	RAWINPUTDEVICE RawMouseDevice = {};
 	RawMouseDevice.usUsagePage = 0x01;
