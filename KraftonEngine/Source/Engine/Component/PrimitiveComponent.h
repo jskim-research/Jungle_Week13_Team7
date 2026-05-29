@@ -7,6 +7,7 @@
 #include "Core/Types/CollisionTypes.h"
 #include "Core/Types/EngineTypes.h"
 #include "Core/Delegate.h"
+#include "Physics/BodyInstance.h"
 #include "Render/Types/VertexTypes.h"
 #include "Render/Proxy/DirtyFlag.h"
 
@@ -232,6 +233,9 @@ public:
 	FComponentHitSignature OnComponentHit;
 	FComponentEndHitSignature OnComponentEndHit;
 
+	FBodyInstance* GetBodyInstance() { return &BodyInstance; }
+	const FBodyInstance* GetBodyInstance() const { return &BodyInstance; }
+
 protected:
 	void OnTransformDirty() override;
 	void EnsureWorldAABBUpdated() const;
@@ -271,6 +275,7 @@ protected:
 	ECollisionChannel ObjectType = ECollisionChannel::WorldStatic;
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Collision Responses", Type=Struct)
 	FCollisionResponseContainer ResponseContainer; // 기본: 전 채널 Block
+	FBodyInstance BodyInstance;
 	FPrimitiveSceneProxy* SceneProxy = nullptr;
 
 	FOctree* OctreeNode = nullptr;
