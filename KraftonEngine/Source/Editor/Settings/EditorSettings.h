@@ -42,7 +42,7 @@ public:
 	struct FUIVisibility
 	{
 		bool bConsole = true;
-		bool bControl = true;
+		bool bControl = false;
 		bool bProperty = true;
 		bool bScene = true;
 		bool bStat = false;

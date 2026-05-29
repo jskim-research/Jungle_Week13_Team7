@@ -17,6 +17,7 @@ class FEditorContentBrowserWidget final : public FEditorWidget
 public:
 	void Initialize(UEditorEngine* InEditor, ID3D11Device* InDevice);
 	void Render(float DeltaTime) override;
+	void RenderDrawerContents(float DeltaTime);
 	void Refresh();
 	void SaveToSettings() const;
 	void SetIconSize(float Size);
@@ -24,6 +25,7 @@ public:
 
 private:
 	void LoadFromSettings();
+	void RenderBody(float DeltaTime);
 	void RefreshContent();
 	void DrawDirNode(const FDirNode& InNode);
 	void DrawContents();

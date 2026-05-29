@@ -1,5 +1,6 @@
 #include "ImGuiSetting.h"
 #include "imgui.h"
+#include "Editor/Settings/EditorSettings.h"
 #include "Core/Types/CoreTypes.h"
 #include "Platform/Paths.h"
 #include "Math/Vector.h"
@@ -18,7 +19,7 @@ namespace
 
 void ImGuiSetting::ShowSetting()
 {
-	if (!ImGui::Begin("ImGuiSetting"))
+	if (!ImGui::Begin("ImGuiSetting", &FEditorSettings::Get().UI.bImGUISettings))
 	{
 		ImGui::End();
 		return;
