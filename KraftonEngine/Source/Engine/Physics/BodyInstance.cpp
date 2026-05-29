@@ -1,9 +1,12 @@
 ﻿#include "Physics/BodyInstance.h"
 
 #include "Component/PrimitiveComponent.h"
+#include "GameFramework/AActor.h"
 #include "Physics/BodySetup.h"
 
 #include <PxPhysicsAPI.h>
+#include <algorithm>
+#include <cmath>
 
 using namespace physx;
 
@@ -39,6 +42,94 @@ namespace
 		const FVector Pos = Comp->GetWorldLocation();
 		const FQuat Rot = Comp->GetWorldMatrix().ToQuat();
 		return PxTransform(ToPxVec3(Pos), ToPxQuat(Rot));
+	}
+
+	float AbsScale(float Value)
+	{
+		return std::fabs(Value);
+	}
+
+	float MaxAbsScale(const FVector& Scale)
+	{
+		return (std::max)((std::max)(AbsScale(Scale.X), AbsScale(Scale.Y)), AbsScale(Scale.Z));
+	}
+
+	FVector ScaleVector(const FVector& Value, const FVector& Scale)
+	{
+		return FVector(Value.X * Scale.X, Value.Y * Scale.Y, Value.Z * Scale.Z);
+	}
+
+	PxTransform GetElemTransform(const FVector& Center, const FRotator& Rotation, const FVector& Scale)
+	{
+		return PxTransform(ToPxVec3(ScaleVector(Center, Scale)), ToPxQuat(Rotation.ToQuaternion()));
+	}
+
+	void SetupFilterData(PxShape* Shape, UPrimitiveComponent* Comp)
+	{
+		if (!Shape || !Comp)
+		{
+			return;
+		}
+
+		PxFilterData Filter;
+		Filter.word0 = static_cast<PxU32>(Comp->GetCollisionObjectType());
+		Filter.word1 = 0;
+		Filter.word2 = 0;
+		AActor* Owner = Comp->GetOwner();
+		Filter.word3 = Owner ? Owner->GetUUID() : 0;
+
+		for (int32 Ch = 0; Ch < static_cast<int32>(ECollisionChannel::ActiveCount); ++Ch)
+		{
+			const ECollisionResponse Response = Comp->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Ch));
+			if (Response == ECollisionResponse::Block)
+			{
+				Filter.word1 |= (1u << Ch);
+			}
+			if (Response == ECollisionResponse::Overlap)
+			{
+				Filter.word2 |= (1u << Ch);
+			}
+		}
+
+		Shape->setSimulationFilterData(Filter);
+		Shape->setQueryFilterData(Filter);
+	}
+
+	bool ShouldUseTriggerShape(UPrimitiveComponent* Comp)
+	{
+		if (!Comp)
+		{
+			return false;
+		}
+		if (Comp->GetGenerateOverlapEvents())
+		{
+			return true;
+		}
+
+		for (int32 Ch = 0; Ch < static_cast<int32>(ECollisionChannel::ActiveCount); ++Ch)
+		{
+			if (Comp->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Ch)) == ECollisionResponse::Block)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void FinalizeShape(PxShape* Shape, UPrimitiveComponent* Comp)
+	{
+		if (!Shape)
+		{
+			return;
+		}
+
+		SetupFilterData(Shape, Comp);
+		if (ShouldUseTriggerShape(Comp))
+		{
+			Shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+			Shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+		}
+		Shape->userData = Comp;
 	}
 }
 
@@ -99,8 +190,70 @@ void FBodyInstance::TermBody(const FBodyInstanceInitParams& InitParams)
 
 void FBodyInstance::CreateShapesFromBodySetup(const FBodyInstanceInitParams& InitParams)
 {
-	(void)InitParams;
-	// Shape creation from UBodySetup::AggGeom
+	if (!Actor || !BodySetup || !OwnerComponent || !InitParams.DefaultMaterial || !bEnableCollision)
+	{
+		return;
+	}
+
+	const FKAggregateGeom& AggGeom = BodySetup->GetAggGeom();
+	const FVector Scale = OwnerComponent->GetWorldScale();
+	const FVector AbsWorldScale(AbsScale(Scale.X), AbsScale(Scale.Y), AbsScale(Scale.Z));
+	const float UniformScale = MaxAbsScale(Scale);
+
+	for (const FKBoxElem& Elem : AggGeom.BoxElems)
+	{
+		const PxVec3 HalfExtents(
+			(std::max)(0.001f, Elem.X * 0.5f * AbsWorldScale.X),
+			(std::max)(0.001f, Elem.Y * 0.5f * AbsWorldScale.Y),
+			(std::max)(0.001f, Elem.Z * 0.5f * AbsWorldScale.Z));
+
+		PxShape* Shape = PxRigidActorExt::createExclusiveShape(
+			*Actor,
+			PxBoxGeometry(HalfExtents),
+			*InitParams.DefaultMaterial);
+		if (!Shape)
+		{
+			continue;
+		}
+
+		Shape->setLocalPose(GetElemTransform(Elem.Center, Elem.Rotation, Scale));
+		FinalizeShape(Shape, OwnerComponent);
+	}
+
+	for (const FKSphereElem& Elem : AggGeom.SphereElems)
+	{
+		const float Radius = (std::max)(0.001f, Elem.Radius * UniformScale);
+		PxShape* Shape = PxRigidActorExt::createExclusiveShape(
+			*Actor,
+			PxSphereGeometry(Radius),
+			*InitParams.DefaultMaterial);
+		if (!Shape)
+		{
+			continue;
+		}
+
+		Shape->setLocalPose(PxTransform(ToPxVec3(ScaleVector(Elem.Center, Scale)), PxQuat(PxIdentity)));
+		FinalizeShape(Shape, OwnerComponent);
+	}
+
+	for (const FKSphylElem& Elem : AggGeom.SphylElems)
+	{
+		const float Radius = (std::max)(0.001f, Elem.Radius * UniformScale);
+		const float HalfLength = (std::max)(0.001f, Elem.Length * 0.5f * UniformScale);
+		PxShape* Shape = PxRigidActorExt::createExclusiveShape(
+			*Actor,
+			PxCapsuleGeometry(Radius, HalfLength),
+			*InitParams.DefaultMaterial);
+		if (!Shape)
+		{
+			continue;
+		}
+
+		PxTransform LocalPose = GetElemTransform(Elem.Center, Elem.Rotation, Scale);
+		LocalPose.q = LocalPose.q * PxQuat(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f));
+		Shape->setLocalPose(LocalPose);
+		FinalizeShape(Shape, OwnerComponent);
+	}
 }
 
 void FBodyInstance::SyncBodyToComponent()
