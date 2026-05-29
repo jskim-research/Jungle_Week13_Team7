@@ -79,8 +79,34 @@ void FEditorMainPanel::Create(FWindowsWindow* InWindow, FRenderer& InRenderer, U
 	ImGui_ImplDX11_Init(InRenderer.GetFD3DDevice().GetDevice(), InRenderer.GetFD3DDevice().GetDeviceContext());
 
 	ImGuiStyle& Style = ImGui::GetStyle();
+	Style.DockingNodeHasCloseButton = false;
 	ImVec4* Colors = Style.Colors;
+
+	const ImVec4 UnifiedBlack = ImVec4(0.024f, 0.024f, 0.028f, 1.0f);
+	const ImVec4 UnifiedBlackHovered = ImVec4(0.075f, 0.075f, 0.085f, 1.0f);
+	const ImVec4 UnifiedBlackActive = ImVec4(0.105f, 0.105f, 0.118f, 1.0f);
 	
+	Colors[ImGuiCol_WindowBg] = UnifiedBlack;
+	Colors[ImGuiCol_ChildBg] = UnifiedBlack;
+	Colors[ImGuiCol_PopupBg] = UnifiedBlack;
+	Colors[ImGuiCol_TitleBg] = UnifiedBlack;
+	Colors[ImGuiCol_TitleBgActive] = UnifiedBlack;
+	Colors[ImGuiCol_TitleBgCollapsed] = UnifiedBlack;
+	Colors[ImGuiCol_MenuBarBg] = UnifiedBlack;
+	Colors[ImGuiCol_Tab] = UnifiedBlack;
+	Colors[ImGuiCol_TabSelected] = UnifiedBlackActive;
+	Colors[ImGuiCol_TabHovered] = UnifiedBlackHovered;
+	Colors[ImGuiCol_TabDimmed] = UnifiedBlack;
+	Colors[ImGuiCol_TabDimmedSelected] = UnifiedBlackActive;
+	Colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.28f, 0.28f, 0.30f, 1.0f);
+	Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.18f, 0.18f, 0.20f, 1.0f);
+	Colors[ImGuiCol_DockingEmptyBg] = UnifiedBlack;
+	Colors[ImGuiCol_Header] = UnifiedBlack;
+	Colors[ImGuiCol_HeaderHovered] = UnifiedBlackHovered;
+	Colors[ImGuiCol_HeaderActive] = UnifiedBlackActive;
+	Colors[ImGuiCol_Button] = UnifiedBlackActive;
+	Colors[ImGuiCol_ButtonHovered] = ImVec4(0.16f, 0.16f, 0.18f, 1.0f);
+	Colors[ImGuiCol_ButtonActive] = ImVec4(0.20f, 0.20f, 0.22f, 1.0f);
 	Colors[ImGuiCol_FrameBg] = ImVec4(0.14f, 0.14f, 0.14f, 1.0f);
 	Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);
 	Colors[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.24f, 0.24f, 1.0f);
@@ -180,7 +206,7 @@ void FEditorMainPanel::Render(float DeltaTime)
 		StatWidget.Render(DeltaTime);
 	}
 
-	if (!bHideEditorWindows && Settings.UI.bContentBrowser)
+	if (!bHideEditorWindows && Settings.UI.bContentBrowser && !bContentBrowserDrawerVisible)
 	{
 		SCOPE_STAT_CAT("ContentBrowserWidget.Render", "5_UI");
 		ContentBrowserWidget.Render(DeltaTime);
@@ -207,6 +233,7 @@ void FEditorMainPanel::Render(float DeltaTime)
 
 	RenderShortcutOverlay();
 	RenderConsoleDrawer(DeltaTime);
+	RenderContentBrowserDrawer(DeltaTime);
 	RenderFooterOverlay(DeltaTime);
 
 	AssetEditorManager.Render(DeltaTime);
@@ -364,6 +391,7 @@ void FEditorMainPanel::RenderShortcutOverlay()
 	ImGui::TextUnformatted("Ctrl+Shift+S : Save Scene As");
 	ImGui::Separator();
 	ImGui::TextUnformatted("` : Focus console input / open console drawer");
+	ImGui::TextUnformatted("Ctrl+Space : Open Content Browser drawer");
 	ImGui::TextUnformatted("F : Focus on selection");
 	ImGui::TextUnformatted("Ctrl + LMB : Multi Picking (Toggle)");
 	ImGui::TextUnformatted("Ctrl + Alt + LMB Drag : Area Selection");
@@ -625,6 +653,94 @@ void FEditorMainPanel::RenderConsoleDrawer(float DeltaTime)
 	bBringConsoleDrawerToFrontNextFrame = false;
 }
 
+void FEditorMainPanel::RenderContentBrowserDrawer(float DeltaTime)
+{
+	constexpr float DrawerMinHeight = 240.0f;
+	constexpr float AnimSpeed = 16.0f;
+
+	const float TargetAnim = bContentBrowserDrawerVisible ? 1.0f : 0.0f;
+	float Alpha = DeltaTime * AnimSpeed;
+	if (Alpha > 1.0f)
+	{
+		Alpha = 1.0f;
+	}
+	ContentBrowserDrawerAnim += (TargetAnim - ContentBrowserDrawerAnim) * Alpha;
+	if (!bContentBrowserDrawerVisible && ContentBrowserDrawerAnim < 0.001f)
+	{
+		ContentBrowserDrawerAnim = 0.0f;
+	}
+	if (ContentBrowserDrawerAnim <= 0.001f)
+	{
+		return;
+	}
+
+	ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+	if (!MainViewport)
+	{
+		return;
+	}
+
+	const float FooterHeight = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
+	const float MaxHeight = (std::max)(DrawerMinHeight, MainViewport->WorkSize.y - FooterHeight - 80.0f);
+	ContentBrowserDrawerHeight = (std::max)(DrawerMinHeight, (std::min)(ContentBrowserDrawerHeight, MaxHeight));
+	const float DrawerHeight = ContentBrowserDrawerHeight * ContentBrowserDrawerAnim;
+	if (DrawerHeight <= 1.0f)
+	{
+		return;
+	}
+
+	const ImVec2 DrawerPos(
+		MainViewport->WorkPos.x,
+		MainViewport->WorkPos.y + MainViewport->WorkSize.y - FooterHeight - DrawerHeight);
+	const ImVec2 DrawerSize(MainViewport->WorkSize.x, DrawerHeight);
+	ImGui::SetNextWindowPos(DrawerPos, ImGuiCond_Always);
+	ImGui::SetNextWindowSize(DrawerSize, ImGuiCond_Always);
+	if (bBringContentBrowserDrawerToFrontNextFrame)
+	{
+		ImGui::SetNextWindowFocus();
+	}
+
+	ImGuiWindowFlags Flags = ImGuiWindowFlags_NoDecoration
+		| ImGuiWindowFlags_NoDocking
+		| ImGuiWindowFlags_NoSavedSettings
+		| ImGuiWindowFlags_NoMove
+		| ImGuiWindowFlags_NoResize
+		| ImGuiWindowFlags_NoFocusOnAppearing;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.09f, 0.11f, 0.98f));
+	if (ImGui::Begin("##ContentBrowserDrawer", nullptr, Flags))
+	{
+		ImGui::InvisibleButton("##ContentBrowserDrawerResizeHandle", ImVec2(ImGui::GetContentRegionAvail().x, 6.0f));
+		if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+		}
+		if (ImGui::IsItemActive())
+		{
+			ContentBrowserDrawerHeight = (std::max)(
+				DrawerMinHeight,
+				(std::min)(ContentBrowserDrawerHeight - ImGui::GetIO().MouseDelta.y, MaxHeight));
+		}
+
+		if (ImGui::SmallButton("Content Browser"))
+		{
+			ToggleContentBrowserDrawer();
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("Ctrl+Space");
+		ImGui::Separator();
+		ContentBrowserWidget.RenderDrawerContents(DeltaTime);
+	}
+	ImGui::End();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(3);
+
+	bBringContentBrowserDrawerToFrontNextFrame = false;
+}
+
 void FEditorMainPanel::RenderFooterOverlay(float DeltaTime)
 {
 	(void)DeltaTime;
@@ -667,6 +783,7 @@ void FEditorMainPanel::RenderFooterOverlay(float DeltaTime)
 			case 1:
 				ConsoleBacktickCycleState = 2;
 				bConsoleDrawerVisible = true;
+				bContentBrowserDrawerVisible = false;
 				bBringConsoleDrawerToFrontNextFrame = true;
 				bFocusConsoleInputNextFrame = true;
 				break;
@@ -691,8 +808,14 @@ void FEditorMainPanel::RenderFooterOverlay(float DeltaTime)
 		}
 
 		ImGui::SameLine();
+		if (ImGui::SmallButton("Content Browser"))
+		{
+			ToggleContentBrowserDrawer();
+		}
+
+		ImGui::SameLine();
 		const bool bDrawerOpen = ConsoleDrawerAnim > 0.5f;
-		const float InputWidth = MainViewport->WorkSize.x * (bDrawerOpen ? 0.35f : 0.175f);
+		const float InputWidth = MainViewport->WorkSize.x * (bDrawerOpen ? 0.30f : 0.16f);
 		ConsoleWidget.RenderInputLine("##FooterConsoleInput", InputWidth, bFocusConsoleInputNextFrame);
 		if (bFocusConsoleInputNextFrame)
 		{
@@ -769,9 +892,25 @@ void FEditorMainPanel::ToggleConsoleDrawer(bool bFocusInput)
 	bBringConsoleDrawerToFrontNextFrame = bConsoleDrawerVisible;
 	bFocusConsoleInputNextFrame = bConsoleDrawerVisible && bFocusInput;
 	ConsoleBacktickCycleState = bConsoleDrawerVisible ? 2 : 0;
+	if (bConsoleDrawerVisible)
+	{
+		bContentBrowserDrawerVisible = false;
+	}
 	if (!bConsoleDrawerVisible)
 	{
 		bFocusConsoleButtonNextFrame = true;
+	}
+}
+
+void FEditorMainPanel::ToggleContentBrowserDrawer()
+{
+	bContentBrowserDrawerVisible = !bContentBrowserDrawerVisible;
+	bBringContentBrowserDrawerToFrontNextFrame = bContentBrowserDrawerVisible;
+	if (bContentBrowserDrawerVisible)
+	{
+		bConsoleDrawerVisible = false;
+		ConsoleBacktickCycleState = 0;
+		bFocusConsoleInputNextFrame = false;
 	}
 }
 
@@ -850,6 +989,10 @@ void FEditorMainPanel::HandleGlobalShortcuts()
 		{
 			EditorEngine->SaveScene();
 		}
+	}
+	else if (!bShift && Input.GetKeyDown(VK_SPACE))
+	{
+		ToggleContentBrowserDrawer();
 	}
 }
 

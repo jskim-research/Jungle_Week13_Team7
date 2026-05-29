@@ -2,6 +2,7 @@
 
 #include "Editor/EditorEngine.h"
 #include "Editor/Selection/SelectionManager.h"
+#include "Editor/Settings/EditorSettings.h"
 
 #include "ImGui/imgui.h"
 
@@ -157,7 +158,7 @@ namespace
 void FEditorAnimationDebugWidget::Render(float /*DeltaTime*/)
 {
 	ImGui::SetNextWindowSize(ImVec2(420.0f, 540.0f), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("Animation Debug"))
+	if (!ImGui::Begin("Animation Debug", &FEditorSettings::Get().UI.bAnimationDebug))
 	{
 		ImGui::End();
 		return;

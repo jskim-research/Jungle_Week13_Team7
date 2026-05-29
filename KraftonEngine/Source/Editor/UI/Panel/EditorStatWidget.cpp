@@ -15,7 +15,11 @@ void FEditorStatWidget::Render(float DeltaTime)
 
 	ImGui::SetNextWindowCollapsed(true, ImGuiCond_Once);
 	ImGui::SetNextWindowSize(ImVec2(700.0f, 500.0f), ImGuiCond_Once);
-	ImGui::Begin("Stat Profiler");
+	if (!ImGui::Begin("Stat Profiler", &FEditorSettings::Get().UI.bStat))
+	{
+		ImGui::End();
+		return;
+	}
 
 	// Pause / Resume 버튼
 	if (bPaused)

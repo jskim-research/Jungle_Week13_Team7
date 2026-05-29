@@ -1,5 +1,6 @@
 #include "Editor/UI/Panel/EditorPropertyWidget.h"
 #include "Editor/EditorEngine.h"
+#include "Editor/Settings/EditorSettings.h"
 
 #include "ImGui/imgui.h"
 #include "Component/ActorComponent.h"
@@ -559,7 +560,11 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 
 	ImGui::SetNextWindowSize(ImVec2(350.0f, 500.0f), ImGuiCond_Once);
 
-	ImGui::Begin("Property Window");
+	if (!ImGui::Begin("Property Window", &FEditorSettings::Get().UI.bProperty))
+	{
+		ImGui::End();
+		return;
+	}
 
 	FSelectionManager& Selection = EditorEngine->GetSelectionManager();
 	AActor* PrimaryActor = Selection.GetPrimarySelection();
