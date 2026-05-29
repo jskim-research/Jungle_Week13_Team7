@@ -38,8 +38,7 @@ public:
 	virtual void RegisterComponent(UPrimitiveComponent* Comp) = 0;
 	virtual void UnregisterComponent(UPrimitiveComponent* Comp) = 0;
 	// 컴포넌트의 SimulatePhysics/ObjectType/Response 등이 변경된 경우 호출.
-	// PhysX는 actor 단위로 unregister + register (compound shape의 다른 컴포넌트도 함께 재등록),
-	// Native는 BodyState만 갱신.
+	// PhysX/Native 모두 해당 컴포넌트 body만 unregister + register.
 	virtual void RebuildBody(UPrimitiveComponent* Comp) = 0;
 
 	// --- 시뮬레이션 ---

@@ -186,8 +186,7 @@ public:
 	void SetAngularVelocity(const FVector& Vel);
 
 	// --- Mass / Center of Mass ---
-	// Compound shape에선 RootComponent의 값만 백엔드에 적용된다.
-	// 자식 컴포넌트의 Mass / CenterOfMassOffset은 직렬화는 되지만 무시.
+	// 각 컴포넌트의 FBodyInstance에 적용된다 (UE per-component policy).
 	UFUNCTION(Callable, Exec, Category="Physics")
 	void SetEnableGravity(bool bInEnable);
 	UFUNCTION(Pure, Category="Physics")
@@ -275,7 +274,7 @@ protected:
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Generate Overlap Events")
 	bool bGenerateOverlapEvents = false;
 
-	// 물리 파라미터 — RootComponent의 값만 백엔드에 적용 (compound shape 정책).
+	// 물리 파라미터 — 이 컴포넌트의 FBodyInstance에 적용.
 	UPROPERTY(Edit, Save, Category="Physics", DisplayName="Enable Gravity")
 	bool bEnableGravity = true;
 	UPROPERTY(Edit, Save, Category="Physics", DisplayName="Mass (kg)")
