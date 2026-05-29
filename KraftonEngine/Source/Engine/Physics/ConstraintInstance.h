@@ -4,6 +4,8 @@
 #include "Source/Engine/Physics/ConstraintInstance.generated.h"
 
 struct FPhysScene;
+struct FBodyInstance;
+struct FBodyInstanceInitParams;
 
 namespace physx
 {
@@ -190,4 +192,10 @@ public:
 		TwistLimitMinDegrees = InTwistMin;
 		TwistLimitMaxDegrees = InTwistMax;
 	}
+
+	void InitConstraint(
+		FBodyInstance* ParentBody,
+		FBodyInstance* ChildBody,
+		const FBodyInstanceInitParams& InitParams);
+	void TermConstraint();
 };
