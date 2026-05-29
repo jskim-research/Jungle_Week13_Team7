@@ -656,6 +656,7 @@ void FEditorMainPanel::RenderConsoleDrawer(float DeltaTime)
 void FEditorMainPanel::RenderContentBrowserDrawer(float DeltaTime)
 {
 	constexpr float DrawerMinHeight = 240.0f;
+	constexpr float ResizeHitHeight = 8.0f;
 	constexpr float AnimSpeed = 16.0f;
 
 	const float TargetAnim = bContentBrowserDrawerVisible ? 1.0f : 0.0f;
@@ -671,6 +672,7 @@ void FEditorMainPanel::RenderContentBrowserDrawer(float DeltaTime)
 	}
 	if (ContentBrowserDrawerAnim <= 0.001f)
 	{
+		bContentBrowserDrawerResizing = false;
 		return;
 	}
 
@@ -713,18 +715,30 @@ void FEditorMainPanel::RenderContentBrowserDrawer(float DeltaTime)
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.09f, 0.11f, 0.98f));
 	if (ImGui::Begin("##ContentBrowserDrawer", nullptr, Flags))
 	{
-		ImGui::InvisibleButton("##ContentBrowserDrawerResizeHandle", ImVec2(ImGui::GetContentRegionAvail().x, 6.0f));
-		if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+		ImGuiIO& IO = ImGui::GetIO();
+		const ImVec2 ResizeMin = ImGui::GetWindowPos();
+		const ImVec2 ResizeMax(ResizeMin.x + ImGui::GetWindowSize().x, ResizeMin.y + ResizeHitHeight);
+		const bool bResizeHovered = ImGui::IsMouseHoveringRect(ResizeMin, ResizeMax, false);
+		if (bResizeHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			bContentBrowserDrawerResizing = true;
+		}
+		if (bContentBrowserDrawerResizing && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		{
+			bContentBrowserDrawerResizing = false;
+		}
+		if (bResizeHovered || bContentBrowserDrawerResizing)
 		{
 			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
 		}
-		if (ImGui::IsItemActive())
+		if (bContentBrowserDrawerResizing)
 		{
 			ContentBrowserDrawerHeight = (std::max)(
 				DrawerMinHeight,
-				(std::min)(ContentBrowserDrawerHeight - ImGui::GetIO().MouseDelta.y, MaxHeight));
+				(std::min)(ContentBrowserDrawerHeight - IO.MouseDelta.y, MaxHeight));
 		}
 
+		ImGui::Dummy(ImVec2(0.0f, 6.0f));
 		if (ImGui::SmallButton("Content Browser"))
 		{
 			ToggleContentBrowserDrawer();
