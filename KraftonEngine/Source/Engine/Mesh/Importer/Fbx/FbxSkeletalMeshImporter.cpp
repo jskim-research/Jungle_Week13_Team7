@@ -55,6 +55,8 @@ namespace
 			RefBone.LocalBindPose   = Bone.GetReferenceLocalPose();
 			RefBone.GlobalBindPose  = Bone.GetReferenceGlobalPose();
 			RefBone.InverseBindPose = Bone.GetInverseBindPose();
+			RefBone.bOverrideTranslationRetargetMode = Bone.bOverrideTranslationRetargetMode;
+			RefBone.TranslationRetargetMode = Bone.TranslationRetargetMode;
 			Context.ReferenceSkeleton.Bones.push_back(RefBone);
 		}
 

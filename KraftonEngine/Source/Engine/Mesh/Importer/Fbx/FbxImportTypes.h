@@ -59,6 +59,7 @@ struct FFbxAnimationImportOptions
 {
 	// Empty means import every stack. Filled means import only matching FBX AnimStack indices.
 	TSet<int32> SelectedStackIndices;
+	const FReferenceSkeleton* TargetReferenceSkeleton = nullptr;
 
 	bool ShouldImportStack(int32 StackIndex) const
 	{

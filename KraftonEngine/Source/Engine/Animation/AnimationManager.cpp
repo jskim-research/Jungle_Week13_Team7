@@ -354,8 +354,16 @@ bool FAnimationManager::ImportAnimationForSkeleton(const FAnimationImportRequest
         return false;
     }
 
+    USkeleton* TargetSkeleton = FSkeletonManager::Get().LoadSkeleton(Request.TargetSkeletonPath);
+    if (!TargetSkeleton)
+    {
+        UE_LOG("Animation import failed: target skeleton not found. Path=%s", Request.TargetSkeletonPath.c_str());
+        return false;
+    }
+
     FFbxAnimationImportOptions ImportOptions;
     ImportOptions.SelectedStackIndices = Request.SelectedAnimationStackIndices;
+    ImportOptions.TargetReferenceSkeleton = &TargetSkeleton->GetReferenceSkeleton();
 
     FFbxAnimationImportResult ImportResult;
     if (!FFbxImporter::ImportAnimationOnly(Request.SourceFbxPath, ImportResult, &ImportOptions))
