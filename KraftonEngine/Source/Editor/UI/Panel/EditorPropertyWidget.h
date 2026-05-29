@@ -22,6 +22,8 @@ private:
 	bool CanDeleteSelectedComponent(AActor* Actor, UActorComponent* Comp) const;
 	void DeleteSelectedComponent(AActor* Actor, UActorComponent* Comp);
 	void DrawComponentDeleteContextMenu(AActor* Actor, UActorComponent* Comp);
+	bool IsComponentTreeItemSelected(const UActorComponent* Comp) const;
+	void SelectComponentInTree(UActorComponent* Comp);
 
 	void RenameActor(AActor* PrimaryActor);
 	void RenderComponentTree(AActor* Actor);

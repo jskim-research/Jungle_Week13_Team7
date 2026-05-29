@@ -103,9 +103,13 @@ void FEditorMainPanel::Create(FWindowsWindow* InWindow, FRenderer& InRenderer, U
 	Colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.28f, 0.28f, 0.30f, 1.0f);
 	Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.18f, 0.18f, 0.20f, 1.0f);
 	Colors[ImGuiCol_DockingEmptyBg] = UnifiedBlack;
-	Colors[ImGuiCol_Header] = UnifiedBlack;
-	Colors[ImGuiCol_HeaderHovered] = UnifiedBlackHovered;
-	Colors[ImGuiCol_HeaderActive] = UnifiedBlackActive;
+	// Selectable / TreeNode 선택 배경 — WindowBg 와 동일하면 목록 선택이 보이지 않음
+	const ImVec4 SelectionBg = ImVec4(0.22f, 0.22f, 0.24f, 1.0f);
+	const ImVec4 SelectionBgHovered = ImVec4(0.30f, 0.30f, 0.33f, 1.0f);
+	const ImVec4 SelectionBgActive = ImVec4(0.36f, 0.36f, 0.39f, 1.0f);
+	Colors[ImGuiCol_Header] = SelectionBg;
+	Colors[ImGuiCol_HeaderHovered] = SelectionBgHovered;
+	Colors[ImGuiCol_HeaderActive] = SelectionBgActive;
 	Colors[ImGuiCol_Button] = UnifiedBlackActive;
 	Colors[ImGuiCol_ButtonHovered] = ImVec4(0.16f, 0.16f, 0.18f, 1.0f);
 	Colors[ImGuiCol_ButtonActive] = ImVec4(0.20f, 0.20f, 0.22f, 1.0f);

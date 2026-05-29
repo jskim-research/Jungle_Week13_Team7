@@ -604,6 +604,23 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 	const TArray<AActor*>& SelectedActors = Selection.GetSelectedActors();
 	const int32 SelectionCount = static_cast<int32>(SelectedActors.size());
 
+	// 뷰포트 / Scene Manager 선택과 Property 트리 하이라이트 동기화
+	if (USceneComponent* MgrSelected = Selection.GetSelectedComponent();
+		IsValid(MgrSelected) && MgrSelected->GetOwner() == PrimaryActor)
+	{
+		USceneComponent* Root = PrimaryActor->GetRootComponent();
+		if (IsValid(MgrSelected) && MgrSelected != Root)
+		{
+			bActorSelected = false;
+			SelectedComponent = MgrSelected;
+		}
+		else if (IsValid(SelectedComponent) && SelectedComponent != Root && !bActorSelected)
+		{
+			bActorSelected = true;
+			SelectedComponent = nullptr;
+		}
+	}
+
 	// ========== 고정 영역: Actor Info (clickable) ==========
 	if (SelectionCount > 1)
 	{
@@ -612,14 +629,13 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 		FString PrimaryName = PrimaryActor->GetFName().ToString();
 		if (PrimaryName.empty()) PrimaryName = PrimaryActor->GetClass()->GetName();
 
-		bool bHighlight = bActorSelected;
-		if (bHighlight) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
-		ImGui::Text("Name: %s (+%d)", PrimaryName.c_str(), SelectionCount - 1);
-		if (bHighlight) ImGui::PopStyleColor();
-		if (ImGui::IsItemClicked())
+		char NameLabel[256];
+		snprintf(NameLabel, sizeof(NameLabel), "Name: %s (+%d)", PrimaryName.c_str(), SelectionCount - 1);
+		if (ImGui::Selectable(NameLabel, bActorSelected))
 		{
 			bActorSelected = true;
 			SelectedComponent = nullptr;
+			Selection.Select(PrimaryActor);
 		}
 		ImGui::SameLine();
 		char RemoveLabel[64];
@@ -650,15 +666,18 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 	}
 	else
 	{
-		ImGui::SetWindowFontScale(1.5f);
-		ImGui::Text(PrimaryActor->GetFName().ToString().c_str());
-		ImGui::SetWindowFontScale(1.0f);
+		FString PrimaryName = PrimaryActor->GetFName().ToString();
+		if (PrimaryName.empty()) PrimaryName = PrimaryActor->GetClass()->GetName();
 
-		if (ImGui::IsItemClicked())
+		ImGui::SetWindowFontScale(1.5f);
+		const float ActorRowWidth = ImGui::GetContentRegionAvail().x;
+		if (ImGui::Selectable(PrimaryName.c_str(), bActorSelected, ImGuiSelectableFlags_None, ImVec2(ActorRowWidth, 0.0f)))
 		{
 			bActorSelected = true;
 			SelectedComponent = nullptr;
+			Selection.Select(PrimaryActor);
 		}
+		ImGui::SetWindowFontScale(1.0f);
 		//ImGui::SameLine();
 
 		//ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70.0f);
@@ -774,10 +793,7 @@ void FEditorPropertyWidget::DrawComponentDeleteContextMenu(AActor* Actor, UActor
 
 	if (ImGui::MenuItem("Delete", "Del"))
 	{
-		SelectedComponent = Comp;
-		bActorSelected = false;
-		EditorEngine->GetSelectionManager().SelectComponent(
-			Cast<USceneComponent>(Comp));
+		SelectComponentInTree(Comp);
 		DeleteSelectedComponent(Actor, Comp);
 	}
 
@@ -787,6 +803,48 @@ void FEditorPropertyWidget::DrawComponentDeleteContextMenu(AActor* Actor, UActor
 	}
 
 	ImGui::EndPopup();
+}
+
+bool FEditorPropertyWidget::IsComponentTreeItemSelected(const UActorComponent* Comp) const
+{
+	if (!IsValid(Comp) || bActorSelected)
+	{
+		return false;
+	}
+
+	if (SelectedComponent == Comp)
+	{
+		return true;
+	}
+
+	if (!EditorEngine || !Comp->IsA<USceneComponent>())
+	{
+		return false;
+	}
+
+	const USceneComponent* SceneComp = static_cast<const USceneComponent*>(Comp);
+	return EditorEngine->GetSelectionManager().GetSelectedComponent() == SceneComp;
+}
+
+void FEditorPropertyWidget::SelectComponentInTree(UActorComponent* Comp)
+{
+	if (!IsValid(Comp))
+	{
+		return;
+	}
+
+	SelectedComponent = Comp;
+	bActorSelected = false;
+
+	if (!EditorEngine)
+	{
+		return;
+	}
+
+	if (USceneComponent* SceneComp = Cast<USceneComponent>(Comp))
+	{
+		EditorEngine->GetSelectionManager().SelectComponent(SceneComp);
+	}
 }
 
 void FEditorPropertyWidget::RenameActor(AActor* PrimaryActor)
@@ -1182,7 +1240,8 @@ void FEditorPropertyWidget::RenderComponentTree(AActor* Actor)
 
 			ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
-			if (!bActorSelected && SelectedComponent == Comp)
+			const bool bCompSelected = IsComponentTreeItemSelected(Comp);
+			if (bCompSelected)
 			{
 				Flags |= ImGuiTreeNodeFlags_Selected;
 			}
@@ -1191,18 +1250,12 @@ void FEditorPropertyWidget::RenderComponentTree(AActor* Actor)
 
 			if (ImGui::IsItemClicked())
 			{
-				SelectedComponent = Comp;
-				bActorSelected = false;
+				SelectComponentInTree(Comp);
 			}
 
 			if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
 			{
-				SelectedComponent = Comp;
-				bActorSelected = false;
-				if (USceneComponent* SceneComp = Cast<USceneComponent>(Comp))
-				{
-					EditorEngine->GetSelectionManager().SelectComponent(SceneComp);
-				}
+				SelectComponentInTree(Comp);
 			}
 
 			DrawComponentDeleteContextMenu(Actor, Comp);
@@ -1264,7 +1317,7 @@ void FEditorPropertyWidget::RenderSceneComponentNode(USceneComponent* Comp)
 	ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
 	if (!bHasVisibleChildren)
 		Flags |= ImGuiTreeNodeFlags_Leaf;
-	if (!bActorSelected && SelectedComponent == Comp)
+	if (IsComponentTreeItemSelected(Comp))
 		Flags |= ImGuiTreeNodeFlags_Selected;
 
 	bool bIsRoot = (Comp->GetParent() == nullptr);
@@ -1277,16 +1330,12 @@ void FEditorPropertyWidget::RenderSceneComponentNode(USceneComponent* Comp)
 
 	if (ImGui::IsItemClicked())
 	{
-		SelectedComponent = Comp;
-		bActorSelected = false;
-		EditorEngine->GetSelectionManager().SelectComponent(Comp);
+		SelectComponentInTree(Comp);
 	}
 
 	if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
 	{
-		SelectedComponent = Comp;
-		bActorSelected = false;
-		EditorEngine->GetSelectionManager().SelectComponent(Comp);
+		SelectComponentInTree(Comp);
 	}
 
 	AActor* OwnerActor = Comp->GetOwner();
