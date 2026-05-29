@@ -1,4 +1,4 @@
-#include "Mesh/Importer/Fbx/FbxAnimationImporter.h"
+﻿#include "Mesh/Importer/Fbx/FbxAnimationImporter.h"
 #include "Mesh/Importer/Fbx/FbxSceneQuery.h"
 #include "Mesh/Importer/Fbx/FbxTransformUtils.h"
 #include "Animation/AnimationRuntime.h"
@@ -31,6 +31,64 @@ namespace
 	static constexpr float                   GConstantPositionTolerance    = 1.0e-5f;
 	static constexpr float                   GConstantScaleTolerance       = 1.0e-5f;
 	static constexpr float                   GConstantRotationTolerance    = 1.0e-5f;
+	static constexpr float                   GTranslationRetargetLocationToleranceSq = 1.0e-6f;
+
+	static const FReferenceBone* FindTargetReferenceBone(const FReferenceSkeleton* TargetReferenceSkeleton, const FString& BoneName)
+	{
+		if (!TargetReferenceSkeleton)
+		{
+			return nullptr;
+		}
+
+		const int32 TargetBoneIndex = TargetReferenceSkeleton->FindBoneIndex(BoneName);
+		return TargetBoneIndex >= 0 ? &TargetReferenceSkeleton->Bones[TargetBoneIndex] : nullptr;
+	}
+
+	static ETranslationRetargetMode ResolveTranslationRetargetMode(
+		const FBone&           SourceBone,
+		const FReferenceBone*  TargetBone,
+		bool                   bLocationVaries)
+	{
+		const int32 ParentIndex = TargetBone ? TargetBone->ParentIndex : SourceBone.ParentIndex;
+		if (ParentIndex < 0)
+		{
+			return ETranslationRetargetMode::Animation;
+		}
+
+		if (TargetBone && TargetBone->bOverrideTranslationRetargetMode)
+		{
+			return TargetBone->TranslationRetargetMode;
+		}
+
+		if (SourceBone.bOverrideTranslationRetargetMode)
+		{
+			return SourceBone.TranslationRetargetMode;
+		}
+
+		return bLocationVaries ? ETranslationRetargetMode::AnimationRelative : ETranslationRetargetMode::Skeleton;
+	}
+
+	static FVector ApplyTranslationRetargetMode(
+		ETranslationRetargetMode Mode,
+		const FVector&           RawLocation,
+		const FVector&           TargetRefLocation,
+		const FVector&           FirstRawLocation)
+	{
+		switch (Mode)
+		{
+		case ETranslationRetargetMode::Animation:
+			return RawLocation;
+		case ETranslationRetargetMode::Skeleton:
+			return TargetRefLocation;
+		case ETranslationRetargetMode::AnimationRelative:
+			return TargetRefLocation + (RawLocation - FirstRawLocation);
+		case ETranslationRetargetMode::AnimationScaled:
+			// TODO: implement scaled translation retargeting.
+			return TargetRefLocation + (RawLocation - FirstRawLocation);
+		default:
+			return RawLocation;
+		}
+	}
 	
 	static float GetSceneSampleRate(FbxScene* Scene)
 	{
@@ -1358,6 +1416,9 @@ bool FFbxAnimationImporter::ImportAnimations(
 		TArray<bool> BoneHasAnimatedCurves;
 		BoneHasAnimatedCurves.resize(Context.Bones.size(), false);
 
+		TArray<TArray<FVector>> RawLocationKeysByBone;
+		RawLocationKeysByBone.resize(Context.Bones.size());
+
 		for (const auto& Pair : Context.BoneNodeToIndex)
 		{
 			FbxNode*    BoneNode  = Pair.first;
@@ -1381,7 +1442,7 @@ bool FFbxAnimationImporter::ImportAnimations(
 			FRawAnimSequenceTrack& Raw = Track.InternalTrackData;
 			if (BoneHasAnimatedCurves[BoneIndex])
 			{
-				Raw.PosKeys.reserve(NumFrames);
+				RawLocationKeysByBone[BoneIndex].reserve(NumFrames);
 				Raw.RotKeys.reserve(NumFrames);
 				Raw.ScaleKeys.reserve(NumFrames);
 			}
@@ -1423,7 +1484,11 @@ bool FFbxAnimationImporter::ImportAnimations(
 		BindLocalTransforms.resize(Context.Bones.size());
 		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Context.Bones.size()); ++BoneIndex)
 		{
-			BindLocalTransforms[BoneIndex] = FAnimationRuntime::DecomposeMatrix(Context.Bones[BoneIndex].GetReferenceLocalPose());
+			const FReferenceBone* TargetBone = FindTargetReferenceBone(
+				Options ? Options->TargetReferenceSkeleton : nullptr,
+				Context.Bones[BoneIndex].Name);
+			BindLocalTransforms[BoneIndex] = FAnimationRuntime::DecomposeMatrix(
+				TargetBone ? TargetBone->LocalBindPose : Context.Bones[BoneIndex].GetReferenceLocalPose());
 
 			if (!BoneHasAnimatedCurves[BoneIndex])
 			{
@@ -1513,9 +1578,67 @@ bool FFbxAnimationImporter::ImportAnimations(
 				const FTransform&      LocalTransform = BoneLocalTransforms[BoneIndex];
 				FRawAnimSequenceTrack& Raw            = DataModel->BoneAnimationTracks[BoneIndex].InternalTrackData;
 
-				Raw.PosKeys.push_back(LocalTransform.Location);
+				RawLocationKeysByBone[BoneIndex].push_back(LocalTransform.Location);
 				Raw.RotKeys.push_back(LocalTransform.Rotation.GetNormalized());
 				Raw.ScaleKeys.push_back(LocalTransform.Scale);
+			}
+		}
+
+		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Context.Bones.size()); ++BoneIndex)
+		{
+			if (!BoneHasAnimatedCurves[BoneIndex])
+			{
+				continue;
+			}
+
+			const TArray<FVector>& RawLocationKeys = RawLocationKeysByBone[BoneIndex];
+			const FVector TargetRefLocation = BindLocalTransforms[BoneIndex].Location;
+			const FVector FirstRawLocation = RawLocationKeys.empty() ? TargetRefLocation : RawLocationKeys.front();
+
+			bool bLocationVaries = false;
+			for (const FVector& RawLocation : RawLocationKeys)
+			{
+				if (FVector::DistSquared(RawLocation, FirstRawLocation) > GTranslationRetargetLocationToleranceSq)
+				{
+					bLocationVaries = true;
+					break;
+				}
+			}
+
+			const FReferenceBone* TargetBone = FindTargetReferenceBone(
+				Options ? Options->TargetReferenceSkeleton : nullptr,
+				Context.Bones[BoneIndex].Name);
+			const ETranslationRetargetMode Mode = ResolveTranslationRetargetMode(Context.Bones[BoneIndex], TargetBone, bLocationVaries);
+			FRawAnimSequenceTrack& Raw = DataModel->BoneAnimationTracks[BoneIndex].InternalTrackData;
+			Raw.PosKeys.reserve(RawLocationKeys.size());
+
+			for (const FVector& RawLocation : RawLocationKeys)
+			{
+				Raw.PosKeys.push_back(ApplyTranslationRetargetMode(Mode, RawLocation, TargetRefLocation, FirstRawLocation));
+			}
+
+			if (Context.Bones[BoneIndex].Name == "spine_02")
+			{
+				const FVector RawLocation0 = RawLocationKeys.empty() ? FVector::ZeroVector : RawLocationKeys.front();
+				const FVector FinalLocation0 = Raw.PosKeys.empty() ? FVector::ZeroVector : Raw.PosKeys.front();
+				UE_LOG(
+					"Translation retarget: Bone=%s Mode=%s TargetRefLocation=(%.6f, %.6f, %.6f) FirstRawLocation=(%.6f, %.6f, %.6f) bLocationVaries=%d RawLocationKeys[0]=(%.6f, %.6f, %.6f) FinalPosKeys[0]=(%.6f, %.6f, %.6f)",
+					Context.Bones[BoneIndex].Name.c_str(),
+					TranslationRetargetModeToString(Mode),
+					TargetRefLocation.X,
+					TargetRefLocation.Y,
+					TargetRefLocation.Z,
+					FirstRawLocation.X,
+					FirstRawLocation.Y,
+					FirstRawLocation.Z,
+					bLocationVaries ? 1 : 0,
+					RawLocation0.X,
+					RawLocation0.Y,
+					RawLocation0.Z,
+					FinalLocation0.X,
+					FinalLocation0.Y,
+					FinalLocation0.Z
+				);
 			}
 		}
 

@@ -1,4 +1,4 @@
-// Generated from Content/Material/Auto/M_UE4Man_ChestLogo.mat
+// Generated from Content/Material/Auto/M_UE4Man_Body.mat
 // Domain: Surface
 
 #include "Common/ConstantBuffers.hlsli"
@@ -30,10 +30,10 @@ struct FMaterialResult
 
 FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
 {
-    float3 n_50 = float3(1.000000f, 1.000000f, 1.000000f);
+    float3 n_62 = float3(1.000000f, 1.000000f, 1.000000f);
     float n_47 = 1.000000f;
     FMaterialResult Result;
-    Result.BaseColor = n_50;
+    Result.BaseColor = n_62;
     Result.Normal = float3(0, 0, 1);
     Result.Roughness = 0.5f;
     Result.Metallic = 0.0f;

@@ -14,7 +14,7 @@ public:
 	virtual void Render(ContentBrowserContext& Context);
 	virtual void RenderDetail();
 
-	virtual void RenderContextMenu(ContentBrowserContext& Context) {}
+	virtual void RenderContextMenu(ContentBrowserContext& Context);
 
 	void SetIcon(ID3D11ShaderResourceView* InIcon) { Icon = InIcon; }
 	void SetContent(FContentItem InContent) { ContentItem = InContent; }
@@ -140,6 +140,9 @@ class PNGElement final : public ContentBrowserElement
 {
 public:
 	virtual const char* GetDragItemType() override { return "PNGElement"; }
+protected:
+	const char* GetTypeLabel() const override { return "Texture"; }
+	uint32 GetAccentColor() const override { return IM_COL32(192, 64, 64, 255); }
 };
 
 #include "Editor/UI/Panel/EditorMaterialInspector.h"
@@ -153,6 +156,8 @@ public:
 
 private:
 	FEditorMaterialInspector MaterialInspector;
+	const char* GetTypeLabel() const override {return "Material"; }
+	uint32 GetAccentColor() const override { return IM_COL32(64, 192, 64, 255); }
 };
 
 class ParticleSystemElement final : public ContentBrowserElement
