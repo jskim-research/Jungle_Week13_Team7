@@ -55,6 +55,15 @@ public:
 
 	bool IsValid() const { return FileStream.is_open() && FileStream.good(); }
 
+	bool HasRemaining() override
+	{
+		if (!FileStream.is_open())
+		{
+			return false;
+		}
+		return FileStream.peek() != std::ifstream::traits_type::eof();
+	}
+
 	void Serialize(void* Data, size_t Num) override
 	{
 		if (FileStream.is_open() && Num > 0)

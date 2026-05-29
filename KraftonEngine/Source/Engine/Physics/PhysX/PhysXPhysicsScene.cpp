@@ -1,13 +1,18 @@
-﻿#include "Physics/PhysXPhysicsScene.h"
+﻿#include "Physics/PhysX/PhysXPhysicsScene.h"
 #include "Component/PrimitiveComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 #include "Component/Shape/BoxComponent.h"
 #include "Component/Shape/SphereComponent.h"
 #include "Component/Shape/CapsuleComponent.h"
 #include "GameFramework/World.h"
 #include "GameFramework/AActor.h"
+#include "Physics/BodySetup/BodySetup.h"
+#include "Physics/PhysX/PhysXShapeUtils.h"
 #include "Math/Quat.h"
 #include "Object/Object.h"  // IsAliveObject
 #include "Core/Logging/Log.h"
+
+#include <algorithm>
 
 // PhysX headers
 #include <PxPhysicsAPI.h>
@@ -72,6 +77,72 @@ namespace
 
 			OutHit.HitActor = HitActor;
 			return true;
+		}
+
+		return false;
+	}
+
+	bool ShouldUseBodyInstancePath(UPrimitiveComponent* Comp)
+	{
+		if (!IsValid(Comp))
+		{
+			return false;
+		}
+
+		// Shape component는 legacy compound 경로 유지.
+		if (Cast<UBoxComponent>(Comp) || Cast<USphereComponent>(Comp) || Cast<UCapsuleComponent>(Comp))
+		{
+			return false;
+		}
+
+		UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(Comp);
+		if (!StaticMeshComp)
+		{
+			return false;
+		}
+
+		UStaticMesh* StaticMesh = StaticMeshComp->GetStaticMesh();
+		if (!StaticMesh)
+		{
+			return false;
+		}
+
+		const UBodySetup* BodySetup = StaticMesh->GetBodySetup();
+		return BodySetup && BodySetup->HasSimpleCollision();
+	}
+
+	bool ShouldIgnoreActorForQuery(
+		const PxRigidActor* Actor,
+		const AActor* IgnoreActor,
+		const TArray<UPrimitiveComponent*>& BodyInstanceComponents)
+	{
+		if (!IgnoreActor || !Actor)
+		{
+			return false;
+		}
+
+		if (Actor->userData == IgnoreActor)
+		{
+			return true;
+		}
+
+		for (UPrimitiveComponent* Comp : BodyInstanceComponents)
+		{
+			if (!IsValid(Comp))
+			{
+				continue;
+			}
+
+			const FBodyInstance* BodyInstance = Comp->GetBodyInstance();
+			if (!BodyInstance || !BodyInstance->IsValidBodyInstance() || BodyInstance->Actor != Actor)
+			{
+				continue;
+			}
+
+			if (Comp->GetOwner() == IgnoreActor)
+			{
+				return true;
+			}
 		}
 
 		return false;
@@ -384,26 +455,6 @@ static void ApplyRootMassAndCOM(PxRigidDynamic* Dyn, UPrimitiveComponent* Root)
 //           (Native 측 O(N²) 루프의 `if (A->GetOwner() == B->GetOwner()) continue;` 가드와 동일 의미)
 //           Owner가 없거나 UUID가 0이면 가드 미적용.
 
-static void SetupFilterData(PxShape* Shape, UPrimitiveComponent* Comp)
-{
-	PxFilterData Filter;
-	Filter.word0 = static_cast<PxU32>(Comp->GetCollisionObjectType());
-	Filter.word1 = 0;
-	Filter.word2 = 0;
-	AActor* Owner = Comp ? Comp->GetOwner() : nullptr;
-	Filter.word3 = IsValid(Owner) ? Owner->GetUUID() : 0;
-
-	for (int32 Ch = 0; Ch < static_cast<int32>(ECollisionChannel::ActiveCount); ++Ch)
-	{
-		ECollisionResponse R = Comp->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Ch));
-		if (R == ECollisionResponse::Block)   Filter.word1 |= (1u << Ch);
-		if (R == ECollisionResponse::Overlap) Filter.word2 |= (1u << Ch);
-	}
-
-	Shape->setSimulationFilterData(Filter);
-	Shape->setQueryFilterData(Filter);
-}
-
 // PxFilterShader — 엔진의 채널/응답 매트릭스를 PhysX에서 처리
 // 양쪽 모두 상대 채널에 대해 Block이면 물리 충돌, 한쪽이라도 Overlap이면 트리거, 그 외 무시
 static PxFilterFlags KraftonFilterShader(
@@ -541,6 +592,7 @@ void FPhysXPhysicsScene::Shutdown()
 		Scene->setSimulationEventCallback(nullptr);
 	}
 
+	ReleaseBodyInstances();
 	ReleaseBodyMappings();
 
 	if (Scene)
@@ -630,8 +682,83 @@ void FPhysXPhysicsScene::ReleaseBodyMappings()
 	BodyMappings.clear();
 }
 
+FBodyInstanceInitParams FPhysXPhysicsScene::MakeBodyInstanceInitParams() const
+{
+	FBodyInstanceInitParams Params;
+	Params.Physics = Physics;
+	Params.Scene = Scene;
+	Params.DefaultMaterial = DefaultMaterial;
+	return Params;
+}
+
+void FPhysXPhysicsScene::ReleaseBodyInstances()
+{
+	const FBodyInstanceInitParams Params = MakeBodyInstanceInitParams();
+	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
+	{
+		if (IsValid(Comp))
+		{
+			FBodyInstance* BodyInstance = Comp->GetBodyInstance();
+			if (BodyInstance && BodyInstance->IsValidBodyInstance())
+			{
+				BodyInstance->TermBody(Params);
+			}
+		}
+	}
+	BodyInstanceComponents.clear();
+}
+
+void FPhysXPhysicsScene::PruneInvalidBodyInstanceComponents()
+{
+	BodyInstanceComponents.erase(
+		std::remove_if(BodyInstanceComponents.begin(), BodyInstanceComponents.end(),
+			[](UPrimitiveComponent* Comp)
+			{
+				return !IsValid(Comp) || !Comp->GetBodyInstance() || !Comp->GetBodyInstance()->IsValidBodyInstance();
+			}),
+		BodyInstanceComponents.end());
+}
+
+bool FPhysXPhysicsScene::ShouldIgnoreActorForQuery(const PxRigidActor* Actor, const AActor* IgnoreActor) const
+{
+	return ::ShouldIgnoreActorForQuery(Actor, IgnoreActor, BodyInstanceComponents);
+}
+
+PxRigidDynamic* FPhysXPhysicsScene::GetDynamicActorForComponent(UPrimitiveComponent* Comp) const
+{
+	if (!Comp)
+	{
+		return nullptr;
+	}
+
+	const FBodyInstance* BodyInstance = Comp->GetBodyInstance();
+	if (BodyInstance && BodyInstance->IsValidBodyInstance() && BodyInstance->Actor)
+	{
+		return BodyInstance->Actor->is<PxRigidDynamic>();
+	}
+
+	const FBodyMapping* Mapping = FindMappingByComponent(Comp);
+	if (!Mapping || !Mapping->Actor)
+	{
+		return nullptr;
+	}
+
+	return Mapping->Actor->is<PxRigidDynamic>();
+}
+
+UPrimitiveComponent* FPhysXPhysicsScene::GetMassReferenceComponent(UPrimitiveComponent* Comp) const
+{
+	const FBodyMapping* Mapping = FindMappingByComponent(Comp);
+	if (Mapping && IsValid(Mapping->RootComp))
+	{
+		return Mapping->RootComp;
+	}
+
+	return Comp;
+}
+
 // ============================================================
-// Body 관리 — Actor 단위 compound
+// Body 관리 — Actor 단위 compound (legacy)
 //
 // 한 액터의 여러 PrimitiveComponent는 같은 PxRigidActor에 shape로 합쳐진다.
 // shape의 LocalPose는 액터 RootComponent에 대한 상대 transform.
@@ -641,6 +768,25 @@ void FPhysXPhysicsScene::ReleaseBodyMappings()
 void FPhysXPhysicsScene::RegisterComponent(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene || !Physics || !DefaultMaterial) return;
+
+	if (ShouldUseBodyInstancePath(Comp))
+	{
+		if (Comp->GetBodyInstance()->IsValidBodyInstance()) return;
+
+		UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(Comp);
+		UBodySetup* BodySetup = StaticMeshComp->GetStaticMesh()->GetBodySetup();
+		Comp->GetBodyInstance()->InitBody(
+			BodySetup,
+			Comp,
+			MakeBodyInstanceInitParams(),
+			FInitBodySpawnParams(Comp));
+		if (Comp->GetBodyInstance()->IsValidBodyInstance())
+		{
+			BodyInstanceComponents.push_back(Comp);
+		}
+		return;
+	}
+
 	if (FindMappingByComponent(Comp)) return; // 이미 등록됨
 
 	AActor* OwnerActor = Comp->GetOwner();
@@ -691,6 +837,15 @@ void FPhysXPhysicsScene::UnregisterComponent(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene) return;
 
+	if (Comp->GetBodyInstance()->IsValidBodyInstance())
+	{
+		Comp->GetBodyInstance()->TermBody(MakeBodyInstanceInitParams());
+		BodyInstanceComponents.erase(
+			std::remove(BodyInstanceComponents.begin(), BodyInstanceComponents.end(), Comp),
+			BodyInstanceComponents.end());
+		return;
+	}
+
 	FBodyMapping* Mapping = FindMappingByComponent(Comp);
 	if (!Mapping) return;
 
@@ -734,10 +889,19 @@ void FPhysXPhysicsScene::UnregisterComponent(UPrimitiveComponent* Comp)
 
 void FPhysXPhysicsScene::RebuildBody(UPrimitiveComponent* Comp)
 {
-	// SimulatePhysics 변경(Dynamic ↔ Static)은 PxActor type 변경이라 actor를 통째 재생성해야 한다.
-	// 또한 ObjectType/Response 변경은 shape filterData도 새로 계산해야 정확.
-	// 단순화 위해 같은 액터의 모든 컴포넌트를 unregister + register로 일괄 재구성.
 	if (!IsValid(Comp) || !Scene) return;
+
+	if (ShouldUseBodyInstancePath(Comp) || Comp->GetBodyInstance()->IsValidBodyInstance())
+	{
+		UnregisterComponent(Comp);
+		if (ShouldUseBodyInstancePath(Comp))
+		{
+			RegisterComponent(Comp);
+		}
+		return;
+	}
+
+	// SimulatePhysics 변경(Dynamic ↔ Static)은 PxActor type 변경이라 actor를 통째 재생성해야 한다.
 
 	AActor* OwnerActor = Comp->GetOwner();
 	if (!IsValid(OwnerActor)) return;
@@ -775,6 +939,8 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 	{
 		DeltaTime = MaxPhysicsDeltaTime;
 	}
+
+	PruneInvalidBodyInstanceComponents();
 
 	// ── Pre-simulate: Engine → PhysX Transform 동기화 ──
 	// 한 PxActor가 여러 컴포넌트를 가지므로 RootComp 기준으로만 한 번 동기화.
@@ -825,6 +991,48 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 		}
 	}
 
+	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
+	{
+		if (!IsValid(Comp))
+		{
+			continue;
+		}
+
+		FBodyInstance* BodyInstance = Comp->GetBodyInstance();
+		if (!BodyInstance || !BodyInstance->IsValidBodyInstance() || !BodyInstance->Actor)
+		{
+			continue;
+		}
+
+		PxTransform NewPose = GetPxTransform(Comp);
+
+		if (PxRigidDynamic* Dynamic = BodyInstance->Actor->is<PxRigidDynamic>())
+		{
+			if (Dynamic->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)
+			{
+				Dynamic->setKinematicTarget(NewPose);
+			}
+			else
+			{
+				PxTransform PxPose = Dynamic->getGlobalPose();
+				PxVec3 dp = NewPose.p - PxPose.p;
+				const float DistSq = dp.x * dp.x + dp.y * dp.y + dp.z * dp.z;
+				const float QDot = std::abs(
+					NewPose.q.x * PxPose.q.x + NewPose.q.y * PxPose.q.y +
+					NewPose.q.z * PxPose.q.z + NewPose.q.w * PxPose.q.w);
+
+				if (DistSq > TeleportPosThresholdSq || QDot < TeleportRotThreshold)
+				{
+					Dynamic->setGlobalPose(NewPose);
+				}
+			}
+		}
+		else if (BodyInstance->Actor->is<PxRigidStatic>())
+		{
+			BodyInstance->Actor->setGlobalPose(NewPose);
+		}
+	}
+
 	// ── Simulate ──
 	Scene->simulate(DeltaTime);
 	Scene->fetchResults(true);
@@ -846,6 +1054,36 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 
 		Mapping.RootComp->SetWorldLocation(NewPos);
 		Mapping.RootComp->SetRelativeRotation(NewRot);
+	}
+
+	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
+	{
+		if (!IsValid(Comp))
+		{
+			continue;
+		}
+
+		FBodyInstance* BodyInstance = Comp->GetBodyInstance();
+		if (!BodyInstance || !BodyInstance->IsValidBodyInstance() || !BodyInstance->Actor)
+		{
+			continue;
+		}
+
+		PxRigidDynamic* Dynamic = BodyInstance->Actor->is<PxRigidDynamic>();
+		if (!Dynamic)
+		{
+			continue;
+		}
+		if (Dynamic->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)
+		{
+			continue;
+		}
+		if (Dynamic->isSleeping())
+		{
+			continue;
+		}
+
+		BodyInstance->SyncBodyToComponent();
 	}
 
 	// ── Dispatch deferred contact/trigger events ──
@@ -919,41 +1157,7 @@ PxShape* FPhysXPhysicsScene::AddShapeForComponent(FBodyMapping& Mapping, UPrimit
 	LocalPose.q = LocalPose.q * ShapeAxisRot;
 	Shape->setLocalPose(LocalPose);
 
-	SetupFilterData(Shape, Comp);
-
-	// Trigger flag 결정:
-	//   1) GenerateOverlapEvents=true (명시적 trigger 의도)  OR
-	//   2) 어떤 active 채널에도 Block 응답이 없음 (= simulation 의미 없음, overlap 이벤트만 의도)
-	//
-	// (2)가 핵심 — FilterShader의 PairFlag만으로는 simulation shape pair에서 contact resolve를
-	// 막지 못하는 경우가 있어, 응답이 모두 Overlap/Ignore이면 PhysX shape 자체를 trigger로
-	// 등록해 contact resolve 자체가 발생하지 않도록 한다.
-	//
-	// 같은 PxActor 안에 simulation shape와 trigger shape가 섞이면 PhysX가 거부하므로
-	// 같은 액터의 모든 컴포넌트가 같은 종류여야 안전 (현재 ATriggerVolumeBase는 BoxComponent 1개라 OK).
-	bool bShouldBeTrigger = Comp->GetGenerateOverlapEvents();
-	if (!bShouldBeTrigger)
-	{
-		bool bHasAnyBlockResponse = false;
-		for (int32 Ch = 0; Ch < static_cast<int32>(ECollisionChannel::ActiveCount); ++Ch)
-		{
-			if (Comp->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Ch)) == ECollisionResponse::Block)
-			{
-				bHasAnyBlockResponse = true;
-				break;
-			}
-		}
-		bShouldBeTrigger = !bHasAnyBlockResponse;
-	}
-
-	if (bShouldBeTrigger)
-	{
-		Shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
-		Shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
-	}
-
-	// userData: shape 단위로 PrimitiveComponent 매핑 — 콜백에서 역참조용
-	Shape->userData = Comp;
+	PhysXShapeUtils::FinalizeShape(Shape, Comp);
 
 	return Shape;
 }
@@ -986,16 +1190,21 @@ bool FPhysXPhysicsScene::Sweep(const FVector& Start, const FVector& Dir, float M
 	// Raycast의 FChannelRaycastFilter와 동일한 로직, Sweep용으로 재선언
 	struct FChannelSweepFilter : PxQueryFilterCallback
 	{
+		const TArray<UPrimitiveComponent*>& BodyInstanceComponents;
 		const AActor* IgnoreActor = nullptr;
 		PxU32 TraceBit = 0;
-		FChannelSweepFilter(const AActor* InIgnoreActor, ECollisionChannel InChannel)
-			: IgnoreActor(InIgnoreActor)
+		FChannelSweepFilter(
+			const TArray<UPrimitiveComponent*>& InBodyInstanceComponents,
+			const AActor* InIgnoreActor,
+			ECollisionChannel InChannel)
+			: BodyInstanceComponents(InBodyInstanceComponents)
+			, IgnoreActor(InIgnoreActor)
 			, TraceBit(1u << static_cast<PxU32>(InChannel))
 		{
 		}
 		PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* Shape, const PxRigidActor* Actor, PxHitFlags&) override
 		{
-			if (IgnoreActor && Actor && Actor->userData == IgnoreActor)
+			if (::ShouldIgnoreActorForQuery(Actor, IgnoreActor, BodyInstanceComponents))
 				return PxQueryHitType::eNONE;
 
 			if (Shape)
@@ -1038,7 +1247,7 @@ bool FPhysXPhysicsScene::Sweep(const FVector& Start, const FVector& Dir, float M
 	PxSweepBuffer Hit;
 	PxQueryFilterData FilterData;
 	FilterData.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER;
-	FChannelSweepFilter FilterCallback(IgnoreActor, TraceChannel);
+	FChannelSweepFilter FilterCallback(BodyInstanceComponents, IgnoreActor, TraceChannel);
 
 	bool bStatus = Scene->sweep(
 		GeomHolder.any(),    // sweep geometry
@@ -1129,27 +1338,21 @@ const FPhysXPhysicsScene::FBodyMapping* FPhysXPhysicsScene::FindMappingByCompone
 
 void FPhysXPhysicsScene::AddForce(UPrimitiveComponent* Comp, const FVector& Force)
 {
-	FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 	Dyn->addForce(ToPxVec3(Force));
 }
 
 void FPhysXPhysicsScene::AddForceAtLocation(UPrimitiveComponent* Comp, const FVector& Force, const FVector& WorldLocation)
 {
-	FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 	PxRigidBodyExt::addForceAtPos(*Dyn, ToPxVec3(Force), ToPxVec3(WorldLocation));
 }
 
 void FPhysXPhysicsScene::AddTorque(UPrimitiveComponent* Comp, const FVector& Torque)
 {
-	FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 	Dyn->addTorque(ToPxVec3(Torque));
 }
@@ -1160,36 +1363,28 @@ void FPhysXPhysicsScene::AddTorque(UPrimitiveComponent* Comp, const FVector& Tor
 
 FVector FPhysXPhysicsScene::GetLinearVelocity(UPrimitiveComponent* Comp) const
 {
-	const FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return { 0, 0, 0 };
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return { 0, 0, 0 };
 	return ToFVector(Dyn->getLinearVelocity());
 }
 
 void FPhysXPhysicsScene::SetLinearVelocity(UPrimitiveComponent* Comp, const FVector& Vel)
 {
-	FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 	Dyn->setLinearVelocity(ToPxVec3(Vel));
 }
 
 FVector FPhysXPhysicsScene::GetAngularVelocity(UPrimitiveComponent* Comp) const
 {
-	const FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return { 0, 0, 0 };
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return { 0, 0, 0 };
 	return ToFVector(Dyn->getAngularVelocity());
 }
 
 void FPhysXPhysicsScene::SetAngularVelocity(UPrimitiveComponent* Comp, const FVector& Vel)
 {
-	FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 	Dyn->setAngularVelocity(ToPxVec3(Vel));
 }
@@ -1200,41 +1395,31 @@ void FPhysXPhysicsScene::SetAngularVelocity(UPrimitiveComponent* Comp, const FVe
 
 void FPhysXPhysicsScene::SetMass(UPrimitiveComponent* Comp, float NewMass)
 {
-	FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 
-	// setMassAndUpdateInertia(rigid, mass, com=NULL)는 COM을 shape 분포로
-	// 자동 재계산하면서 이전 setCMassLocalPose를 덮어쓴다. RootComp의
-	// CenterOfMassOffset을 명시 전달해 보존.
-	PxVec3 LocalCOM = M->RootComp ? ToPxVec3(M->RootComp->GetCenterOfMass()) : PxVec3(0);
+	UPrimitiveComponent* MassRef = GetMassReferenceComponent(Comp);
+	PxVec3 LocalCOM = MassRef ? ToPxVec3(MassRef->GetCenterOfMass()) : PxVec3(0);
 	PxRigidBodyExt::setMassAndUpdateInertia(*Dyn, NewMass, &LocalCOM);
 }
 
 float FPhysXPhysicsScene::GetMass(UPrimitiveComponent* Comp) const
 {
-	const FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return 1.0f;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return 1.0f;
 	return Dyn->getMass();
 }
 
 void FPhysXPhysicsScene::SetCenterOfMass(UPrimitiveComponent* Comp, const FVector& LocalOffset)
 {
-	FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return;
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return;
 	Dyn->setCMassLocalPose(PxTransform(ToPxVec3(LocalOffset)));
 }
 
 FVector FPhysXPhysicsScene::GetCenterOfMass(UPrimitiveComponent* Comp) const
 {
-	const FBodyMapping* M = FindMappingByComponent(Comp);
-	if (!M || !M->Actor) return { 0, 0, 0 };
-	PxRigidDynamic* Dyn = M->Actor->is<PxRigidDynamic>();
+	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
 	if (!Dyn) return { 0, 0, 0 };
 	return ToFVector(Dyn->getCMassLocalPose().p);
 }
@@ -1254,18 +1439,23 @@ bool FPhysXPhysicsScene::Raycast(const FVector& Start, const FVector& Dir, float
 	// trigger flag가 set된 shape는 PhysX 측 query에서 자동 제외되므로 별도 처리 불필요.
 	struct FChannelRaycastFilter : PxQueryFilterCallback
 	{
+		const TArray<UPrimitiveComponent*>& BodyInstanceComponents;
 		const AActor* IgnoreActor = nullptr;
 		PxU32 TraceBit = 0;
 
-		FChannelRaycastFilter(const AActor* InIgnoreActor, ECollisionChannel InChannel)
-			: IgnoreActor(InIgnoreActor)
+		FChannelRaycastFilter(
+			const TArray<UPrimitiveComponent*>& InBodyInstanceComponents,
+			const AActor* InIgnoreActor,
+			ECollisionChannel InChannel)
+			: BodyInstanceComponents(InBodyInstanceComponents)
+			, IgnoreActor(InIgnoreActor)
 			, TraceBit(1u << static_cast<PxU32>(InChannel))
 		{
 		}
 
 		PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* Shape, const PxRigidActor* Actor, PxHitFlags&) override
 		{
-			if (IgnoreActor && Actor && Actor->userData == IgnoreActor)
+			if (::ShouldIgnoreActorForQuery(Actor, IgnoreActor, BodyInstanceComponents))
 			{
 				return PxQueryHitType::eNONE;
 			}
@@ -1293,7 +1483,7 @@ bool FPhysXPhysicsScene::Raycast(const FVector& Start, const FVector& Dir, float
 	PxRaycastBuffer Hit;
 	PxQueryFilterData FilterData;
 	FilterData.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER;
-	FChannelRaycastFilter FilterCallback(IgnoreActor, TraceChannel);
+	FChannelRaycastFilter FilterCallback(BodyInstanceComponents, IgnoreActor, TraceChannel);
 
 	bool bStatus = Scene->raycast(ToPxVec3(Start), ToPxVec3(Dir), MaxDist, Hit, PxHitFlag::eDEFAULT, FilterData, &FilterCallback);
 	if (!bStatus || !Hit.hasBlock) return false;
@@ -1323,18 +1513,23 @@ bool FPhysXPhysicsScene::RaycastByObjectTypes(const FVector& Start, const FVecto
 	// Trigger flag shape 는 PhysX 측 query 단계에서 자동 제외.
 	struct FObjectTypeRaycastFilter : PxQueryFilterCallback
 	{
+		const TArray<UPrimitiveComponent*>& BodyInstanceComponents;
 		const AActor* IgnoreActor = nullptr;
 		PxU32 ObjectTypeMask = 0;
 
-		FObjectTypeRaycastFilter(const AActor* InIgnoreActor, PxU32 InMask)
-			: IgnoreActor(InIgnoreActor)
+		FObjectTypeRaycastFilter(
+			const TArray<UPrimitiveComponent*>& InBodyInstanceComponents,
+			const AActor* InIgnoreActor,
+			PxU32 InMask)
+			: BodyInstanceComponents(InBodyInstanceComponents)
+			, IgnoreActor(InIgnoreActor)
 			, ObjectTypeMask(InMask)
 		{
 		}
 
 		PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* Shape, const PxRigidActor* Actor, PxHitFlags&) override
 		{
-			if (IgnoreActor && Actor && Actor->userData == IgnoreActor)
+			if (::ShouldIgnoreActorForQuery(Actor, IgnoreActor, BodyInstanceComponents))
 			{
 				return PxQueryHitType::eNONE;
 			}
@@ -1359,7 +1554,7 @@ bool FPhysXPhysicsScene::RaycastByObjectTypes(const FVector& Start, const FVecto
 	PxRaycastBuffer Hit;
 	PxQueryFilterData FilterData;
 	FilterData.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER;
-	FObjectTypeRaycastFilter FilterCallback(IgnoreActor, ObjectTypeMask);
+	FObjectTypeRaycastFilter FilterCallback(BodyInstanceComponents, IgnoreActor, ObjectTypeMask);
 
 	bool bStatus = Scene->raycast(ToPxVec3(Start), ToPxVec3(Dir), MaxDist, Hit, PxHitFlag::eDEFAULT, FilterData, &FilterCallback);
 	if (!bStatus || !Hit.hasBlock) return false;

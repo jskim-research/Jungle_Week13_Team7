@@ -42,6 +42,7 @@ public:
 	const TArray<FStaticMaterial>& GetStaticMaterials() const;
 	UBodySetup* GetBodySetup() const { return BodySetup.Get(); }
 	UBodySetup* CreateBodySetup();
+	void EnsureSimpleCollisionFromBounds();
 
 	void InitResources(ID3D11Device* InDevice);
 
@@ -55,10 +56,16 @@ public:
 	const TArray<FStaticMeshSection>& GetLODSections(uint32 LODLevel) const;
 
 private:
+	static constexpr uint32 BodySetupChunkMagicV1 = 0x474D5342u; // 'BSMG' — Phase 2 legacy
+	static constexpr uint32 BodySetupChunkMagicV2 = 0x32534D42u; // 'BSM2' — UBodySetupCore + AggGeom
+
+	void SerializeBodySetupCollision(FArchive& Ar);
+	void SerializeBodySetupCollisionLegacy(FArchive& Ar);
+
 	FString AssetPathFileName = "None";
 
 	FStaticMesh* StaticMeshAsset = nullptr;
-	UPROPERTY(Transient, Category="Physics")
+	UPROPERTY(Save, Category="Physics")
 	TObjectPtr<UBodySetup> BodySetup = nullptr;
 	TArray<FStaticMaterial> StaticMaterials; // 슬롯 이름과 머티리얼 인터페이스를 묶어서 저장하는 배열
 	mutable FMeshTriangleBVH MeshTrianglePickingBVH; // 빠른 picking을 위해 메시 내부에 트리 형태로 만들어지는 자료구조

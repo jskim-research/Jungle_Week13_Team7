@@ -40,10 +40,7 @@ UPrimitiveComponent::~UPrimitiveComponent()
 {
 	if (UWorld* World = GetWorldEvenIfPendingKill())
 	{
-		if (IPhysicsScene* PS = World->GetPhysicsScene())
-		{
-			PS->UnregisterComponent(this);
-		}
+		DestroyPhysicsState();
 	}
 	DestroyRenderState();
 }
@@ -52,22 +49,37 @@ void UPrimitiveComponent::BeginPlay()
 {
 	USceneComponent::BeginPlay();
 
-	// 직렬화나 InitDefaultComponents에서 CollisionEnabled가 이미 설정된 경우 등록.
-	// 이 시점에 SimulatePhysics/ObjectType/Response/Mass/COM 등 모든 셋업이 끝나있어
-	// PhysX/Native가 정확한 값으로 body를 생성한다.
-	if (IsQueryCollisionEnabled())
-	{
-		if (UWorld* World = GetWorld())
-		{
-			if (IPhysicsScene* PS = World->GetPhysicsScene())
-			{
-				PS->RegisterComponent(this);
-			}
-		}
-	}
+	CreatePhysicsState();
 
 	// flag는 등록 흐름이 끝난 직후에만 true. 이후 setter들이 PhysicsScene::RebuildBody 호출.
 	bComponentHasBegunPlay = true;
+}
+
+void UPrimitiveComponent::CreatePhysicsState()
+{
+	if (!IsQueryCollisionEnabled())
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (IPhysicsScene* PS = World->GetPhysicsScene())
+		{
+			PS->RegisterComponent(this);
+		}
+	}
+}
+
+void UPrimitiveComponent::DestroyPhysicsState()
+{
+	if (UWorld* World = GetWorldEvenIfPendingKill())
+	{
+		if (IPhysicsScene* PS = World->GetPhysicsScene())
+		{
+			PS->UnregisterComponent(this);
+		}
+	}
 }
 
 void UPrimitiveComponent::EndPlay()
@@ -79,10 +91,7 @@ void UPrimitiveComponent::EndPlay()
 	// 이중 호출은 mapping/proxy 부재로 noop.
 	if (UWorld* World = GetWorldEvenIfPendingKill())
 	{
-		if (IPhysicsScene* PS = World->GetPhysicsScene())
-		{
-			PS->UnregisterComponent(this);
-		}
+		DestroyPhysicsState();
 
 		// SpatialPartition에서도 즉시 제거. World::DestroyActor가 Partition.RemoveActor를
 		// 호출하지만, 그 시점에 OctreeNode 캐시가 이미 stale일 수 있는 경로(스폰 폭주 시
@@ -108,10 +117,7 @@ void UPrimitiveComponent::RouteComponentDestroyed()
 
     if (UWorld* World = GetWorldEvenIfPendingKill())
     {
-        if (IPhysicsScene* PS = World->GetPhysicsScene())
-        {
-            PS->UnregisterComponent(this);
-        }
+        DestroyPhysicsState();
 
         World->GetPartition().RemoveSinglePrimitive(this);
         World->MarkWorldPrimitivePickingBVHDirty();
@@ -241,19 +247,13 @@ void UPrimitiveComponent::PostEditProperty(const char* PropertyName)
 		// 최종 상태인 채로 등록된다 (PIE Duplicate 경로와 동일한 타이밍).
 		if (!bComponentHasBegunPlay) return;
 
-		if (UWorld* World = GetWorld())
+		if (IsQueryCollisionEnabled())
 		{
-			if (IPhysicsScene* PS = World->GetPhysicsScene())
-			{
-				if (IsQueryCollisionEnabled())
-				{
-					PS->RegisterComponent(this);
-				}
-				else
-				{
-					PS->UnregisterComponent(this);
-				}
-			}
+			CreatePhysicsState();
+		}
+		else
+		{
+			DestroyPhysicsState();
 		}
 	}
 	else if (strcmp(PropertyName, "Mass") == 0 || strcmp(PropertyName, "Mass (kg)") == 0)
@@ -436,9 +436,13 @@ void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled InEnabled)
 	if (bWasQuery != bIsQuery)
 	{
 		if (bIsQuery)
-			World->GetPhysicsScene()->RegisterComponent(this);
+		{
+			CreatePhysicsState();
+		}
 		else
-			World->GetPhysicsScene()->UnregisterComponent(this);
+		{
+			DestroyPhysicsState();
+		}
 	}
 	else if (bWasQuery && bIsQuery)
 	{

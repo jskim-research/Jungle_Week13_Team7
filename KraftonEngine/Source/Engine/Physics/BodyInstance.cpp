@@ -2,7 +2,8 @@
 
 #include "Component/PrimitiveComponent.h"
 #include "GameFramework/AActor.h"
-#include "Physics/BodySetup.h"
+#include "Physics/BodySetup/BodySetup.h"
+#include "Physics/PhysX/PhysXShapeUtils.h"
 
 #include <PxPhysicsAPI.h>
 #include <algorithm>
@@ -63,77 +64,61 @@ namespace
 	{
 		return PxTransform(ToPxVec3(ScaleVector(Center, Scale)), ToPxQuat(Rotation.ToQuaternion()));
 	}
+}
 
-	void SetupFilterData(PxShape* Shape, UPrimitiveComponent* Comp)
+FInitBodySpawnParams::FInitBodySpawnParams(const UPrimitiveComponent* PrimComp)
+{
+	if (PrimComp)
 	{
-		if (!Shape || !Comp)
-		{
-			return;
-		}
-
-		PxFilterData Filter;
-		Filter.word0 = static_cast<PxU32>(Comp->GetCollisionObjectType());
-		Filter.word1 = 0;
-		Filter.word2 = 0;
-		AActor* Owner = Comp->GetOwner();
-		Filter.word3 = Owner ? Owner->GetUUID() : 0;
-
-		for (int32 Ch = 0; Ch < static_cast<int32>(ECollisionChannel::ActiveCount); ++Ch)
-		{
-			const ECollisionResponse Response = Comp->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Ch));
-			if (Response == ECollisionResponse::Block)
-			{
-				Filter.word1 |= (1u << Ch);
-			}
-			if (Response == ECollisionResponse::Overlap)
-			{
-				Filter.word2 |= (1u << Ch);
-			}
-		}
-
-		Shape->setSimulationFilterData(Filter);
-		Shape->setQueryFilterData(Filter);
-	}
-
-	bool ShouldUseTriggerShape(UPrimitiveComponent* Comp)
-	{
-		if (!Comp)
-		{
-			return false;
-		}
-		if (Comp->GetGenerateOverlapEvents())
-		{
-			return true;
-		}
-
-		for (int32 Ch = 0; Ch < static_cast<int32>(ECollisionChannel::ActiveCount); ++Ch)
-		{
-			if (Comp->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Ch)) == ECollisionResponse::Block)
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
-	void FinalizeShape(PxShape* Shape, UPrimitiveComponent* Comp)
-	{
-		if (!Shape)
-		{
-			return;
-		}
-
-		SetupFilterData(Shape, Comp);
-		if (ShouldUseTriggerShape(Comp))
-		{
-			Shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
-			Shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
-		}
-		Shape->userData = Comp;
+		bStaticPhysics = !PrimComp->GetSimulatePhysics();
 	}
 }
 
-void FBodyInstance::InitBody(UBodySetup* InBodySetup, UPrimitiveComponent* InOwnerComponent, const FBodyInstanceInitParams& InitParams)
+namespace
+{
+	bool ResolveSimulatePhysics(
+		const UBodySetup* InBodySetup,
+		const UPrimitiveComponent* OwnerComponent,
+		const FInitBodySpawnParams& SpawnParams)
+	{
+		if (SpawnParams.bStaticPhysics)
+		{
+			return false;
+		}
+
+		if (SpawnParams.bPhysicsTypeDeterminesSimulation && InBodySetup)
+		{
+			switch (InBodySetup->GetPhysicsType())
+			{
+			case EPhysicsType::Kinematic:
+				return false;
+			case EPhysicsType::Simulated:
+				return true;
+			case EPhysicsType::Default:
+			default:
+				break;
+			}
+		}
+
+		return OwnerComponent ? OwnerComponent->GetSimulatePhysics() : false;
+	}
+
+	bool ResolveEnableCollision(const UBodySetup* InBodySetup, const UPrimitiveComponent* OwnerComponent)
+	{
+		if (InBodySetup && InBodySetup->GetCollisionResponse() == EBodyCollisionResponse::Disabled)
+		{
+			return false;
+		}
+
+		return OwnerComponent ? OwnerComponent->IsQueryCollisionEnabled() : true;
+	}
+}
+
+void FBodyInstance::InitBody(
+	UBodySetup* InBodySetup,
+	UPrimitiveComponent* InOwnerComponent,
+	const FBodyInstanceInitParams& InitParams,
+	const FInitBodySpawnParams& SpawnParams)
 {
 	TermBody(InitParams);
 
@@ -146,7 +131,8 @@ void FBodyInstance::InitBody(UBodySetup* InBodySetup, UPrimitiveComponent* InOwn
 		return;
 	}
 
-	bSimulatePhysics = OwnerComponent->GetSimulatePhysics();
+	bSimulatePhysics = ResolveSimulatePhysics(BodySetup, OwnerComponent, SpawnParams);
+	bEnableCollision = ResolveEnableCollision(BodySetup, OwnerComponent);
 	Mass = OwnerComponent->GetMass();
 
 	const PxTransform BodyTransform = GetPxTransform(OwnerComponent);
@@ -217,7 +203,7 @@ void FBodyInstance::CreateShapesFromBodySetup(const FBodyInstanceInitParams& Ini
 		}
 
 		Shape->setLocalPose(GetElemTransform(Elem.Center, Elem.Rotation, Scale));
-		FinalizeShape(Shape, OwnerComponent);
+		PhysXShapeUtils::FinalizeShape(Shape, OwnerComponent);
 	}
 
 	for (const FKSphereElem& Elem : AggGeom.SphereElems)
@@ -233,7 +219,7 @@ void FBodyInstance::CreateShapesFromBodySetup(const FBodyInstanceInitParams& Ini
 		}
 
 		Shape->setLocalPose(PxTransform(ToPxVec3(ScaleVector(Elem.Center, Scale)), PxQuat(PxIdentity)));
-		FinalizeShape(Shape, OwnerComponent);
+		PhysXShapeUtils::FinalizeShape(Shape, OwnerComponent);
 	}
 
 	for (const FKSphylElem& Elem : AggGeom.SphylElems)
@@ -252,7 +238,7 @@ void FBodyInstance::CreateShapesFromBodySetup(const FBodyInstanceInitParams& Ini
 		PxTransform LocalPose = GetElemTransform(Elem.Center, Elem.Rotation, Scale);
 		LocalPose.q = LocalPose.q * PxQuat(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f));
 		Shape->setLocalPose(LocalPose);
-		FinalizeShape(Shape, OwnerComponent);
+		PhysXShapeUtils::FinalizeShape(Shape, OwnerComponent);
 	}
 }
 

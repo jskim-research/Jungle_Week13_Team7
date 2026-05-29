@@ -13,6 +13,17 @@ namespace physx
 	class PxScene;
 }
 
+// UE: FInitBodySpawnParams — spawn/simulation policy for InitBody.
+struct FInitBodySpawnParams
+{
+	explicit FInitBodySpawnParams(const UPrimitiveComponent* PrimComp = nullptr);
+
+	bool bStaticPhysics = true;
+	bool bPhysicsTypeDeterminesSimulation = false;
+};
+
+// PhysX backend scene injection for this repo's IPhysicsScene adapter.
+// UE passes FPhysScene* separately to InitBody instead of bundling it here.
 struct FBodyInstanceInitParams
 {
 	physx::PxPhysics* Physics = nullptr;
@@ -31,7 +42,11 @@ struct FBodyInstance
 	bool bEnableCollision = true;
 	float Mass = 10.0f;
 
-	void InitBody(UBodySetup* InBodySetup, UPrimitiveComponent* InOwnerComponent, const FBodyInstanceInitParams& InitParams);
+	void InitBody(
+		UBodySetup* InBodySetup,
+		UPrimitiveComponent* InOwnerComponent,
+		const FBodyInstanceInitParams& InitParams,
+		const FInitBodySpawnParams& SpawnParams = FInitBodySpawnParams());
 	void TermBody(const FBodyInstanceInitParams& InitParams);
 
 	void CreateShapesFromBodySetup(const FBodyInstanceInitParams& InitParams);

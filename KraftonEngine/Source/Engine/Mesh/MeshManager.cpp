@@ -508,6 +508,7 @@ bool FMeshManager::ReimportStaticMesh(const FString& BinaryPath, ID3D11Device* D
 	NewMeshAsset->PathFileName = Metadata.SourcePath;
 	StaticMesh->SetStaticMaterials(std::move(ParsedMaterials));
 	StaticMesh->SetStaticMeshAsset(NewMeshAsset.release());
+	StaticMesh->EnsureSimpleCollisionFromBounds();
 
 	if (!SaveStaticMeshBinary(StaticMesh, PackagePath, Metadata.SourcePath)) return false;
 
@@ -681,6 +682,7 @@ UStaticMesh* FMeshManager::LoadStaticMesh(const FString& PathFileName, const FIm
 	NewMeshAsset->PathFileName = NormalizeProjectPath(PathFileName);
 	StaticMesh->SetStaticMaterials(std::move(ParsedMaterials));
 	StaticMesh->SetStaticMeshAsset(NewMeshAsset.release());
+	StaticMesh->EnsureSimpleCollisionFromBounds();
 
 	// import가 끝난 StaticMesh는 .statbin으로 저장한다.
 	// 다음 로드부터는 무거운 원본 파싱을 건너뛸 수 있다.
@@ -758,6 +760,7 @@ UStaticMesh* FMeshManager::LoadStaticMesh(const FString& PathFileName, ID3D11Dev
 	NewMeshAsset->PathFileName = NormalizeProjectPath(PathFileName);
 	StaticMesh->SetStaticMaterials(std::move(ParsedMaterials));
 	StaticMesh->SetStaticMeshAsset(NewMeshAsset.release());
+	StaticMesh->EnsureSimpleCollisionFromBounds();
 
 	// .statbin이 없을 때만 원본 파일을 import한다.
 	// import가 성공하면 바로 캐시 파일을 만들어 둔다.
