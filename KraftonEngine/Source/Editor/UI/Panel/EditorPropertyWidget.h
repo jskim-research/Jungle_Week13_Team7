@@ -49,4 +49,13 @@ private:
 	int32 PendingStaticFbxSkinnedMeshPolicy = 0;
 
 	FFbxSceneImportDialogState SkeletalFbxImportDialog;
+
+	// ##Details child scroll — property edit 시 partial render 후 다음 frame 에만 복원.
+	// 매 frame SetScrollY 하면 ImGui 기본 scroll 과 충돌해 스크롤 시 떨림이 난다.
+	float CachedDetailsScrollY = 0.0f;
+	bool bPendingDetailsScrollRestore = false;
+	bool bDeferDetailsScrollRestore = false;
+	AActor* LastDetailsScrollActor = nullptr;
+	UActorComponent* LastDetailsScrollComponent = nullptr;
+	bool LastDetailsScrollActorMode = true;
 };
