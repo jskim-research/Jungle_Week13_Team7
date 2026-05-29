@@ -1,4 +1,4 @@
-#include "SkeletalMeshComponent.h"
+﻿#include "SkeletalMeshComponent.h"
 #include "Render/Proxy/SkeletalMeshSceneProxy.h"
 
 #include "Animation/AnimationManager.h"
@@ -25,6 +25,8 @@
 #include <cstring>
 
 #include "Object/GarbageCollection.h"
+#include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsConstraintTemplate.h"
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
 {
@@ -477,6 +479,56 @@ void USkeletalMeshComponent::Serialize(FArchive& Ar)
     Ar << AnimationData.bLooping;
     Ar << AnimationData.bPlaying;
 
+}
+
+UPhysicsAsset* USkeletalMeshComponent::GetPhysicsAsset() const
+{
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	if (!SkelMesh)
+	{
+		return nullptr;
+	}
+
+	return SkelMesh->GetPhysicsAsset();
+}
+
+void USkeletalMeshComponent::InstantiatePhysicsAsset()
+{
+}
+
+void USkeletalMeshComponent::TermPhysicsAsset()
+{
+}
+
+void USkeletalMeshComponent::StartRagdoll()
+{
+}
+
+void USkeletalMeshComponent::EndRagdoll()
+{
+}
+
+void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
+{
+}
+
+void USkeletalMeshComponent::SyncSkeletonPoseFromBodies()
+{
+}
+
+FBodyInstance* USkeletalMeshComponent::GetBodyInstance(FName BoneName) const
+{
+    return nullptr;
+}
+
+FBodyInstance* USkeletalMeshComponent::GetBodyInstance(int32 BodyIndex) const
+{
+    return nullptr;
+}
+
+FConstraintInstance* USkeletalMeshComponent::GetConstraintInstance(int32 ConstraintIndex) const
+{
+    return nullptr;
 }
 
 bool USkeletalMeshComponent::EvaluateAnimInstance(float DeltaTime)
