@@ -896,7 +896,13 @@ bool FPhysXPhysicsScene::Sweep(const FVector& Start, const FVector& Dir, float M
 		return false;
 	}
 
-	const PxTransform PxStartPose(ToPxVec3(Start), ToPxQuat(ShapeRot));
+	PxQuat SweepRot = ToPxQuat(ShapeRot);
+	if (Shape.ShapeType == ECollisionShape::Capsule)
+	{
+		SweepRot = (SweepRot * PhysXShapeUtils::GetCapsuleAxisCorrectionQuat()).getNormalized();
+	}
+
+	const PxTransform PxStartPose(ToPxVec3(Start), SweepRot);
 	const PxVec3 PxDir = ToPxVec3(Dir);
 
 	PxSweepBuffer Hit;

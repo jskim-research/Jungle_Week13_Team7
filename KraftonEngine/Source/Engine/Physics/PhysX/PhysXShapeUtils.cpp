@@ -9,6 +9,12 @@
 
 namespace PhysXShapeUtils
 {
+	physx::PxQuat GetCapsuleAxisCorrectionQuat()
+	{
+		// Rotate PhysX +X capsule axis to engine +Z (right-handed, Z-up).
+		return physx::PxQuat(-physx::PxHalfPi, physx::PxVec3(0.0f, 1.0f, 0.0f));
+	}
+
 	void SetupFilterData(physx::PxShape* Shape, UPrimitiveComponent* Comp)
 	{
 		if (!Shape || !Comp)
