@@ -1,0 +1,10 @@
+{
+  "Origin" : "FbxImport",
+  "Parameters" : {
+    "HasNormalMap" : 0.000000,
+    "SectionColor" : [0.000000, 0.000000, 0.000000, 1.000000]
+  },
+  "PathFileName" : "Asset/Animation/Samurai/SamuraiAttack1_M_UE4Man_ChestLogo.mat",
+  "RenderPass" : "Opaque",
+  "ShaderPath" : "Shaders/Geometry/UberLit.hlsl"
+}

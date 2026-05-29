@@ -1,4 +1,4 @@
-#include "MeshEditorWidget.h"
+﻿#include "MeshEditorWidget.h"
 
 #ifdef GetCurrentTime
 #undef GetCurrentTime
@@ -23,6 +23,7 @@
 #include "Animation/AnimationManager.h"
 #include "Animation/Sequence/AnimDataModel.h"
 #include "Asset/AssetRegistry.h"
+#include "Editor/EditorEngine.h"
 #include "UI/Asset/Animation/AnimationTransportBar.h"
 #include "UI/Asset/Animation/AnimationTimelinePanel.h"
 #include "UI/Asset/Animation/AnimSequencePropertyPanel.h"
@@ -73,6 +74,20 @@ namespace
 		return A.SkeletonPath == B.SkeletonPath
 			&& A.SkeletonAssetGuid == B.SkeletonAssetGuid
 			&& A.CompatibilitySignature == B.CompatibilitySignature;
+	}
+
+	bool IsValidAssetPath(const FString& Path)
+	{
+		return !Path.empty() && Path != "None";
+	}
+
+	FString ExtractStemFromPath(const FString& Path)
+	{
+		const size_t LastSlash = Path.find_last_of("/\\");
+		const size_t Start = (LastSlash == FString::npos) ? 0 : LastSlash + 1;
+		const size_t LastDot = Path.find_last_of('.');
+		const size_t End = (LastDot == FString::npos || LastDot < Start) ? Path.size() : LastDot;
+		return Path.substr(Start, End - Start);
 	}
 
 	TMap<FString, double> GMeshImportDurationsByAssetPath;
@@ -702,7 +717,7 @@ void FMeshEditorWidget::RenderMeshLayout()
 	USkeletalMesh* SkeletalMesh = Cast<USkeletalMesh>(EditedObject);
 
 	// Left: mesh info
-	const float StatsWidth = 220.0f;
+	const float StatsWidth = 420.0f;
 	ImGui::BeginChild("MeshInfo", ImVec2(StatsWidth, 0), true);
 	ImGui::Text("Mesh Info");
 	ImGui::Separator();
@@ -747,6 +762,114 @@ void FMeshEditorWidget::RenderMeshLayout()
 			if (!Path.empty() && Path != "None")
 			{
 				ImGui::TextWrapped("Path:\n%s", Path.c_str());
+			}
+
+			ImGui::Dummy(ImVec2(0, 8));
+			ImGui::Separator();
+			ImGui::TextUnformatted("Materials");
+
+			const TArray<FSkeletalMaterial>& SkeletalMaterials = SkeletalMesh->GetSkeletalMaterials();
+			const TArray<UMaterial*> OverrideMaterials = PreviewMeshComponent
+				? PreviewMeshComponent->GetOverrideMaterials()
+				: TArray<UMaterial*>();
+
+			if (Asset->Sections.empty())
+			{
+				ImGui::TextDisabled("No mesh sections.");
+			}
+			else if (ImGui::BeginTable(
+				"SkeletalMeshSectionMaterials",
+				5,
+				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+				ImGuiTableFlags_SizingStretchProp))
+			{
+				ImGui::TableSetupColumn("Section", ImGuiTableColumnFlags_WidthFixed, 58.0f);
+				ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+				ImGui::TableSetupColumn("Name");
+				ImGui::TableSetupColumn("Path");
+				ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 94.0f);
+				ImGui::TableHeadersRow();
+
+				for (int32 SectionIndex = 0; SectionIndex < static_cast<int32>(Asset->Sections.size()); ++SectionIndex)
+				{
+					const FSkeletalMeshSection& Section = Asset->Sections[SectionIndex];
+					const int32 MaterialIndex = Section.MaterialIndex;
+					const bool bValidMaterialIndex =
+						MaterialIndex >= 0 && MaterialIndex < static_cast<int32>(SkeletalMaterials.size());
+
+					UMaterial* Material = nullptr;
+					FString MaterialPath;
+					FString MaterialName = "Invalid Material";
+					FString SlotLabel = std::to_string(MaterialIndex);
+
+					if (bValidMaterialIndex)
+					{
+						const FSkeletalMaterial& MaterialSlot = SkeletalMaterials[MaterialIndex];
+						if (!MaterialSlot.MaterialSlotName.empty())
+						{
+							SlotLabel += " / " + MaterialSlot.MaterialSlotName;
+						}
+
+						if (MaterialIndex < static_cast<int32>(OverrideMaterials.size()) && OverrideMaterials[MaterialIndex])
+						{
+							Material = OverrideMaterials[MaterialIndex];
+						}
+						else
+						{
+							Material = MaterialSlot.MaterialInterface;
+						}
+
+						MaterialPath = Material ? Material->GetAssetPathFileName() : MaterialSlot.MaterialPath;
+						if (Material)
+						{
+							MaterialName = IsValidAssetPath(MaterialPath) ? ExtractStemFromPath(MaterialPath) : Material->GetName();
+						}
+						else
+						{
+							MaterialName = IsValidAssetPath(MaterialPath) ? "Invalid Material" : "None";
+						}
+					}
+					else if (!Section.MaterialSlotName.empty())
+					{
+						SlotLabel += " / " + Section.MaterialSlotName;
+					}
+
+					const bool bCanOpenMaterial = IsValidAssetPath(MaterialPath);
+
+					ImGui::PushID(SectionIndex);
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					ImGui::Text("%d", SectionIndex);
+					ImGui::TableSetColumnIndex(1);
+					ImGui::TextWrapped("%s", SlotLabel.c_str());
+					ImGui::TableSetColumnIndex(2);
+					ImGui::TextWrapped("%s", MaterialName.c_str());
+					ImGui::TableSetColumnIndex(3);
+					ImGui::TextWrapped("%s", bCanOpenMaterial ? MaterialPath.c_str() : "None");
+					ImGui::TableSetColumnIndex(4);
+					if (!bCanOpenMaterial)
+					{
+						ImGui::BeginDisabled();
+					}
+					if (ImGui::SmallButton("Open Material") && bCanOpenMaterial && EditorEngine)
+					{
+						if (!Material)
+						{
+							Material = FMaterialManager::Get().GetOrCreateMaterial(MaterialPath);
+						}
+						if (Material)
+						{
+							EditorEngine->OpenAssetEditorForObject(Material);
+						}
+					}
+					if (!bCanOpenMaterial)
+					{
+						ImGui::EndDisabled();
+					}
+					ImGui::PopID();
+				}
+
+				ImGui::EndTable();
 			}
 		}
 	}
