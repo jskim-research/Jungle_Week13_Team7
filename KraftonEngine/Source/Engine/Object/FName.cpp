@@ -89,5 +89,10 @@ FString FName::ToString() const
 
 bool FName::IsValid() const
 {
+	return !IsNone();
+}
+
+bool FName::IsNone() const
+{
 	return DisplayIndex != 0 || ComparisonIndex != 0;
 }
