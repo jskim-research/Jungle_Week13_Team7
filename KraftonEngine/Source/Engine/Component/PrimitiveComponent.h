@@ -143,6 +143,8 @@ public:
 	bool IsCollisionEnabled() const { return CollisionEnabled != ECollisionEnabled::NoCollision; }
 	UFUNCTION(Pure, Category="Collision")
 	bool IsQueryCollisionEnabled() const;
+	UFUNCTION(Pure, Category="Collision")
+	bool IsPhysicsCollisionEnabled() const;
 
 	UFUNCTION(Callable, Exec, Category="Collision")
 	void SetCollisionObjectType(ECollisionChannel InChannel);
@@ -186,6 +188,11 @@ public:
 	// --- Mass / Center of Mass ---
 	// Compound shape에선 RootComponent의 값만 백엔드에 적용된다.
 	// 자식 컴포넌트의 Mass / CenterOfMassOffset은 직렬화는 되지만 무시.
+	UFUNCTION(Callable, Exec, Category="Physics")
+	void SetEnableGravity(bool bInEnable);
+	UFUNCTION(Pure, Category="Physics")
+	bool GetEnableGravity() const { return bEnableGravity; }
+
 	UFUNCTION(Callable, Exec, Category="Physics")
 	void SetMass(float NewMass);
 	UFUNCTION(Pure, Category="Physics")
@@ -269,6 +276,8 @@ protected:
 	bool bGenerateOverlapEvents = false;
 
 	// 물리 파라미터 — RootComponent의 값만 백엔드에 적용 (compound shape 정책).
+	UPROPERTY(Edit, Save, Category="Physics", DisplayName="Enable Gravity")
+	bool bEnableGravity = true;
 	UPROPERTY(Edit, Save, Category="Physics", DisplayName="Mass (kg)")
 	float Mass = 1.0f;                          // kg
 	UPROPERTY(Edit, Save, Category="Physics", DisplayName="Center Of Mass Offset")

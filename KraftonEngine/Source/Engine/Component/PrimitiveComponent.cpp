@@ -57,7 +57,7 @@ void UPrimitiveComponent::BeginPlay()
 
 void UPrimitiveComponent::CreatePhysicsState()
 {
-	if (!IsQueryCollisionEnabled())
+	if (!IsQueryCollisionEnabled() && !IsPhysicsCollisionEnabled())
 	{
 		return;
 	}
@@ -247,7 +247,7 @@ void UPrimitiveComponent::PostEditProperty(const char* PropertyName)
 		// 최종 상태인 채로 등록된다 (PIE Duplicate 경로와 동일한 타이밍).
 		if (!bComponentHasBegunPlay) return;
 
-		if (IsQueryCollisionEnabled())
+		if (IsQueryCollisionEnabled() || IsPhysicsCollisionEnabled())
 		{
 			CreatePhysicsState();
 		}
@@ -256,10 +256,19 @@ void UPrimitiveComponent::PostEditProperty(const char* PropertyName)
 			DestroyPhysicsState();
 		}
 	}
+	else if (strcmp(PropertyName, "bSimulatePhysics") == 0 || strcmp(PropertyName, "Simulate Physics") == 0)
+	{
+		if (!bComponentHasBegunPlay) return;
+		NotifyPhysicsBodyDirty();
+	}
 	else if (strcmp(PropertyName, "Mass") == 0 || strcmp(PropertyName, "Mass (kg)") == 0)
 	{
 		// 에디터 슬라이더로 값을 바꾼 경우 백엔드에 즉시 반영.
 		SetMass(Mass);
+	}
+	else if (strcmp(PropertyName, "bEnableGravity") == 0 || strcmp(PropertyName, "Enable Gravity") == 0)
+	{
+		SetEnableGravity(bEnableGravity);
 	}
 	else if (strcmp(PropertyName, "CenterOfMassOffset") == 0 || strcmp(PropertyName, "Center Of Mass Offset") == 0)
 	{
@@ -422,9 +431,9 @@ void UPrimitiveComponent::EnsureWorldAABBUpdated() const
 
 void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled InEnabled)
 {
-	bool bWasQuery = IsQueryCollisionEnabled();
+	const bool bWasRegistered = IsQueryCollisionEnabled() || IsPhysicsCollisionEnabled();
 	CollisionEnabled = InEnabled;
-	bool bIsQuery = IsQueryCollisionEnabled();
+	const bool bIsRegistered = IsQueryCollisionEnabled() || IsPhysicsCollisionEnabled();
 
 	// 컴포넌트 BeginPlay 전이면 멤버만 변경. BeginPlay에서 한 번 등록되며 그 시점엔
 	// SimulatePhysics 등 다른 셋업이 모두 완료된 상태.
@@ -433,9 +442,9 @@ void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled InEnabled)
 	UWorld* World = GetWorld();
 	if (!World) return;
 
-	if (bWasQuery != bIsQuery)
+	if (bWasRegistered != bIsRegistered)
 	{
-		if (bIsQuery)
+		if (bIsRegistered)
 		{
 			CreatePhysicsState();
 		}
@@ -444,7 +453,7 @@ void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled InEnabled)
 			DestroyPhysicsState();
 		}
 	}
-	else if (bWasQuery && bIsQuery)
+	else if (bIsRegistered)
 	{
 		// 이미 등록된 상태에서 enabled 종류 변경 (예: QueryOnly ↔ QueryAndPhysics) — 재구성
 		NotifyPhysicsBodyDirty();
@@ -454,6 +463,12 @@ void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled InEnabled)
 bool UPrimitiveComponent::IsQueryCollisionEnabled() const
 {
 	return CollisionEnabled == ECollisionEnabled::QueryOnly
+		|| CollisionEnabled == ECollisionEnabled::QueryAndPhysics;
+}
+
+bool UPrimitiveComponent::IsPhysicsCollisionEnabled() const
+{
+	return CollisionEnabled == ECollisionEnabled::PhysicsOnly
 		|| CollisionEnabled == ECollisionEnabled::QueryAndPhysics;
 }
 
@@ -542,6 +557,14 @@ void UPrimitiveComponent::SetAngularVelocity(const FVector& Vel)
 	if (UWorld* W = GetWorld())
 			if (IPhysicsScene* PS = W->GetPhysicsScene())
 				PS->SetAngularVelocity(this, Vel);
+}
+
+void UPrimitiveComponent::SetEnableGravity(bool bInEnable)
+{
+	bEnableGravity = bInEnable;
+	if (UWorld* W = GetWorld())
+		if (IPhysicsScene* PS = W->GetPhysicsScene())
+			PS->SetEnableGravity(this, bInEnable);
 }
 
 void UPrimitiveComponent::SetMass(float NewMass)

@@ -56,6 +56,9 @@ public:
 	virtual FVector GetAngularVelocity(UPrimitiveComponent* Comp) const = 0;
 	virtual void SetAngularVelocity(UPrimitiveComponent* Comp, const FVector& Vel) = 0;
 
+	// --- Gravity ---
+	virtual void SetEnableGravity(UPrimitiveComponent* Comp, bool bEnable) = 0;
+
 	// --- Mass / Center of Mass ---
 	virtual void SetMass(UPrimitiveComponent* Comp, float Mass) = 0;
 	virtual float GetMass(UPrimitiveComponent* Comp) const = 0;

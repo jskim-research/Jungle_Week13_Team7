@@ -1,4 +1,4 @@
-#include "Physics/BodySetup/BodySetup.h"
+﻿#include "Physics/BodySetup/BodySetup.h"
 
 #include "Mesh/Static/StaticMeshAsset.h"
 #include "Serialization/Archive.h"
@@ -31,7 +31,7 @@ void UBodySetup::SerializeAggGeom(FArchive& Ar, FKAggregateGeom& AggGeom)
 	Ar << AggGeom.SphereElems << AggGeom.BoxElems << AggGeom.SphylElems;
 }
 
-void UBodySetup::SerializeCollision(FArchive& Ar)
+void UBodySetup::SerializeCollision(FArchive& Ar)  
 {
 	SerializeCore(Ar, *this);
 

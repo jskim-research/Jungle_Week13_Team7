@@ -110,7 +110,9 @@ namespace
 			return false;
 		}
 
-		return OwnerComponent ? OwnerComponent->IsQueryCollisionEnabled() : true;
+		return OwnerComponent
+			? (OwnerComponent->IsQueryCollisionEnabled() || OwnerComponent->IsPhysicsCollisionEnabled())
+			: true;
 	}
 }
 
@@ -153,6 +155,8 @@ void FBodyInstance::InitBody(
 		const float MassKg = Mass > 0.0f ? Mass : 1.0f;
 		PxRigidBodyExt::setMassAndUpdateInertia(*DynamicActor, MassKg);
 		DynamicActor->setCMassLocalPose(PxTransform(ToPxVec3(OwnerComponent->GetCenterOfMass())));
+		DynamicActor->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !OwnerComponent->GetEnableGravity());
+		DynamicActor->wakeUp();
 	}
 
 	InitParams.Scene->addActor(*Actor);

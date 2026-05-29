@@ -122,8 +122,11 @@ void FNativePhysicsScene::Tick(float DeltaTime)
 		State.Velocity = State.Velocity + State.AccumulatedForce * InvMass * DeltaTime;
 		State.AngularVelocity = State.AngularVelocity + State.AccumulatedTorque * InvMass * DeltaTime;
 
-		// 중력
-		State.Velocity.Z += GravityZ * DeltaTime;
+		// 중력 (Simulate Physics + Enable Gravity 둘 다 켜져 있을 때만)
+		if (Comp->GetEnableGravity())
+		{
+			State.Velocity.Z += GravityZ * DeltaTime;
+		}
 
 		FVector Pos = Comp->GetWorldLocation();
 		Pos = Pos + State.Velocity * DeltaTime;
@@ -379,6 +382,11 @@ void FNativePhysicsScene::SetAngularVelocity(UPrimitiveComponent* Comp, const FV
 // ============================================================
 // Mass
 // ============================================================
+
+void FNativePhysicsScene::SetEnableGravity(UPrimitiveComponent* /*Comp*/, bool /*bEnable*/)
+{
+	// Native 백엔드는 Tick에서 컴포넌트의 GetEnableGravity()를 직접 읽는다.
+}
 
 void FNativePhysicsScene::SetMass(UPrimitiveComponent* Comp, float Mass)
 {
