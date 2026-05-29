@@ -21,6 +21,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/Instance/AnimSingleNodeInstance.h"
 #include "Animation/AnimationManager.h"
+#include "Animation/Skeleton/Skeleton.h"
 #include "Animation/Sequence/AnimDataModel.h"
 #include "Asset/AssetRegistry.h"
 #include "Editor/EditorEngine.h"
@@ -79,6 +80,58 @@ namespace
 	bool IsValidAssetPath(const FString& Path)
 	{
 		return !Path.empty() && Path != "None";
+	}
+
+	int32 FindFirstRootBoneIndex(const FSkeletalMesh* Asset)
+	{
+		if (!Asset)
+		{
+			return -1;
+		}
+
+		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
+		{
+			if (Asset->Bones[BoneIndex].ParentIndex < 0)
+			{
+				return BoneIndex;
+			}
+		}
+
+		return Asset->Bones.empty() ? -1 : 0;
+	}
+
+	void SyncTranslationRetargetModeToSkeleton(USkeletalMesh* Mesh, int32 BoneIndex, const FBone& Bone)
+	{
+		if (!Mesh)
+		{
+			return;
+		}
+
+		USkeleton* Skeleton = Mesh->GetSkeleton();
+		if (!Skeleton)
+		{
+			return;
+		}
+
+		FReferenceSkeleton& RefSkeleton = Skeleton->GetMutableReferenceSkeleton();
+		if (BoneIndex < 0 || BoneIndex >= RefSkeleton.GetNumBones())
+		{
+			return;
+		}
+
+		int32 RefBoneIndex = BoneIndex;
+		if (RefSkeleton.Bones[RefBoneIndex].Name != Bone.Name)
+		{
+			RefBoneIndex = RefSkeleton.FindBoneIndex(Bone.Name);
+			if (RefBoneIndex < 0)
+			{
+				return;
+			}
+		}
+
+		FReferenceBone& RefBone = RefSkeleton.Bones[RefBoneIndex];
+		RefBone.bOverrideTranslationRetargetMode = Bone.bOverrideTranslationRetargetMode;
+		RefBone.TranslationRetargetMode = Bone.TranslationRetargetMode;
 	}
 
 	FString ExtractStemFromPath(const FString& Path)
@@ -262,7 +315,12 @@ void FMeshEditorWidget::Open(UObject* Object)
 
 	WorldContext.World->SetEditorPOVProvider(&ViewportClient);
 
-	ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), -1);
+	SelectedBoneIndex = -1;
+	if (USkeletalMesh* Mesh = Cast<USkeletalMesh>(EditedObject))
+	{
+		SelectedBoneIndex = FindFirstRootBoneIndex(Mesh->GetSkeletalMeshAsset());
+	}
+	ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), SelectedBoneIndex);
 
 	FSlateApplication::Get().RegisterViewport(&ViewportClient);
 
@@ -271,7 +329,6 @@ void FMeshEditorWidget::Open(UObject* Object)
 
 	ActiveTab         = EMeshEditorTab::Skeleton;
 	AnimTabState      = FAnimationTabState {};
-	SelectedBoneIndex = -1;
 }
 
 void FMeshEditorWidget::Close()
@@ -590,6 +647,18 @@ void FMeshEditorWidget::RenderViewportPanel(ImVec2 Size)
 void FMeshEditorWidget::RenderSkeletonLayout()
 {
 	USkeletalMesh* SkeletalMesh = Cast<USkeletalMesh>(EditedObject);
+	if (SkeletalMesh)
+	{
+		const FSkeletalMesh* Asset = SkeletalMesh->GetSkeletalMeshAsset();
+		const bool bInvalidSelection = !Asset
+			|| SelectedBoneIndex < 0
+			|| SelectedBoneIndex >= static_cast<int32>(Asset->Bones.size());
+		if (bInvalidSelection)
+		{
+			SelectedBoneIndex = FindFirstRootBoneIndex(Asset);
+			ViewportClient.SetSelectedBone(SkeletalMesh, SelectedBoneIndex);
+		}
+	}
 
 	// Left: bone hierarchy
 	ImGui::BeginChild("BoneHierarchy", ImVec2(HierarchyWidth, 0), true);
@@ -654,6 +723,40 @@ void FMeshEditorWidget::RenderSkeletonLayout()
 
 		ImGui::Text("Name: %s", Bone.Name.c_str());
 		ImGui::Text("Index: %d", SelectedBoneIndex);
+		ImGui::Dummy(ImVec2(0, 6));
+
+		const bool bRootBone = Bone.ParentIndex < 0;
+		if (bRootBone)
+		{
+			ImGui::Text("Translation Retarget: %s", TranslationRetargetModeToString(ETranslationRetargetMode::Animation));
+			ImGui::TextDisabled("Root bone is fixed to Animation.");
+		}
+		else
+		{
+			bool bOverrideTranslationRetargetMode = Bone.bOverrideTranslationRetargetMode;
+			if (ImGui::Checkbox("Override Translation Retarget", &bOverrideTranslationRetargetMode))
+			{
+				Bone.bOverrideTranslationRetargetMode = bOverrideTranslationRetargetMode;
+				SyncTranslationRetargetModeToSkeleton(SkeletalMesh, SelectedBoneIndex, Bone);
+			}
+
+			const char* ModeLabels[] = { "Animation", "Skeleton", "AnimationRelative", "AnimationScaled" };
+			int32 ModeIndex = static_cast<int32>(Bone.TranslationRetargetMode);
+			if (!Bone.bOverrideTranslationRetargetMode)
+			{
+				ImGui::BeginDisabled();
+			}
+			if (ImGui::Combo("Translation Retarget", &ModeIndex, ModeLabels, IM_ARRAYSIZE(ModeLabels)))
+			{
+				Bone.TranslationRetargetMode = static_cast<ETranslationRetargetMode>(ModeIndex);
+				SyncTranslationRetargetModeToSkeleton(SkeletalMesh, SelectedBoneIndex, Bone);
+			}
+			if (!Bone.bOverrideTranslationRetargetMode)
+			{
+				ImGui::EndDisabled();
+				ImGui::TextDisabled("Auto: Skeleton if location is constant, AnimationRelative if it varies.");
+			}
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 
 		USkeletalMeshComponent* PreviewMeshComponent = ViewportClient.GetPreviewMeshComponent();

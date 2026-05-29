@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Types/CoreTypes.h"
+#include "Animation/Skeleton/SkeletonTypes.h"
 #include "Render/Types/VertexTypes.h"
 #include "Render/Resource/Buffer.h"
 #include "Math/Matrix.h"
@@ -29,6 +30,8 @@ struct FBone
 	FMatrix LocalMatrix = FMatrix::Identity;
 	FMatrix GlobalMatrix = FMatrix::Identity;
 	FMatrix InverseBindPoseMatrix = FMatrix::Identity;
+	bool                     bOverrideTranslationRetargetMode = false;
+	ETranslationRetargetMode TranslationRetargetMode          = ETranslationRetargetMode::Skeleton;
 
 	void SyncSeparatedPoseDataFromLegacy()
 	{
