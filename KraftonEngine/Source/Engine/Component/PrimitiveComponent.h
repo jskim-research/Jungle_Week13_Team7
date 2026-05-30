@@ -254,6 +254,8 @@ public:
 	FBodyInstance* GetBodyInstance() { return &BodyInstance; }
 	const FBodyInstance* GetBodyInstance() const { return &BodyInstance; }
 
+	bool GetPhysicsBodyDebugInfo(struct FPhysicsBodyDebugInfo& OutInfo) const;
+
 	// UE lifecycle names — adapter to IPhysicsScene registration in this repo.
 	void CreatePhysicsState();
 	void DestroyPhysicsState();

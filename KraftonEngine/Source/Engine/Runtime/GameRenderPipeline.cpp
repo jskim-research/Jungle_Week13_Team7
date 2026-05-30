@@ -161,5 +161,5 @@ void FGameRenderPipeline::CollectCommands(FScene* Scene, FRenderer& Renderer, FC
 	Builder.BeginCollect(Frame);
 
 	Collector.Collect(Game->GetWorld(), Frame, Output);
-	Builder.BuildCommands(Frame, Scene, Output);
+	Builder.BuildCommands(Frame, Scene, Output, Game->GetWorld());
 }

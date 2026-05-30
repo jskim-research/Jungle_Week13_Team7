@@ -674,6 +674,8 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataRibbon.cpp" />
     <ClCompile Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.cpp" />
     <ClCompile Include="Source\Engine\Physics\BodyInstance.cpp" />
+    <ClCompile Include="Source\Engine\Physics\CollisionDebugDraw.cpp" />
+    <ClCompile Include="Source\Engine\Physics\CollisionWireUtils.cpp" />
     <ClCompile Include="Source\Engine\Physics\BodySetup\BodySetup.cpp" />
     <ClCompile Include="Source\Engine\Physics\BodySetup\BodySetupCore.cpp" />
     <ClCompile Include="Source\Engine\Physics\PhysX\PhysXShapeUtils.cpp" />

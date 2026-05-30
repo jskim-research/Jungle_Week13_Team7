@@ -71,6 +71,6 @@ void FObjViewerRenderPipeline::RenderPreviewViewport(FRenderer& Renderer)
 	Builder.BeginCollect(Frame);
 	FCollectOutput Output;
 	Collector.Collect(World, Frame, Output);
-	Builder.BuildCommands(Frame, &Scene, Output);
+	Builder.BuildCommands(Frame, &Scene, Output, World);
 	Renderer.Render(Frame, World, Scene);
 }

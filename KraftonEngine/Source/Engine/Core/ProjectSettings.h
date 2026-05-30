@@ -28,7 +28,7 @@ class FProjectSettings : public TSingleton<FProjectSettings>
 	// --- Physics ---
 	struct FPhysicsOption
 	{
-		EPhysicsBackend Backend = EPhysicsBackend::Native;
+		EPhysicsBackend Backend = EPhysicsBackend::PhysX;
 	};
 
 	// --- Game ---
