@@ -36,6 +36,9 @@
 #include "Mesh/MeshManager.h"
 #include "Mesh/Static/StaticMesh.h"
 #include "Mesh/Skeletal/SkeletalMesh.h"
+#include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsAssetManager.h"
 #include "Editor/UI/Asset/Mesh/MeshEditorWidget.h"
 #include "Platform/Paths.h"
 #include "Serialization/MemoryArchive.h"
@@ -468,6 +471,20 @@ static FString GetStemFromPath(const FString& Path)
 	size_t SlashPos = Path.find_last_of("/\\");
 	FString FileName = (SlashPos == FString::npos) ? Path : Path.substr(SlashPos + 1);
 	return RemoveExtension(FileName);
+}
+
+static FString GetTempPhysicsAssetPath(USkeletalMesh* Mesh)
+{
+	FString Stem = "Temp";
+	if (Mesh && Mesh->GetAssetPathFileName() != "None")
+	{
+		Stem = GetStemFromPath(Mesh->GetAssetPathFileName());
+	}
+	else if (Mesh && Mesh->GetSkeletalMeshAsset() && !Mesh->GetSkeletalMeshAsset()->PathFileName.empty())
+	{
+		Stem = GetStemFromPath(Mesh->GetSkeletalMeshAsset()->PathFileName);
+	}
+	return "Content/Physics/" + Stem + "_PhysicsAsset.uasset";
 }
 
 FString FEditorPropertyWidget::OpenObjFileDialog()
@@ -1531,12 +1548,127 @@ void FEditorPropertyWidget::RenderComponentProperties(AActor* Actor, const TArra
 		ImGui::PopID();
 	}
 
+	RenderSkeletalMeshPhysicsAssetTools();
 	RenderCallInEditorFunctions(SelectedComponent);
 
 	// 실제 변경이 있었을 때만 Transform dirty 마킹
 	if (bAnyChanged && IsValid(SelectedComponent) && SelectedComponent->IsA<USceneComponent>())
 	{
 		static_cast<USceneComponent*>(SelectedComponent)->MarkTransformDirty();
+	}
+}
+
+void FEditorPropertyWidget::RenderSkeletalMeshPhysicsAssetTools()
+{
+	USkeletalMeshComponent* SkelComp = Cast<USkeletalMeshComponent>(SelectedComponent);
+	if (!SkelComp)
+	{
+		return;
+	}
+
+	USkeletalMesh* SkelMesh = SkelComp->GetSkeletalMesh();
+	UPhysicsAsset* CurrentAsset = SkelComp->GetPhysicsAsset();
+	UPhysicsAsset* OverrideAsset = SkelComp->GetPhysicsAssetOverride();
+	const FString CurrentPath = CurrentAsset ? CurrentAsset->GetSourcePath() : FString("None");
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	if (ImGui::CollapsingHeader("Physics Asset Test", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Text("Using: %s", CurrentPath.empty() ? "None" : CurrentPath.c_str());
+		ImGui::Text("Source: %s", OverrideAsset ? "Override" : "SkeletalMesh Default");
+
+		FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+		const TArray<FAssetListItem>& AssetFiles = FPhysicsAssetManager::Get().GetAvailablePhysicsAssetFiles();
+		const char* Preview = OverrideAsset && !SkelComp->GetPhysicsAssetOverridePath().empty()
+			? SkelComp->GetPhysicsAssetOverridePath().c_str()
+			: "None";
+
+		ImGui::SetNextItemWidth(-1);
+		if (ImGui::BeginCombo("##PhysicsAssetOverride", Preview))
+		{
+			const bool bSelectedNone = OverrideAsset == nullptr;
+			if (ImGui::Selectable("None", bSelectedNone))
+			{
+				SkelComp->ClearPhysicsAssetOverride();
+			}
+			if (bSelectedNone)
+			{
+				ImGui::SetItemDefaultFocus();
+			}
+
+			for (const FAssetListItem& Item : AssetFiles)
+			{
+				const bool bSelected = SkelComp->GetPhysicsAssetOverridePath() == Item.FullPath;
+				if (ImGui::Selectable(Item.DisplayName.c_str(), bSelected))
+				{
+					if (UPhysicsAsset* Loaded = FPhysicsAssetManager::Get().Load(Item.FullPath))
+					{
+						SkelComp->SetPhysicsAsset(Loaded);
+					}
+				}
+				if (bSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		if (ImGui::Button("Create Temp PhysicsAsset"))
+		{
+			const FString NewPath = GetTempPhysicsAssetPath(SkelMesh);
+			if (UPhysicsAsset* NewAsset = FPhysicsAssetManager::Get().CreatePhysicsAsset(NewPath))
+			{
+				if (SkelMesh && SkelMesh->GetSkeletalMeshAsset())
+				{
+					for (const FBone& Bone : SkelMesh->GetSkeletalMeshAsset()->Bones)
+					{
+						NewAsset->AddBodySetup(FName(Bone.Name));
+					}
+				}
+
+				if (FPhysicsAssetManager::Get().Save(NewAsset))
+				{
+					UE_LOG("Create Temp PhysicsAsset saved. Path=%s", NewPath.c_str());
+				}
+				else
+				{
+					UE_LOG("Create Temp PhysicsAsset save failed. Path=%s", NewPath.c_str());
+				}
+				SkelComp->SetPhysicsAsset(NewAsset);
+				FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+			}
+		}
+
+		if (ImGui::Button("Save PhysicsAsset"))
+		{
+			const bool bSaved = FPhysicsAssetManager::Get().Save(CurrentAsset);
+			UE_LOG("Save PhysicsAsset %s. Path=%s", bSaved ? "succeeded" : "failed", CurrentPath.c_str());
+		}
+
+		if (ImGui::Button("Reload PhysicsAsset"))
+		{
+			if (CurrentAsset && !CurrentAsset->GetSourcePath().empty())
+			{
+				if (UPhysicsAsset* Reloaded = FPhysicsAssetManager::Get().Reload(CurrentAsset->GetSourcePath()))
+				{
+					SkelComp->SetPhysicsAsset(Reloaded);
+					UE_LOG("Reload PhysicsAsset succeeded. Path=%s", Reloaded->GetSourcePath().c_str());
+				}
+				else
+				{
+					UE_LOG("Reload PhysicsAsset failed. Path=%s", CurrentAsset->GetSourcePath().c_str());
+				}
+			}
+		}
+
+		if (ImGui::Button("Clear Override"))
+		{
+			SkelComp->ClearPhysicsAssetOverride();
+		}
 	}
 }
 

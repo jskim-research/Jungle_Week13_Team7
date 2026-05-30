@@ -1,14 +1,17 @@
-#include "SkeletalMesh.h"
+﻿#include "SkeletalMesh.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Serialization/Archive.h"
 #include "Animation/Skeleton/Skeleton.h"
 #include "Object/GarbageCollection.h"
+#include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsAssetManager.h"
 
 void USkeletalMesh::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	UObject::AddReferencedObjects(Collector);
 
 	Collector.AddReferencedObject(Skeleton);
+	Collector.AddReferencedObject(PhysicsAsset);
 
 	for (FSkeletalMaterial& MaterialSlot : SkeletalMaterials)
 	{
@@ -39,6 +42,23 @@ void USkeletalMesh::Serialize(FArchive& Ar)
 	Ar << SkeletalMeshAsset->Bones;
 	Ar << SkeletalMaterials;
 	Ar << SkeletalMeshAsset->MorphTargets;
+
+	if (Ar.IsSaving())
+	{
+		if (PhysicsAsset && !PhysicsAsset->GetSourcePath().empty())
+		{
+			PhysicsAssetPath = PhysicsAsset->GetSourcePath();
+		}
+		Ar << PhysicsAssetPath;
+	}
+	else if (Ar.HasRemaining())
+	{
+		Ar << PhysicsAssetPath;
+		if (!PhysicsAssetPath.empty() && PhysicsAssetPath != "None")
+		{
+			PhysicsAsset = FPhysicsAssetManager::Get().Load(PhysicsAssetPath);
+		}
+	}
 
 	if (Ar.IsLoading())
 	{
@@ -124,6 +144,15 @@ void USkeletalMesh::SetSkeleton(USkeleton* InSkeleton)
 USkeleton* USkeletalMesh::GetSkeleton() const
 {
 	return Skeleton;
+}
+
+void USkeletalMesh::SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset)
+{
+	PhysicsAsset = InPhysicsAsset;
+	if (PhysicsAsset && !PhysicsAsset->GetSourcePath().empty())
+	{
+		PhysicsAssetPath = PhysicsAsset->GetSourcePath();
+	}
 }
 
 void USkeletalMesh::SetSkeletonBinding(const FSkeletonBinding& InBinding)

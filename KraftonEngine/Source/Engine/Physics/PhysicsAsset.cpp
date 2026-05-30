@@ -1,9 +1,223 @@
 ﻿#include "PhysicsAsset.h"
 #include "PhysicsConstraintTemplate.h"
+#include "Serialization/Archive.h"
+
+#include <utility>
 
 static bool IsValidIndex(int32 Index, int32 Count)
 {
 	return Index >= 0 && Index < Count;
+}
+
+namespace
+{
+	static constexpr uint32 PhysicsAssetSerializeVersion = 1;
+
+	void SerializeConstraintFrame(FArchive& Ar, FConstraintFrame& Frame)
+	{
+		Ar << Frame.Position;
+		Ar << Frame.Rotation;
+	}
+
+	void SerializeConstraintInstanceEditorData(FArchive& Ar, FConstraintInstance& Instance)
+	{
+		Ar << Instance.ConstraintName;
+		Ar << Instance.ParentBoneName;
+		Ar << Instance.ChildBoneName;
+		SerializeConstraintFrame(Ar, Instance.ParentFrame);
+		SerializeConstraintFrame(Ar, Instance.ChildFrame);
+		Ar << Instance.bDisableCollision;
+
+		uint8 LinearX = static_cast<uint8>(Instance.LinearXMotion);
+		uint8 LinearY = static_cast<uint8>(Instance.LinearYMotion);
+		uint8 LinearZ = static_cast<uint8>(Instance.LinearZMotion);
+		Ar << LinearX;
+		Ar << LinearY;
+		Ar << LinearZ;
+		if (Ar.IsLoading())
+		{
+			Instance.LinearXMotion = static_cast<EConstraintMotion>(LinearX);
+			Instance.LinearYMotion = static_cast<EConstraintMotion>(LinearY);
+			Instance.LinearZMotion = static_cast<EConstraintMotion>(LinearZ);
+		}
+		Ar << Instance.LinearLimitSize;
+
+		uint8 Swing1 = static_cast<uint8>(Instance.Swing1Motion);
+		uint8 Swing2 = static_cast<uint8>(Instance.Swing2Motion);
+		uint8 Twist = static_cast<uint8>(Instance.TwistMotion);
+		Ar << Swing1;
+		Ar << Swing2;
+		Ar << Twist;
+		if (Ar.IsLoading())
+		{
+			Instance.Swing1Motion = static_cast<EConstraintMotion>(Swing1);
+			Instance.Swing2Motion = static_cast<EConstraintMotion>(Swing2);
+			Instance.TwistMotion = static_cast<EConstraintMotion>(Twist);
+		}
+		Ar << Instance.Swing1LimitDegrees;
+		Ar << Instance.Swing2LimitDegrees;
+		Ar << Instance.TwistLimitMinDegrees;
+		Ar << Instance.TwistLimitMaxDegrees;
+	}
+}
+
+void UPhysicsAsset::Serialize(FArchive& Ar)
+{
+	UObject::Serialize(Ar);
+
+	uint32 Version = PhysicsAssetSerializeVersion;
+	Ar << Version;
+
+	if (Ar.IsLoading())
+	{
+		for (USkeletalBodySetup* BodySetup : SkeletalBodySetups)
+		{
+			delete BodySetup;
+		}
+		SkeletalBodySetups.clear();
+
+		for (UPhysicsConstraintTemplate* ConstraintSetup : ConstraintSetups)
+		{
+			delete ConstraintSetup;
+		}
+		ConstraintSetups.clear();
+		CollisionDisableTable.clear();
+		BoundsBodies.clear();
+		BodySetupIndexMap.clear();
+	}
+
+	uint32 BodyCount = static_cast<uint32>(SkeletalBodySetups.size());
+	Ar << BodyCount;
+	if (Ar.IsLoading())
+	{
+		SkeletalBodySetups.resize(BodyCount, nullptr);
+	}
+	for (uint32 BodyIndex = 0; BodyIndex < BodyCount; ++BodyIndex)
+	{
+		if (Ar.IsLoading())
+		{
+			SkeletalBodySetups[BodyIndex] = new USkeletalBodySetup();
+		}
+
+		USkeletalBodySetup* BodySetup = SkeletalBodySetups[BodyIndex];
+		bool bHasBodySetup = BodySetup != nullptr;
+		Ar << bHasBodySetup;
+		if (!bHasBodySetup)
+		{
+			if (Ar.IsLoading())
+			{
+				SkeletalBodySetups[BodyIndex] = nullptr;
+			}
+			continue;
+		}
+
+		BodySetup->SerializeCollision(Ar);
+		Ar << BodySetup->bSkipScaleFromAnimation;
+	}
+
+	uint32 ConstraintCount = static_cast<uint32>(ConstraintSetups.size());
+	Ar << ConstraintCount;
+	if (Ar.IsLoading())
+	{
+		ConstraintSetups.resize(ConstraintCount, nullptr);
+	}
+	for (uint32 ConstraintIndex = 0; ConstraintIndex < ConstraintCount; ++ConstraintIndex)
+	{
+		UPhysicsConstraintTemplate* Template = ConstraintSetups[ConstraintIndex];
+		FConstraintInstance Instance;
+		if (Ar.IsSaving() && Template)
+		{
+			Instance = Template->GetDefaultInstance();
+			if (Instance.ConstraintName.IsNone())
+			{
+				Instance.ConstraintName = Template->GetConstraintName();
+			}
+			if (Instance.ParentBoneName.IsNone())
+			{
+				Instance.ParentBoneName = Template->GetParentBoneName();
+			}
+			if (Instance.ChildBoneName.IsNone())
+			{
+				Instance.ChildBoneName = Template->GetChildBoneName();
+			}
+		}
+
+		bool bHasTemplate = Ar.IsSaving() ? Template != nullptr : true;
+		Ar << bHasTemplate;
+		if (!bHasTemplate)
+		{
+			continue;
+		}
+
+		SerializeConstraintInstanceEditorData(Ar, Instance);
+
+		if (Ar.IsLoading())
+		{
+			Template = new UPhysicsConstraintTemplate();
+			Template->SetDefaultInstance(Instance);
+			ConstraintSetups[ConstraintIndex] = Template;
+		}
+	}
+
+	if (Ar.IsLoading())
+	{
+		UpdateBodySetupIndexMap();
+	}
+
+	TArray<std::pair<FName, FName>> DisabledCollisionPairs;
+	if (Ar.IsSaving())
+	{
+		for (const auto& Pair : CollisionDisableTable)
+		{
+			if (!Pair.second)
+			{
+				continue;
+			}
+
+			const USkeletalBodySetup* BodyA = GetBodySetup(Pair.first.BodyIndexA);
+			const USkeletalBodySetup* BodyB = GetBodySetup(Pair.first.BodyIndexB);
+			if (!BodyA || !BodyB)
+			{
+				continue;
+			}
+
+			DisabledCollisionPairs.push_back({ BodyA->GetBoneName(), BodyB->GetBoneName() });
+		}
+	}
+
+	uint32 DisabledPairCount = static_cast<uint32>(DisabledCollisionPairs.size());
+	Ar << DisabledPairCount;
+	for (uint32 PairIndex = 0; PairIndex < DisabledPairCount; ++PairIndex)
+	{
+		FName BoneA;
+		FName BoneB;
+		if (Ar.IsSaving())
+		{
+			BoneA = DisabledCollisionPairs[PairIndex].first;
+			BoneB = DisabledCollisionPairs[PairIndex].second;
+		}
+
+		Ar << BoneA;
+		Ar << BoneB;
+
+		if (Ar.IsLoading())
+		{
+			const int32 BodyIndexA = FindBodyIndex(BoneA);
+			const int32 BodyIndexB = FindBodyIndex(BoneB);
+			if (IsValidIndex(BodyIndexA, static_cast<int32>(SkeletalBodySetups.size())) &&
+				IsValidIndex(BodyIndexB, static_cast<int32>(SkeletalBodySetups.size())) &&
+				BodyIndexA != BodyIndexB)
+			{
+				CollisionDisableTable[FRigidBodyIndexPair(BodyIndexA, BodyIndexB)] = true;
+			}
+		}
+	}
+
+	if (Ar.IsLoading())
+	{
+		UpdateBodySetupIndexMap();
+		UpdateBoundsBodiesArray();
+	}
 }
 
 USkeletalBodySetup* UPhysicsAsset::GetBodySetup(int32 BodyIndex)

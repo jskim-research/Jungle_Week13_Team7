@@ -29,6 +29,7 @@
 #include "Physics/ConstraintInstance.h"
 #include "Physics/BodyInstance.h"
 #include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsAssetManager.h"
 #include "Physics/PhysicsConstraintTemplate.h"
 #include "GameFramework/World.h"
 
@@ -123,6 +124,10 @@ void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
     // Mesh 가 바뀌면 이전 AnimInstance 가 가리키던 본 인덱스/카운트가 무의미해진다.
     // 새 SkeletalMesh 기준으로 AnimInstance 를 재인스턴스화한다.
     InitializeAnimation();
+	if (GetPhysicsAsset() && GetWorld() && GetWorld()->GetPhysicsScene())
+	{
+		InstantiatePhysicsAsset();
+	}
 }
 
 void USkeletalMeshComponent::PlayAnimation(UAnimSequenceBase* NewAnimToPlay, bool bLooping)
@@ -558,10 +563,32 @@ void USkeletalMeshComponent::Serialize(FArchive& Ar)
     Ar << AnimationData.bLooping;
     Ar << AnimationData.bPlaying;
 
+	FString OverridePath = Ar.IsSaving() ? PhysicsAssetOverridePath : FString();
+	if (Ar.IsSaving() && PhysicsAssetOverride && !PhysicsAssetOverride->GetSourcePath().empty())
+	{
+		OverridePath = PhysicsAssetOverride->GetSourcePath();
+	}
+	if (Ar.IsSaving() || Ar.HasRemaining())
+	{
+		Ar << OverridePath;
+	}
+	if (Ar.IsLoading())
+	{
+		PhysicsAssetOverridePath = OverridePath;
+		if (!PhysicsAssetOverridePath.empty() && PhysicsAssetOverridePath != "None")
+		{
+			PhysicsAssetOverride = FPhysicsAssetManager::Get().Load(PhysicsAssetOverridePath);
+		}
+	}
 }
 
 UPhysicsAsset* USkeletalMeshComponent::GetPhysicsAsset() const
 {
+	if (PhysicsAssetOverride)
+	{
+		return PhysicsAssetOverride.Get();
+	}
+
 	USkeletalMesh* SkelMesh = GetSkeletalMesh();
 	if (!SkelMesh)
 	{
@@ -569,6 +596,26 @@ UPhysicsAsset* USkeletalMeshComponent::GetPhysicsAsset() const
 	}
 
 	return SkelMesh->GetPhysicsAsset();
+}
+
+void USkeletalMeshComponent::SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset)
+{
+	if (PhysicsAssetOverride.Get() == InPhysicsAsset)
+	{
+		return;
+	}
+
+	TermPhysicsAsset();
+	PhysicsAssetOverride = InPhysicsAsset;
+	PhysicsAssetOverridePath = (InPhysicsAsset && !InPhysicsAsset->GetSourcePath().empty())
+		? InPhysicsAsset->GetSourcePath()
+		: FString("None");
+
+	UWorld* World = GetWorld();
+	if (World && World->GetPhysicsScene())
+	{
+		InstantiatePhysicsAsset();
+	}
 }
 
 void USkeletalMeshComponent::InstantiatePhysicsAsset()
@@ -898,4 +945,5 @@ void USkeletalMeshComponent::AddReferencedObjects(FReferenceCollector& Collector
 
     Collector.AddReferencedObject(AnimationData.AnimToPlay, "USkeletalMeshComponent.AnimationData.AnimToPlay");
     Collector.AddReferencedObject(AnimInstance, "USkeletalMeshComponent.AnimInstance");
+	Collector.AddReferencedObject(PhysicsAssetOverride, "USkeletalMeshComponent.PhysicsAssetOverride");
 }
