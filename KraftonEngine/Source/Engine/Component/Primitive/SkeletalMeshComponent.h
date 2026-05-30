@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Component/Primitive/SkinnedMeshComponent.h"
 #include "Animation/AnimationMode.h"
@@ -7,9 +7,11 @@
 #include "Animation/Instance/AnimSingleNodeInstance.h"
 #include "Animation/Sequence/AnimSequenceBase.h"
 #include "Object/Ptr/ObjectPtr.h"
-
 #include "Source/Engine/Component/Primitive/SkeletalMeshComponent.generated.h"
 
+class UPhysicsAsset;
+class FBodyInstance;
+class FConstraintInstance;
 class UAnimInstance;
 class UAnimSingleNodeInstance;
 class UAnimSequenceBase;
@@ -90,6 +92,28 @@ public:
     void PostDuplicate() override;
     void Serialize(FArchive& Ar) override;
 
+	// Physics
+	UPhysicsAsset* GetPhysicsAsset() const;
+	// PhysicsAsset -> Bodies / Constraints 생성
+	void InstantiatePhysicsAsset();
+
+	// Bodies / Constraints 제거
+	void TermPhysicsAsset();
+
+	// Ragdoll
+	void StartRagdoll();
+	void EndRagdoll();
+
+	// Pose sync
+	void SyncBodiesFromAnimationPose();
+	void SyncSkeletonPoseFromBodies();
+
+	// Lookup
+	FBodyInstance* GetBodyInstance(FName BoneName) const;
+	FBodyInstance* GetBodyInstance(int32 BodyIndex) const;
+
+	FConstraintInstance* GetConstraintInstance(int32 ConstraintIndex) const;
+
 protected:
     // 매 프레임 AnimInstance 평가 → 결과 포즈를 SetBoneLocalTransforms 로 푸시.
     // 이 경로가 CPU skinning 과 bounds dirty 를 한 번에 처리한다.
@@ -104,6 +128,12 @@ private:
     void ApplyPersistentAnimInstanceSettings(UAnimInstance* Instance);
 
 protected:
+	TArray<FBodyInstance*> Bodies;
+	TArray<FConstraintInstance*> Constraints;
+
+	UPROPERTY(EditAnywhere)
+	bool bRagdollActive = false;
+
     // Animation 런타임 상태.
     UPROPERTY(Edit, Save, Category="Animation", DisplayName="Animation Mode", Enum=EAnimationMode)
     EAnimationMode             AnimationMode = EAnimationMode::None;

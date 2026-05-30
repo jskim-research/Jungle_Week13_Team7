@@ -1,4 +1,4 @@
-#include "SkeletalMeshComponent.h"
+﻿#include "SkeletalMeshComponent.h"
 #include "Render/Proxy/SkeletalMeshSceneProxy.h"
 
 #include "Animation/AnimationManager.h"
@@ -25,9 +25,43 @@
 #include <cstring>
 
 #include "Object/GarbageCollection.h"
+#include "Physics/IPhysicsScene.h"
+#include "Physics/ConstraintInstance.h"
+#include "Physics/BodyInstance.h"
+#include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsConstraintTemplate.h"
+#include "GameFramework/World.h"
+
+namespace
+{
+	FBodyInstanceInitParams MakeBodyInstanceInitParams(const USkeletalMeshComponent* Component, bool bEvenIfPendingKill)
+	{
+		FBodyInstanceInitParams Params;
+		if (!Component)
+		{
+			return Params;
+		}
+
+		UWorld* World = bEvenIfPendingKill
+			? Component->GetWorldEvenIfPendingKill()
+			: Component->GetWorld();
+		if (!World)
+		{
+			return Params;
+		}
+
+		if (IPhysicsScene* PhysicsScene = World->GetPhysicsScene())
+		{
+			Params = PhysicsScene->MakeBodyInstanceInitParams();
+		}
+
+		return Params;
+	}
+}
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
 {
+	TermPhysicsAsset();
     ClearAnimInstance();
 }
 
@@ -477,6 +511,168 @@ void USkeletalMeshComponent::Serialize(FArchive& Ar)
     Ar << AnimationData.bLooping;
     Ar << AnimationData.bPlaying;
 
+}
+
+UPhysicsAsset* USkeletalMeshComponent::GetPhysicsAsset() const
+{
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	if (!SkelMesh)
+	{
+		return nullptr;
+	}
+
+	return SkelMesh->GetPhysicsAsset();
+}
+
+void USkeletalMeshComponent::InstantiatePhysicsAsset()
+{
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	if (!PhysicsAsset)
+	{
+		return;
+	}
+
+	TermPhysicsAsset();
+
+	PhysicsAsset->UpdateBodySetupIndexMap();
+
+	const FBodyInstanceInitParams InitParams = MakeBodyInstanceInitParams(this, false);
+	FInitBodySpawnParams SpawnParams(this);
+	SpawnParams.bStaticPhysics = !GetSimulatePhysics() && !bRagdollActive;
+	SpawnParams.bPhysicsTypeDeterminesSimulation = true;
+
+	// 1. PhysicsAsset의 BodySetup을 컴포넌트 소유 런타임 BodyInstance로 복제한다.
+	Bodies.resize(PhysicsAsset->GetBodySetupCount(), nullptr);
+	for (int32 BodyIndex = 0; BodyIndex < PhysicsAsset->GetBodySetupCount(); ++BodyIndex)
+	{
+		USkeletalBodySetup* BodySetup = PhysicsAsset->GetBodySetup(BodyIndex);
+		if (!BodySetup)
+		{
+			continue;
+		}
+
+		FBodyInstance* BodyInstance = new FBodyInstance();
+		BodyInstance->InitBody(BodySetup, this, InitParams, SpawnParams);
+		Bodies[BodyIndex] = BodyInstance;
+	}
+
+	// 2. PhysicsAsset의 ConstraintTemplate을 BodyInstance끼리 연결하는 런타임 ConstraintInstance로 복제한다.
+	Constraints.resize(PhysicsAsset->GetConstraintSetupCount(), nullptr);
+	for (int32 ConstraintIndex = 0; ConstraintIndex < PhysicsAsset->GetConstraintSetupCount(); ++ConstraintIndex)
+	{
+		UPhysicsConstraintTemplate* Template = PhysicsAsset->GetConstraintSetup(ConstraintIndex);
+		if (!Template)
+		{
+			continue;
+		}
+
+		FConstraintInstance DefaultInstance = Template->GetDefaultInstance();
+		if (DefaultInstance.ConstraintName.IsNone())
+		{
+			DefaultInstance.ConstraintName = Template->GetConstraintName();
+		}
+		if (DefaultInstance.ParentBoneName.IsNone())
+		{
+			DefaultInstance.ParentBoneName = Template->GetParentBoneName();
+		}
+		if (DefaultInstance.ChildBoneName.IsNone())
+		{
+			DefaultInstance.ChildBoneName = Template->GetChildBoneName();
+		}
+
+		const int32 ParentBodyIndex = PhysicsAsset->FindBodyIndex(DefaultInstance.ParentBoneName);
+		const int32 ChildBodyIndex = PhysicsAsset->FindBodyIndex(DefaultInstance.ChildBoneName);
+		if (ParentBodyIndex < 0 || ChildBodyIndex < 0)
+		{
+			continue;
+		}
+
+		FBodyInstance* ParentBody = GetBodyInstance(ParentBodyIndex);
+		FBodyInstance* ChildBody = GetBodyInstance(ChildBodyIndex);
+		if (!ParentBody || !ChildBody)
+		{
+			continue;
+		}
+
+		FConstraintInstance* RuntimeConstraint = new FConstraintInstance();
+		*RuntimeConstraint = DefaultInstance;
+		RuntimeConstraint->ConstraintIndex = ConstraintIndex;
+		RuntimeConstraint->InitConstraint(ParentBody, ChildBody, InitParams);
+		Constraints[ConstraintIndex] = RuntimeConstraint;
+	}
+}
+
+void USkeletalMeshComponent::TermPhysicsAsset()
+{
+	const FBodyInstanceInitParams InitParams = MakeBodyInstanceInitParams(this, true);
+
+	for (FConstraintInstance* Constraint : Constraints)
+	{
+		if (Constraint)
+		{
+			Constraint->TermConstraint();
+			delete Constraint;
+		}
+	}
+	Constraints.clear();
+
+	for (FBodyInstance* Body : Bodies)
+	{
+		if (Body)
+		{
+			Body->TermBody(InitParams);
+			delete Body;
+		}
+	}
+	Bodies.clear();
+}
+
+void USkeletalMeshComponent::StartRagdoll()
+{
+}
+
+void USkeletalMeshComponent::EndRagdoll()
+{
+}
+
+void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
+{
+}
+
+void USkeletalMeshComponent::SyncSkeletonPoseFromBodies()
+{
+}
+
+FBodyInstance* USkeletalMeshComponent::GetBodyInstance(FName BoneName) const
+{
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	if (!PhysicsAsset)
+	{
+		return nullptr;
+	}
+
+	PhysicsAsset->UpdateBodySetupIndexMap();
+	return GetBodyInstance(PhysicsAsset->FindBodyIndex(BoneName));
+}
+
+FBodyInstance* USkeletalMeshComponent::GetBodyInstance(int32 BodyIndex) const
+{
+	if (BodyIndex < 0 || BodyIndex >= static_cast<int32>(Bodies.size()))
+	{
+		return nullptr;
+	}
+
+	return Bodies[BodyIndex];
+}
+
+FConstraintInstance* USkeletalMeshComponent::GetConstraintInstance(int32 ConstraintIndex) const
+{
+	if (ConstraintIndex < 0 || ConstraintIndex >= static_cast<int32>(Constraints.size()))
+	{
+		return nullptr;
+	}
+
+	return Constraints[ConstraintIndex];
 }
 
 bool USkeletalMeshComponent::EvaluateAnimInstance(float DeltaTime)

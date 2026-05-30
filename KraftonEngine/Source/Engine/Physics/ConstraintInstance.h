@@ -4,6 +4,8 @@
 #include "Source/Engine/Physics/ConstraintInstance.generated.h"
 
 struct FPhysScene;
+struct FBodyInstance;
+struct FBodyInstanceInitParams;
 
 namespace physx
 {
@@ -91,9 +93,7 @@ struct FConstraintInstance : public FConstraintInstanceBase
 	GENERATED_BODY()
 
 public:
-	// ----------------------------
 	// Identity / bone binding
-	// ----------------------------
 
 	UPROPERTY(Edit, Save, Category = "Constraint")
 	FName ConstraintName;
@@ -104,10 +104,8 @@ public:
 	UPROPERTY(Edit, Save, Category = "Constraint")
 	FName ChildBoneName;
 
-	// ----------------------------
 	// Local joint frame
 	// Parent body local / Child body local
-	// ----------------------------
 
 	// UPROPERTY(Edit, Save, Category = "Constraint")
 	FTransform ParentFrame;
@@ -115,17 +113,13 @@ public:
 	// UPROPERTY(Edit, Save, Category = "Constraint")
 	FTransform ChildFrame;
 
-	// ----------------------------
 	// Collision
-	// ----------------------------
 
 	UPROPERTY(Edit, Save, Category = "Constraint")
 	bool bDisableCollision = true;
 
-	// ----------------------------
 	// Linear DOF
 	// Ragdoll은 보통 Linear는 Locked
-	// ----------------------------
 
 	UPROPERTY(Edit, Save, Category = "Linear Limit")
 	EConstraintMotion LinearXMotion = EConstraintMotion::Locked;
@@ -139,10 +133,7 @@ public:
 	UPROPERTY(Edit, Save, Category = "Linear Limit")
 	float LinearLimitSize = 0.0f;
 
-	// ----------------------------
 	// Angular DOF
-	// ----------------------------
-
 	UPROPERTY(Edit, Save, Category = "Angular Limit")
 	EConstraintMotion Swing1Motion = EConstraintMotion::Limited;
 
@@ -201,4 +192,10 @@ public:
 		TwistLimitMinDegrees = InTwistMin;
 		TwistLimitMaxDegrees = InTwistMax;
 	}
+
+	void InitConstraint(
+		FBodyInstance* ParentBody,
+		FBodyInstance* ChildBody,
+		const FBodyInstanceInitParams& InitParams);
+	void TermConstraint();
 };

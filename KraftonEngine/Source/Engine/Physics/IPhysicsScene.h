@@ -5,6 +5,7 @@
 #include "Math/Quat.h"
 #include "Core/Types/RayTypes.h"
 #include "Core/Types/CollisionTypes.h"
+#include "Physics/BodyInstance.h"
 
 class UWorld;
 class AActor;
@@ -35,6 +36,7 @@ public:
 	virtual void Shutdown() = 0;
 
 	// --- Body 관리 ---
+	virtual FBodyInstanceInitParams MakeBodyInstanceInitParams() const { return FBodyInstanceInitParams(); }
 	virtual void RegisterComponent(UPrimitiveComponent* Comp) = 0;
 	virtual void UnregisterComponent(UPrimitiveComponent* Comp) = 0;
 	// 컴포넌트의 SimulatePhysics/ObjectType/Response 등이 변경된 경우 호출.

@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "Object/Object.h"
 #include "Mesh/Skeletal/SkeletalMeshAsset.h"
 #include "Animation/Skeleton/SkeletonTypes.h"
 
 class USkeleton;
-
+class UPhysicsAsset;
 
 #include "Source/Engine/Mesh/Skeletal/SkeletalMesh.generated.h"
 
@@ -40,7 +40,10 @@ public:
     void       SetSkeleton(USkeleton* InSkeleton);
     USkeleton* GetSkeleton() const;
 
-    void SetSkeletonBinding(const FSkeletonBinding& InBinding);
+	void SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset) { PhysicsAsset = InPhysicsAsset; }
+	UPhysicsAsset* GetPhysicsAsset() const { return PhysicsAsset; }
+
+	void SetSkeletonBinding(const FSkeletonBinding& InBinding);
     const FSkeletonBinding& GetSkeletonBinding() const { return SkeletonBinding; }
 
 private:
@@ -56,4 +59,7 @@ private:
 
     FSkeletonBinding SkeletonBinding;
     USkeleton*       Skeleton = nullptr;
+
+	UPROPERTY(Edit, Save, Category = "Physics")
+	UPhysicsAsset* PhysicsAsset = nullptr;
 };
