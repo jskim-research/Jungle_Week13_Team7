@@ -1,4 +1,4 @@
-#include "AssetRegistry.h"
+﻿#include "AssetRegistry.h"
 #include "Mesh/MeshManager.h"
 #include "Mesh/Skeletal/SkeletalMesh.h"
 #include "Animation/AnimationManager.h"

@@ -1,15 +1,11 @@
 {
   "BlendState" : "Opaque",
   "Compiled" : {
-    "GeneratorVersion" : "ParticleMeshLighting_v4",
+    "GeneratorVersion" : "GeneratedSurfacePass_v1",
     "GraphHash" : "852C90FC1D785923",
-    "GraphShaderMode" : "UberLit",
+    "GraphShaderMode" : "Generated",
     "Parameters" : {
-      "HasNormalMap" : 0.000000,
-      "SectionColor" : {
-        "Type" : "Float4",
-        "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
-      }
+
     },
     "ReceiveLighting" : false,
     "Textures" : {
@@ -21,7 +17,7 @@
   },
   "DepthStencilState" : "Default",
   "Domain" : "Surface",
-  "GeneratedShaderPath" : "",
+  "GeneratedShaderPath" : "Shaders/Generated/Materials/D626D7F1EDB6163F_Surface.hlsl",
   "Graph" : {
     "Links" : [{
         "FromPinId" : 2,
@@ -347,7 +343,7 @@
   "RasterizerState" : "SolidBackCull",
   "ReceiveLighting" : false,
   "RenderPass" : "Opaque",
-  "ShaderPath" : "Shaders/Geometry/UberLit.hlsl",
+  "ShaderPath" : "Shaders/Generated/Materials/D626D7F1EDB6163F_Surface.hlsl",
   "Textures" : {
     "DiffuseTexture" : "Content/Data/Samba Dancing/textures/cloth.png"
   },

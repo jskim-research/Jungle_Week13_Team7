@@ -208,6 +208,25 @@ void FDrawCommandBuilder::BuildCommandForProxy(FScene& Scene, const FPrimitiveSc
 		FShader* SectionShader = (Section.Material && Section.Material->GetShader())
 			? Section.Material->GetShader()
 			: Proxy.GetShader();
+
+		// Generated Surface/Opaque material emits EvaluateMaterial() only.
+		// Select the common Static/Skeletal entry point to match the vertex buffer.
+		if (Section.Material
+			&& Section.Material->GetGraphShaderMode() == EMaterialGraphShaderMode::Generated
+			&& Section.Material->GetDomain() == EMaterialDomain::Surface
+			&& Section.Material->GetRenderPass() == ERenderPass::Opaque
+			&& !Section.Material->GetGeneratedShaderPath().empty())
+		{
+			FShaderKey GeneratedSurfaceKey(Section.Material->GetGeneratedShaderPath());
+			GeneratedSurfaceKey.SetVertexFactory(
+				bGPUSkinning ? EShaderVertexFactory::SkeletalMesh : EShaderVertexFactory::StaticMesh);
+
+			if (FShader* GeneratedSurfaceShader = FShaderManager::Get().FindOrCreate(GeneratedSurfaceKey))
+			{
+				SectionShader = GeneratedSurfaceShader;
+			}
+		}
+
 		FShader* EffectiveShader = SelectEffectiveShader(SectionShader, CollectViewMode, bGPUSkinning, bWeightBoneHeatMap, bSectionIsTranslucent);
 
 		FDrawCommand& Cmd = DrawCommandList.AddCommand();

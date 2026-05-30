@@ -33,7 +33,8 @@ Texture2D Tex_Diffuse : register(t0);
 
 FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
 {
-    float4 n_17 = Tex_Diffuse.Sample(LinearWrapSampler, Input.UV0);
+    float2 n_32 = Input.UV0;
+    float4 n_17 = Tex_Diffuse.Sample(LinearWrapSampler, n_32);
     FMaterialResult Result;
     Result.Color = (n_17).xyz;
     Result.Emissive = float3(0, 0, 0);

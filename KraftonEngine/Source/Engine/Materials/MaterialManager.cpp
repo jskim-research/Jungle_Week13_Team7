@@ -45,7 +45,7 @@ namespace
         }
         return std::filesystem::exists(Full);
     }
-    constexpr const char* MaterialGraphGeneratorVersion = "ParticleMeshLighting_v4";
+    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedSurfacePass_v1";
 }
 
 void FMaterialManager::ScanMaterialAssets()
@@ -186,11 +186,9 @@ bool FMaterialManager::LoadMaterialFromJson(
         JsonData.hasKey(MatKeys::GraphShaderMode) ? JsonData[MatKeys::GraphShaderMode].ToString().c_str() : "",
         EMaterialGraphShaderMode::Generated
     );
-    FString ShaderPath = GraphShaderMode == EMaterialGraphShaderMode::UberLit
-        ? DefaultShaderPath
-        : (JsonData.hasKey(MatKeys::GeneratedShaderPath) && !JsonData[MatKeys::GeneratedShaderPath].ToString().empty()
-            ? JsonData[MatKeys::GeneratedShaderPath].ToString().c_str()
-            : JsonData[MatKeys::ShaderPath].ToString().c_str());
+    FString ShaderPath = JsonData.hasKey(MatKeys::GeneratedShaderPath) && !JsonData[MatKeys::GeneratedShaderPath].ToString().empty()
+        ? JsonData[MatKeys::GeneratedShaderPath].ToString().c_str()
+        : JsonData[MatKeys::ShaderPath].ToString().c_str();
     if (ShaderPath.empty())
     {
         ShaderPath = DefaultShaderPath;
@@ -209,12 +207,16 @@ bool FMaterialManager::LoadMaterialFromJson(
 	ERasterizerState RasterState = StringToRasterizerState(RasterStr, RenderPass);
 
     FShaderKey ShaderKey(ShaderPath);
-    if (bGraphMaterial && GraphShaderMode == EMaterialGraphShaderMode::Generated)
+    if (bGraphMaterial
+        && GraphShaderMode == EMaterialGraphShaderMode::Generated
+        && Domain == EMaterialDomain::Surface)
     {
         ShaderKey.SetVertexFactory(DomainToVertexFactory(Domain));
     }
 
-    FMaterialTemplate* Template = (bGraphMaterial && GraphShaderMode == EMaterialGraphShaderMode::Generated)
+    FMaterialTemplate* Template = (bGraphMaterial
+            && GraphShaderMode == EMaterialGraphShaderMode::Generated
+            && Domain == EMaterialDomain::Surface)
         ? GetOrCreateTemplate(ShaderKey)
         : GetOrCreateTemplate(ShaderPath);
     if (!Template)
@@ -615,8 +617,8 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
         GraphHash != OldHash
         || OldGeneratorVersion != MaterialGraphGeneratorVersion
         || CurrentShaderMode != CompiledShaderMode
-        || (CurrentShaderMode == EMaterialGraphShaderMode::Generated && ExistingGeneratedPath.empty())
-        || (CurrentShaderMode == EMaterialGraphShaderMode::Generated && !ProjectFileExists(ExistingGeneratedPath))
+        || ExistingGeneratedPath.empty()
+        || !ProjectFileExists(ExistingGeneratedPath)
         || bCurrentReceiveLighting != bCompiledReceiveLighting;
     if (!bNeedsCompile)
     {
@@ -652,53 +654,6 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
             *OutError = Result.Errors.empty() ? FString("Material graph compile failed.") : Result.Errors.front();
         }
         return false;
-    }
-
-    if (CurrentShaderMode == EMaterialGraphShaderMode::UberLit)
-    {
-        InOutJson[MatKeys::GeneratedShaderPath]                       = "";
-        InOutJson[MatKeys::ShaderPath]                                = DefaultShaderPath;
-        InOutJson[MatKeys::Compiled]                                  = json::JSON::Make(json::JSON::Class::Object);
-        InOutJson[MatKeys::Compiled][MatKeys::GraphHash]              = GraphHash;
-        InOutJson[MatKeys::Compiled][MatKeys::GeneratorVersion]       = MaterialGraphGeneratorVersion;
-        InOutJson[MatKeys::Compiled][MatKeys::GraphShaderMode]        = ToString(CurrentShaderMode);
-        InOutJson[MatKeys::Compiled][MatKeys::ReceiveLighting]        = bCurrentReceiveLighting;
-        InOutJson[MatKeys::Compiled][MatKeys::Parameters]             = json::JSON::Make(json::JSON::Class::Object);
-        InOutJson[MatKeys::Compiled][MatKeys::Textures]               = json::JSON::Make(json::JSON::Class::Object);
-
-        for (const auto& Pair : Result.Parameters)
-        {
-            const FString&                    Name = Pair.first;
-            const FMaterialCompiledParameter& Param = Pair.second;
-            json::JSON                        ParamJson = json::JSON::Make(json::JSON::Class::Object);
-            ParamJson["Type"] = ToString(Param.Type);
-            ParamJson["Value"] = json::Array(Param.Value.X, Param.Value.Y, Param.Value.Z, Param.Value.W);
-            InOutJson[MatKeys::Compiled][MatKeys::Parameters][Name] = std::move(ParamJson);
-        }
-
-        bool bHasNormalTexture = false;
-        for (const auto& Pair : Result.Textures)
-        {
-            const FString&                  Name = Pair.first;
-            const FMaterialCompiledTexture& Texture = Pair.second;
-            json::JSON                      TexJson = json::JSON::Make(json::JSON::Class::Object);
-            TexJson["Path"] = Texture.Path;
-            TexJson["Slot"] = ToString(Texture.Slot);
-            InOutJson[MatKeys::Compiled][MatKeys::Textures][Name] = std::move(TexJson);
-            bHasNormalTexture = bHasNormalTexture || Texture.Slot == EMaterialTextureSlot::Normal;
-        }
-
-        if (InOutJson[MatKeys::Compiled][MatKeys::Parameters]["SectionColor"].IsNull())
-        {
-            json::JSON SectionColorJson = json::JSON::Make(json::JSON::Class::Object);
-            SectionColorJson["Type"] = ToString(EMaterialGraphPinType::Float4);
-            SectionColorJson["Value"] = json::Array(1.0f, 1.0f, 1.0f, 1.0f);
-            InOutJson[MatKeys::Compiled][MatKeys::Parameters]["SectionColor"] = std::move(SectionColorJson);
-        }
-
-        InOutJson[MatKeys::Compiled][MatKeys::Parameters]["HasNormalMap"] = bHasNormalTexture ? 1.0f : 0.0f;
-        SaveToJSON(InOutJson, MatFilePath);
-        return true;
     }
 
     const std::filesystem::path GeneratedPath = std::filesystem::path(FPaths::RootDir()) / FPaths::ToWide(

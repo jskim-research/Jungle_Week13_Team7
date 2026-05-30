@@ -60,10 +60,28 @@ struct FShaderKey
 		SetVertexFactory(InVertexFactory);
 	}
 
+	void SetEntryPoints(const FString& InVSEntryPoint, const FString& InPSEntryPoint = "PS")
+	{
+		VSEntryPoint = InVSEntryPoint;
+		PSEntryPoint = InPSEntryPoint;
+		EntryHash = HashEntryPoints(VSEntryPoint, PSEntryPoint);
+	}
+
 	void SetVertexFactory(EShaderVertexFactory InVertexFactory)
 	{
 		VertexFactory = InVertexFactory;
 		VertexFactoryHash = HashVertexFactory(VertexFactory);
+
+		// Generated Surface shaders expose the same entry names as UberLit/BasePass.
+		// Particle/PostProcess generated shaders keep the legacy VS entry point.
+		if (InVertexFactory == EShaderVertexFactory::StaticMesh)
+		{
+			SetEntryPoints("VS_StaticMesh", "PS");
+		}
+		else if (InVertexFactory == EShaderVertexFactory::SkeletalMesh)
+		{
+			SetEntryPoints("VS_SkeletalMesh", "PS");
+		}
 	}
 
 	bool operator==(const FShaderKey& Other) const

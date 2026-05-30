@@ -448,29 +448,6 @@ void FMaterialEditorWidget::RenderToolbar(UMaterial* Material)
 	}
 
 	ImGui::SameLine();
-	EMaterialGraphShaderMode ShaderMode = Material->GetGraphShaderMode();
-	ImGui::SetNextItemWidth(130.0f);
-	if (ImGui::BeginCombo("Shader", ToString(ShaderMode)))
-	{
-		const EMaterialGraphShaderMode Modes[] =
-		{
-			EMaterialGraphShaderMode::Generated,
-			EMaterialGraphShaderMode::UberLit
-		};
-		for (EMaterialGraphShaderMode Candidate : Modes)
-		{
-			const bool bSelected = ShaderMode == Candidate;
-			if (ImGui::Selectable(ToString(Candidate), bSelected))
-			{
-				Material->SetGraphShaderMode(Candidate);
-				MarkDirty();
-			}
-			if (bSelected) ImGui::SetItemDefaultFocus();
-		}
-		ImGui::EndCombo();
-	}
-
-	ImGui::SameLine();
 	if (ImGui::Button("Presets"))
 	{
 		ImGui::OpenPopup("MaterialPresetsPopup");
