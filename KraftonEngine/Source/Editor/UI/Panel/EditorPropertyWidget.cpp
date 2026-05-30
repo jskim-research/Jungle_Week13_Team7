@@ -1580,7 +1580,11 @@ void FEditorPropertyWidget::RenderSkeletalMeshPhysicsAssetTools()
 		ImGui::Text("Using: %s", CurrentPath.empty() ? "None" : CurrentPath.c_str());
 		ImGui::Text("Source: %s", OverrideAsset ? "Override" : "SkeletalMesh Default");
 
-		FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+		if (!bPhysicsAssetListInitialized)
+		{
+			FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+			bPhysicsAssetListInitialized = true;
+		}
 		const TArray<FAssetListItem>& AssetFiles = FPhysicsAssetManager::Get().GetAvailablePhysicsAssetFiles();
 		const char* Preview = OverrideAsset && !SkelComp->GetPhysicsAssetOverridePath().empty()
 			? SkelComp->GetPhysicsAssetOverridePath().c_str()
@@ -1641,6 +1645,12 @@ void FEditorPropertyWidget::RenderSkeletalMeshPhysicsAssetTools()
 				SkelComp->SetPhysicsAsset(NewAsset);
 				FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
 			}
+		}
+
+		if (ImGui::Button("Refresh PhysicsAsset List"))
+		{
+			FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+			bPhysicsAssetListInitialized = true;
 		}
 
 		if (ImGui::Button("Save PhysicsAsset"))

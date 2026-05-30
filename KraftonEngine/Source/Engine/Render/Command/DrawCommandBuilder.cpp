@@ -502,7 +502,7 @@ void FDrawCommandBuilder::PrepareDynamicGeometry(const FFrameContext& Frame, con
 {
 	if (!Scene) return;
 
-	if (World && Frame.RenderOptions.ShowFlags.bCollision)
+	if (World && Frame.RenderOptions.ShowFlags.bDebugDraw && Frame.RenderOptions.ShowFlags.bCollision)
 	{
 		CollisionDebugDraw::AppendCollisionWireframes(World, Frame, EditorLines);
 	}

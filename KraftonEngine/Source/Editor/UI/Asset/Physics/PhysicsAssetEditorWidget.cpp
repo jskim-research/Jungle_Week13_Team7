@@ -664,8 +664,7 @@ public:
 			return;
 		}
 
-		FMeshData MeshData;
-		const std::uint64_t NewHash = BuildMeshData(Editor, MeshData);
+		const std::uint64_t NewHash = BuildMeshData(Editor, nullptr);
 		if (NewHash == LastMeshHash)
 		{
 			return;
@@ -673,6 +672,8 @@ public:
 
 		LastMeshHash = NewHash;
 
+		FMeshData MeshData;
+		BuildMeshData(Editor, &MeshData);
 		if (MeshData.Vertices.empty() || MeshData.Indices.empty() || !GEngine)
 		{
 			MeshBuffer.Release();
@@ -691,7 +692,7 @@ public:
 	}
 
 private:
-	std::uint64_t BuildMeshData(const FPhysicsAssetEditorWidget& Editor, FMeshData& OutMeshData) const
+	std::uint64_t BuildMeshData(const FPhysicsAssetEditorWidget& Editor, FMeshData* OutMeshData) const
 	{
 		std::uint64_t Hash = 0;
 		HashInt(Hash, Editor.SelectedBodyIndex);
@@ -740,7 +741,10 @@ private:
 				HashFloat(Hash, Box.X);
 				HashFloat(Hash, Box.Y);
 				HashFloat(Hash, Box.Z);
-				AddSolidBox(OutMeshData, Center, HalfExtent, Rotation, Color);
+				if (OutMeshData)
+				{
+					AddSolidBox(*OutMeshData, Center, HalfExtent, Rotation, Color);
+				}
 			}
 
 			for (int32 Index = 0; Index < static_cast<int32>(AggGeom.SphereElems.size()); ++Index)
@@ -754,7 +758,10 @@ private:
 
 				HashVector(Hash, Sphere.Center);
 				HashFloat(Hash, Sphere.Radius);
-				AddSolidSphere(OutMeshData, Center, Sphere.Radius, BodyRotation, Color);
+				if (OutMeshData)
+				{
+					AddSolidSphere(*OutMeshData, Center, Sphere.Radius, BodyRotation, Color);
+				}
 			}
 
 			for (int32 Index = 0; Index < static_cast<int32>(AggGeom.SphylElems.size()); ++Index)
@@ -771,7 +778,10 @@ private:
 				HashQuat(Hash, Rotation);
 				HashFloat(Hash, Capsule.Radius);
 				HashFloat(Hash, Capsule.Length);
-				AddSolidCapsule(OutMeshData, Center, Capsule.Radius, Capsule.Length, Rotation, Color);
+				if (OutMeshData)
+				{
+					AddSolidCapsule(*OutMeshData, Center, Capsule.Radius, Capsule.Length, Rotation, Color);
+				}
 			}
 		}
 
@@ -780,7 +790,7 @@ private:
 
 private:
 	mutable FMeshBuffer MeshBuffer;
-	std::uint64_t LastMeshHash = 0;
+	std::uint64_t LastMeshHash = ~std::uint64_t{0};
 };
 
 class FPhysicsAssetPrimitiveGizmoTarget final : public IGizmoTransformTarget

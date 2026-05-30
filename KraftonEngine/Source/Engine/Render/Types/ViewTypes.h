@@ -60,7 +60,7 @@ struct FShowFlags
 	bool bViewLightCulling = false;
 	bool bVisualize25DCulling = false;
 	bool bShowShadowFrustum = false;
-	bool bCollision = true; // Simple collision 와이어 (BodySetup / Shape — Editor·PIE·Game, PhysX 불필요)
+	bool bCollision = false; // Simple collision wireframe (BodySetup / Shape, PhysX readback not required)
 	bool bParticle = true;
 };
 
