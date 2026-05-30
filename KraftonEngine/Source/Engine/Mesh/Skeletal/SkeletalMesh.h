@@ -40,8 +40,10 @@ public:
     void       SetSkeleton(USkeleton* InSkeleton);
     USkeleton* GetSkeleton() const;
 
-	void SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset) { PhysicsAsset = InPhysicsAsset; }
+	void SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset);
 	UPhysicsAsset* GetPhysicsAsset() const { return PhysicsAsset; }
+	void SetPhysicsAssetPath(const FString& InPath) { PhysicsAssetPath = InPath; }
+	const FString& GetPhysicsAssetPath() const { return PhysicsAssetPath; }
 
 	void SetSkeletonBinding(const FSkeletonBinding& InBinding);
     const FSkeletonBinding& GetSkeletonBinding() const { return SkeletonBinding; }
@@ -62,4 +64,7 @@ private:
 
 	UPROPERTY(Edit, Save, Category = "Physics")
 	UPhysicsAsset* PhysicsAsset = nullptr;
+
+	UPROPERTY(Edit, Save, Category = "Physics", DisplayName = "Physics Asset Path", AssetType = "PhysicsAsset")
+	FString PhysicsAssetPath = "None";
 };

@@ -55,8 +55,13 @@ public:
 	GENERATED_BODY()
 
 public:
+	void Serialize(FArchive& Ar) override;
+
+	const FString& GetSourcePath() const { return SourcePath; }
+	void SetSourcePath(const FString& InSourcePath) { SourcePath = InSourcePath; }
+
 	// BodySetup access
-	int32 GetBodySetupCount() const { return SkeletalBodySetups.size(); }
+	int32 GetBodySetupCount() const { return static_cast<int32>(SkeletalBodySetups.size()); }
 
 	USkeletalBodySetup* GetBodySetup(int32 BodyIndex);
 	const USkeletalBodySetup* GetBodySetup(int32 BodyIndex) const;
@@ -78,7 +83,7 @@ public:
 	bool RemoveBodySetupAt(int32 BodyIndex);
 
 	// Constraint access
-	int32 GetConstraintSetupCount() const { return ConstraintSetups.size(); }
+	int32 GetConstraintSetupCount() const { return static_cast<int32>(ConstraintSetups.size()); }
 
 	UPhysicsConstraintTemplate* GetConstraintSetup(int32 ConstraintIndex);
 	const UPhysicsConstraintTemplate* GetConstraintSetup(int32 ConstraintIndex) const;
@@ -121,6 +126,9 @@ public:
 	void RefreshPhysicsAssetChange();
 
 private:
+	UPROPERTY(Save)
+	FString SourcePath;
+
 	UPROPERTY(Edit, Save, Category = "Physics Asset", DisplayName = "Skeletal Body Setups")
 	TArray<USkeletalBodySetup*> SkeletalBodySetups;
 
