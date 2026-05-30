@@ -1,13 +1,16 @@
 {
   "BlendState" : "Opaque",
   "Compiled" : {
-    "GeneratorVersion" : "GeneratedSurfacePass_v1",
+    "BlendState" : "Opaque",
+    "Domain" : "Surface",
+    "GeneratorVersion" : "GeneratedMaterialPass_v2",
     "GraphHash" : "C73490C99B64990E",
     "GraphShaderMode" : "Generated",
     "Parameters" : {
 
     },
     "ReceiveLighting" : true,
+    "RenderPass" : "Opaque",
     "Textures" : {
       "DiffuseTexture" : {
         "Path" : "Content/Data/skull-coin/textures/UV_mapping_Coin.png",

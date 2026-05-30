@@ -210,12 +210,11 @@ void FDrawCommandBuilder::BuildCommandForProxy(FScene& Scene, const FPrimitiveSc
 			? Section.Material->GetShader()
 			: Proxy.GetShader();
 
-		// Generated Surface/Opaque material emits EvaluateMaterial() only.
-		// Select the common Static/Skeletal entry point to match the vertex buffer.
+		// Generated Surface material emits EvaluateMaterial() only.
+		// Mode decides pass/render state; domain decides the Static/Skeletal entry point.
 		if (Section.Material
 			&& Section.Material->GetGraphShaderMode() == EMaterialGraphShaderMode::Generated
 			&& Section.Material->GetDomain() == EMaterialDomain::Surface
-			&& Section.Material->GetRenderPass() == ERenderPass::Opaque
 			&& !Section.Material->GetGeneratedShaderPath().empty())
 		{
 			FShaderKey GeneratedSurfaceKey(Section.Material->GetGeneratedShaderPath());

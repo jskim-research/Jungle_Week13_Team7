@@ -1,13 +1,16 @@
 {
   "BlendState" : "Opaque",
   "Compiled" : {
-    "GeneratorVersion" : "GeneratedSurfacePass_v1",
+    "BlendState" : "Opaque",
+    "Domain" : "Surface",
+    "GeneratorVersion" : "GeneratedMaterialPass_v2",
     "GraphHash" : "852C90FC1D785923",
     "GraphShaderMode" : "Generated",
     "Parameters" : {
 
     },
     "ReceiveLighting" : false,
+    "RenderPass" : "Opaque",
     "Textures" : {
       "DiffuseTexture" : {
         "Path" : "",

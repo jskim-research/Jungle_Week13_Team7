@@ -1,4 +1,4 @@
-#include "Editor/UI/Asset/Material/MaterialEditorWidget.h"
+﻿#include "Editor/UI/Asset/Material/MaterialEditorWidget.h"
 
 #include "Engine/Runtime/Engine.h"
 #include "Materials/Material.h"
@@ -100,23 +100,64 @@ namespace
 		}
 	}
 
-    void ApplyDefaultBlendModeForDomain(UMaterial* Material, EMaterialDomain Domain)
-    {
-        if (!Material)
-        {
-            return;
-        }
+	bool IsSupportedMaterialDomain(EMaterialDomain Domain)
+	{
+		switch (Domain)
+		{
+		case EMaterialDomain::Surface:
+		case EMaterialDomain::ParticleSprite:
+		case EMaterialDomain::ParticleMesh:
+			return true;
+		case EMaterialDomain::Decal:
+		case EMaterialDomain::PostProcess:
+		default:
+			return false;
+		}
+	}
 
-        switch (Domain)
-        {
-        case EMaterialDomain::ParticleMesh:
-            ApplyMaterialEditorBlendMode(Material, EMaterialEditorBlendMode::Opaque);
-            break;
-        case EMaterialDomain::ParticleSprite:
-        default:
-            break;
-        }
-    }
+	bool IsSupportedBlendModeForDomain(EMaterialDomain Domain, EMaterialEditorBlendMode Mode)
+	{
+		switch (Domain)
+		{
+		case EMaterialDomain::Surface:
+			return Mode == EMaterialEditorBlendMode::Opaque
+				|| Mode == EMaterialEditorBlendMode::Translucent;
+		case EMaterialDomain::ParticleSprite:
+			return Mode == EMaterialEditorBlendMode::Translucent
+				|| Mode == EMaterialEditorBlendMode::Additive;
+		case EMaterialDomain::ParticleMesh:
+			return Mode == EMaterialEditorBlendMode::Opaque
+				|| Mode == EMaterialEditorBlendMode::Translucent
+				|| Mode == EMaterialEditorBlendMode::Additive;
+		case EMaterialDomain::Decal:
+		case EMaterialDomain::PostProcess:
+		default:
+			return false;
+		}
+	}
+
+	EMaterialEditorBlendMode GetDefaultBlendModeForDomain(EMaterialDomain Domain)
+	{
+		switch (Domain)
+		{
+		case EMaterialDomain::ParticleSprite:
+			return EMaterialEditorBlendMode::Translucent;
+		case EMaterialDomain::Surface:
+		case EMaterialDomain::ParticleMesh:
+		default:
+			return EMaterialEditorBlendMode::Opaque;
+		}
+	}
+
+	void ApplyDefaultBlendModeForDomain(UMaterial* Material, EMaterialDomain Domain)
+	{
+		if (!Material)
+		{
+			return;
+		}
+
+		ApplyMaterialEditorBlendMode(Material, GetDefaultBlendModeForDomain(Domain));
+	}
 
 	ImVec4 NodeColor(EMaterialGraphNodeType Type)
 	{
@@ -400,31 +441,57 @@ void FMaterialEditorWidget::RenderToolbar(UMaterial* Material)
 	ImGui::SetNextItemWidth(160.0f);
 	if (ImGui::BeginCombo("Domain", ToString(Domain)))
 	{
-		for (int32 i = 0; i <= static_cast<int32>(EMaterialDomain::PostProcess); ++i)
+		const EMaterialDomain Domains[] =
 		{
-			const EMaterialDomain Candidate = static_cast<EMaterialDomain>(i);
+			EMaterialDomain::Surface,
+			EMaterialDomain::ParticleSprite,
+			EMaterialDomain::ParticleMesh
+		};
+		for (EMaterialDomain Candidate : Domains)
+		{
 			const bool bSelected = (Domain == Candidate);
-            if (ImGui::Selectable(ToString(Candidate), bSelected))
-            {
-                const EMaterialDomain PreviousDomain = Material->GetDomain();
+			if (ImGui::Selectable(ToString(Candidate), bSelected))
+			{
+				const EMaterialDomain PreviousDomain = Material->GetDomain();
 
-                Material->SetDomain(Candidate);
-                RebuildOutputPinsForDomain(Material);
+				Material->SetDomain(Candidate);
+				Domain = Candidate;
 
-                if (PreviousDomain != Candidate)
-                {
-                    ApplyDefaultBlendModeForDomain(Material, Candidate);
-                }
+				RebuildOutputPinsForDomain(Material);
 
-                MarkDirty();
-            }
+				if (PreviousDomain != Candidate)
+				{
+					ApplyDefaultBlendModeForDomain(Material, Candidate);
+				}
+
+				MarkDirty();
+
+				ImGui::CloseCurrentPopup();
+				break;
+			}
 			if (bSelected) ImGui::SetItemDefaultFocus();
 		}
 		ImGui::EndCombo();
 	}
 
+	if (!IsSupportedMaterialDomain(Domain))
+	{
+		Domain = EMaterialDomain::Surface;
+		Material->SetDomain(Domain);
+		RebuildOutputPinsForDomain(Material);
+		ApplyDefaultBlendModeForDomain(Material, Domain);
+		MarkDirty();
+	}
+
 	ImGui::SameLine();
 	EMaterialEditorBlendMode BlendMode = GetMaterialEditorBlendMode(Material);
+	if (!IsSupportedBlendModeForDomain(Domain, BlendMode))
+	{
+		BlendMode = GetDefaultBlendModeForDomain(Domain);
+		ApplyMaterialEditorBlendMode(Material, BlendMode);
+		MarkDirty();
+	}
+
 	ImGui::SetNextItemWidth(130.0f);
 	if (ImGui::BeginCombo("Mode", ToString(BlendMode)))
 	{
@@ -436,6 +503,11 @@ void FMaterialEditorWidget::RenderToolbar(UMaterial* Material)
 		};
 		for (EMaterialEditorBlendMode Candidate : Modes)
 		{
+			if (!IsSupportedBlendModeForDomain(Domain, Candidate))
+			{
+				continue;
+			}
+
 			const bool bSelected = (BlendMode == Candidate);
 			if (ImGui::Selectable(ToString(Candidate), bSelected))
 			{
@@ -1074,6 +1146,14 @@ void FMaterialEditorWidget::CompileOnly(UMaterial* Material)
 void FMaterialEditorWidget::RebuildOutputPinsForDomain(UMaterial* Material)
 {
 	if (!Material) return;
+
+	if (NodeEditorContext)
+	{
+		ed::SetCurrentEditor(NodeEditorContext);
+		ed::ClearSelection();
+		ed::SetCurrentEditor(nullptr);
+	}
+
 	Material->GetGraph().RebuildOutputPinsForDomain(Material->GetDomain());
 	bPositionsPushed = false;
 	MarkDirty();

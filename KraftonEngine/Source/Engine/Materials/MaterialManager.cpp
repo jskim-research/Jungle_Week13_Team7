@@ -45,7 +45,102 @@ namespace
         }
         return std::filesystem::exists(Full);
     }
-    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedSurfacePass_v1";
+
+	enum class ESupportedGraphMaterialMode
+	{
+		Opaque,
+		Translucent,
+		Additive
+	};
+
+	bool IsSupportedGraphMaterialDomain(EMaterialDomain Domain)
+	{
+		switch (Domain)
+		{
+		case EMaterialDomain::Surface:
+		case EMaterialDomain::ParticleSprite:
+		case EMaterialDomain::ParticleMesh:
+			return true;
+		case EMaterialDomain::Decal:
+		case EMaterialDomain::PostProcess:
+		default:
+			return false;
+		}
+	}
+
+	ESupportedGraphMaterialMode GetDefaultGraphMaterialMode(EMaterialDomain Domain)
+	{
+		switch (Domain)
+		{
+		case EMaterialDomain::ParticleSprite:
+			return ESupportedGraphMaterialMode::Translucent;
+		case EMaterialDomain::Surface:
+		case EMaterialDomain::ParticleMesh:
+		default:
+			return ESupportedGraphMaterialMode::Opaque;
+		}
+	}
+
+	ESupportedGraphMaterialMode ResolveGraphMaterialMode(ERenderPass Pass, EBlendState Blend)
+	{
+		if (Pass == ERenderPass::AlphaBlend && Blend == EBlendState::Additive)
+		{
+			return ESupportedGraphMaterialMode::Additive;
+		}
+		if (Pass == ERenderPass::AlphaBlend && Blend == EBlendState::AlphaBlend)
+		{
+			return ESupportedGraphMaterialMode::Translucent;
+		}
+		return ESupportedGraphMaterialMode::Opaque;
+	}
+
+	bool IsSupportedGraphMaterialMode(EMaterialDomain Domain, ESupportedGraphMaterialMode Mode)
+	{
+		switch (Domain)
+		{
+		case EMaterialDomain::Surface:
+			return Mode == ESupportedGraphMaterialMode::Opaque
+				|| Mode == ESupportedGraphMaterialMode::Translucent;
+		case EMaterialDomain::ParticleSprite:
+			return Mode == ESupportedGraphMaterialMode::Translucent
+				|| Mode == ESupportedGraphMaterialMode::Additive;
+		case EMaterialDomain::ParticleMesh:
+			return Mode == ESupportedGraphMaterialMode::Opaque
+				|| Mode == ESupportedGraphMaterialMode::Translucent
+				|| Mode == ESupportedGraphMaterialMode::Additive;
+		case EMaterialDomain::Decal:
+		case EMaterialDomain::PostProcess:
+		default:
+			return false;
+		}
+	}
+
+	void WriteGraphMaterialMode(json::JSON& JsonData, ESupportedGraphMaterialMode Mode)
+	{
+		switch (Mode)
+		{
+		case ESupportedGraphMaterialMode::Opaque:
+			JsonData[MatKeys::RenderPass] = "Opaque";
+			JsonData[MatKeys::BlendState] = "Opaque";
+			JsonData[MatKeys::DepthStencilState] = "Default";
+			JsonData[MatKeys::RasterizerState] = "SolidBackCull";
+			break;
+		case ESupportedGraphMaterialMode::Translucent:
+			JsonData[MatKeys::RenderPass] = "AlphaBlend";
+			JsonData[MatKeys::BlendState] = "AlphaBlend";
+			JsonData[MatKeys::DepthStencilState] = "DepthReadOnly";
+			JsonData[MatKeys::RasterizerState] = "SolidNoCull";
+			break;
+		case ESupportedGraphMaterialMode::Additive:
+			JsonData[MatKeys::RenderPass] = "AlphaBlend";
+			JsonData[MatKeys::BlendState] = "Additive";
+			JsonData[MatKeys::DepthStencilState] = "DepthReadOnly";
+			JsonData[MatKeys::RasterizerState] = "SolidNoCull";
+			break;
+		}
+	}
+
+    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedMaterialPass_v2";
 }
 
 void FMaterialManager::ScanMaterialAssets()
@@ -165,7 +260,7 @@ bool FMaterialManager::LoadMaterialFromJson(
     UMaterial*&    OutMaterial
     )
 {
-    EnsureGraphMaterialJsonDefaults(MatFilePath, JsonData);
+    const bool bDefaultsChanged = EnsureGraphMaterialJsonDefaults(MatFilePath, JsonData);
 
     const bool bGraphMaterial = JsonData.hasKey(MatKeys::Graph);
     if (bGraphMaterial)
@@ -263,7 +358,7 @@ bool FMaterialManager::LoadMaterialFromJson(
 	JsonData[MatKeys::RasterizerState] = RasterStr.empty() ? "" : RasterStr.c_str();
 	JsonData[MatKeys::GraphShaderMode] = ToString(GraphShaderMode);
 
-	if (bInjected || bPurged)
+	if (bDefaultsChanged || bInjected || bPurged)
 	{
         SaveToJSON(JsonData, MatFilePath);
     }
@@ -582,6 +677,8 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
         return true;
     }
 
+	EnsureGraphMaterialJsonDefaults(MatFilePath, InOutJson);
+
     FMaterialGraph Graph;
     if (!MaterialGraphAsset::LoadFromJson(InOutJson[MatKeys::Graph], Graph))
     {
@@ -596,6 +693,33 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     hasKey(MatKeys::GeneratorVersion) ? InOutJson[MatKeys::Compiled][MatKeys::GeneratorVersion].ToString() : FString();
     const FString ExistingGeneratedPath = InOutJson.hasKey(MatKeys::GeneratedShaderPath)
     ? InOutJson[MatKeys::GeneratedShaderPath].ToString() : FString();
+	const EMaterialDomain CurrentDomain = StringToDomain(
+		InOutJson.hasKey(MatKeys::Domain) ? InOutJson[MatKeys::Domain].ToString() : FString()
+	);
+	const EMaterialDomain CompiledDomain = MaterialDomainFromString(
+		InOutJson.hasKey(MatKeys::Compiled) && InOutJson[MatKeys::Compiled].hasKey(MatKeys::Domain)
+			? InOutJson[MatKeys::Compiled][MatKeys::Domain].ToString()
+			: FString(),
+		EMaterialDomain::PostProcess
+	);
+	const ERenderPass CurrentRenderPass = StringToRenderPass(
+		InOutJson.hasKey(MatKeys::RenderPass) ? InOutJson[MatKeys::RenderPass].ToString() : FString()
+	);
+	const ERenderPass CompiledRenderPass = StringToRenderPass(
+		InOutJson.hasKey(MatKeys::Compiled) && InOutJson[MatKeys::Compiled].hasKey(MatKeys::RenderPass)
+			? InOutJson[MatKeys::Compiled][MatKeys::RenderPass].ToString()
+			: FString()
+	);
+	const EBlendState CurrentBlendState = StringToBlendState(
+		InOutJson.hasKey(MatKeys::BlendState) ? InOutJson[MatKeys::BlendState].ToString() : FString(),
+		CurrentRenderPass
+	);
+	const EBlendState CompiledBlendState = StringToBlendState(
+		InOutJson.hasKey(MatKeys::Compiled) && InOutJson[MatKeys::Compiled].hasKey(MatKeys::BlendState)
+			? InOutJson[MatKeys::Compiled][MatKeys::BlendState].ToString()
+			: FString(),
+		CompiledRenderPass
+	);
     const EMaterialGraphShaderMode CurrentShaderMode = MaterialGraphShaderModeFromString(
         InOutJson.hasKey(MatKeys::GraphShaderMode) ? InOutJson[MatKeys::GraphShaderMode].ToString() : FString(),
         EMaterialGraphShaderMode::Generated
@@ -616,6 +740,9 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     const bool bNeedsCompile =
         GraphHash != OldHash
         || OldGeneratorVersion != MaterialGraphGeneratorVersion
+        || CurrentDomain != CompiledDomain
+		|| CurrentRenderPass != CompiledRenderPass
+		|| CurrentBlendState != CompiledBlendState
         || CurrentShaderMode != CompiledShaderMode
         || ExistingGeneratedPath.empty()
         || !ProjectFileExists(ExistingGeneratedPath)
@@ -628,14 +755,9 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     FMaterialCompileOptions Options;
     Options.MaterialPath = MatFilePath;
     Options.MaterialGuid = InOutJson.hasKey(MatKeys::MaterialGuid) ? InOutJson[MatKeys::MaterialGuid].ToString() : "";
-    Options.Domain = StringToDomain(InOutJson.hasKey(MatKeys::Domain) ? InOutJson[MatKeys::Domain].ToString() : "");
-    Options.RenderPass = StringToRenderPass(
-        InOutJson.hasKey(MatKeys::RenderPass) ? InOutJson[MatKeys::RenderPass].ToString() : ""
-    );
-    Options.BlendState = StringToBlendState(
-        InOutJson.hasKey(MatKeys::BlendState) ? InOutJson[MatKeys::BlendState].ToString() : "",
-        Options.RenderPass
-    );
+    Options.Domain = CurrentDomain;
+    Options.RenderPass = CurrentRenderPass;
+    Options.BlendState = CurrentBlendState;
     Options.DepthStencilState = StringToDepthStencilState(
         InOutJson.hasKey(MatKeys::DepthStencilState) ? InOutJson[MatKeys::DepthStencilState].ToString() : "",
         Options.RenderPass
@@ -675,6 +797,9 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     InOutJson[MatKeys::Compiled]                                  = json::JSON::Make(json::JSON::Class::Object);
     InOutJson[MatKeys::Compiled][MatKeys::GraphHash]              = GraphHash;
     InOutJson[MatKeys::Compiled][MatKeys::GeneratorVersion]       = MaterialGraphGeneratorVersion;
+    InOutJson[MatKeys::Compiled][MatKeys::Domain]                 = ToString(Options.Domain);
+    InOutJson[MatKeys::Compiled][MatKeys::RenderPass]             = RenderStateStrings::ToString(RenderStateStrings::RenderPassMap, Options.RenderPass);
+    InOutJson[MatKeys::Compiled][MatKeys::BlendState]             = RenderStateStrings::ToString(RenderStateStrings::BlendStateMap, Options.BlendState);
     InOutJson[MatKeys::Compiled][MatKeys::GraphShaderMode]        = ToString(CurrentShaderMode);
     InOutJson[MatKeys::Compiled][MatKeys::ReceiveLighting]        = bCurrentReceiveLighting;
     InOutJson[MatKeys::Compiled][MatKeys::Parameters]             = json::JSON::Make(json::JSON::Class::Object);
@@ -700,6 +825,10 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
         InOutJson[MatKeys::Compiled][MatKeys::Textures][Name] = std::move(TexJson);
     }
 
+	if (!ExistingGeneratedPath.empty() && ExistingGeneratedPath != Result.GeneratedShaderPath)
+	{
+		FShaderManager::Get().InvalidatePath(ExistingGeneratedPath);
+	}
     FShaderManager::Get().InvalidatePath(Result.GeneratedShaderPath);
     auto DropTemplate = [this](const FString& CacheKey)
     {
@@ -723,14 +852,28 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     return true;
 }
 
-void FMaterialManager::EnsureGraphMaterialJsonDefaults(const FString& MatFilePath, json::JSON& JsonData)
+bool FMaterialManager::EnsureGraphMaterialJsonDefaults(const FString& MatFilePath, json::JSON& JsonData)
 {
     if (!JsonData.hasKey(MatKeys::Graph))
     {
-        return;
+        return false;
     }
+	bool bChanged = false;
 
-    if (!JsonData.hasKey(MatKeys::Version)) JsonData[MatKeys::Version] = 2;
+	auto SetStringIfMissing = [&JsonData, &bChanged](const char* Key, const char* Value)
+	{
+		if (!JsonData.hasKey(Key))
+		{
+			JsonData[Key] = Value;
+			bChanged = true;
+		}
+	};
+
+	if (!JsonData.hasKey(MatKeys::Version))
+	{
+		JsonData[MatKeys::Version] = 2;
+		bChanged = true;
+	}
     if (!JsonData.hasKey(MatKeys::MaterialGuid) || JsonData[MatKeys::MaterialGuid].ToString().empty())
     {
         char Buffer[32];
@@ -741,21 +884,56 @@ void FMaterialManager::EnsureGraphMaterialJsonDefaults(const FString& MatFilePat
             static_cast<unsigned long long>(std::hash<FString> {}(MatFilePath))
         );
         JsonData[MatKeys::MaterialGuid] = Buffer;
+		bChanged = true;
     }
-    if (!JsonData.hasKey(MatKeys::PathFileName)) JsonData[MatKeys::PathFileName] = MatFilePath;
-    if (!JsonData.hasKey(MatKeys::Domain)) JsonData[MatKeys::Domain] = "ParticleSprite";
-    if (!JsonData.hasKey(MatKeys::RenderPass)) JsonData[MatKeys::RenderPass] = "AlphaBlend";
-    if (!JsonData.hasKey(MatKeys::BlendState)) JsonData[MatKeys::BlendState] = "AlphaBlend";
-    if (!JsonData.hasKey(MatKeys::DepthStencilState)) JsonData[MatKeys::DepthStencilState] = "DepthReadOnly";
-    if (!JsonData.hasKey(MatKeys::RasterizerState)) JsonData[MatKeys::RasterizerState] = "SolidNoCull";
-    if (!JsonData.hasKey(MatKeys::GraphShaderMode)) JsonData[MatKeys::GraphShaderMode] = ToString(EMaterialGraphShaderMode::Generated);
-    if (!JsonData.hasKey(MatKeys::GeneratedShaderPath)) JsonData[MatKeys::GeneratedShaderPath] = "";
+	if (!JsonData.hasKey(MatKeys::PathFileName))
+	{
+		JsonData[MatKeys::PathFileName] = MatFilePath;
+		bChanged = true;
+	}
+	SetStringIfMissing(MatKeys::Domain, "ParticleSprite");
+	SetStringIfMissing(MatKeys::RenderPass, "AlphaBlend");
+	SetStringIfMissing(MatKeys::BlendState, "AlphaBlend");
+	SetStringIfMissing(MatKeys::DepthStencilState, "DepthReadOnly");
+	SetStringIfMissing(MatKeys::RasterizerState, "SolidNoCull");
+	if (!JsonData.hasKey(MatKeys::GraphShaderMode))
+	{
+		JsonData[MatKeys::GraphShaderMode] = ToString(EMaterialGraphShaderMode::Generated);
+		bChanged = true;
+	}
+	SetStringIfMissing(MatKeys::GeneratedShaderPath, "");
+
+	EMaterialDomain Domain = MaterialDomainFromString(JsonData[MatKeys::Domain].ToString(), EMaterialDomain::Surface);
+	if (!IsSupportedGraphMaterialDomain(Domain))
+	{
+		Domain = EMaterialDomain::Surface;
+		JsonData[MatKeys::Domain] = ToString(Domain);
+		bChanged = true;
+	}
+
+	const ERenderPass RenderPass = StringToRenderPass(JsonData[MatKeys::RenderPass].ToString());
+	const EBlendState BlendState = StringToBlendState(JsonData[MatKeys::BlendState].ToString(), RenderPass);
+	ESupportedGraphMaterialMode Mode = ResolveGraphMaterialMode(RenderPass, BlendState);
+	if (!IsSupportedGraphMaterialMode(Domain, Mode))
+	{
+		Mode = GetDefaultGraphMaterialMode(Domain);
+		WriteGraphMaterialMode(JsonData, Mode);
+		bChanged = true;
+	}
+	else
+	{
+		WriteGraphMaterialMode(JsonData, Mode);
+	}
+
     if (!JsonData.hasKey(MatKeys::Compiled))
     {
         JsonData[MatKeys::Compiled]                      = json::JSON::Make(json::JSON::Class::Object);
         JsonData[MatKeys::Compiled][MatKeys::Parameters] = json::JSON::Make(json::JSON::Class::Object);
         JsonData[MatKeys::Compiled][MatKeys::Textures]   = json::JSON::Make(json::JSON::Class::Object);
+		bChanged = true;
     }
+
+	return bChanged;
 }
 
 bool FMaterialManager::InjectDefaultParameters(json::JSON& JsonData, FMaterialTemplate* Template, UMaterial* Material)

@@ -1,13 +1,16 @@
 {
   "BlendState" : "Opaque",
   "Compiled" : {
-    "GeneratorVersion" : "GeneratedSurfacePass_v1",
-    "GraphHash" : "250F195CB2AC575E",
+    "BlendState" : "Opaque",
+    "Domain" : "Surface",
+    "GeneratorVersion" : "GeneratedMaterialPass_v2",
+    "GraphHash" : "586C34B451876751",
     "GraphShaderMode" : "Generated",
     "Parameters" : {
 
     },
     "ReceiveLighting" : false,
+    "RenderPass" : "Opaque",
     "Textures" : {
 
     }
@@ -17,15 +20,15 @@
   "GeneratedShaderPath" : "Shaders/Generated/Materials/CCE0A28865D142F8_Surface.hlsl",
   "Graph" : {
     "Links" : [{
-        "FromPinId" : 48,
-        "LinkId" : 49,
-        "ToPinId" : 37
-      }, {
         "FromPinId" : 66,
-        "LinkId" : 67,
-        "ToPinId" : 32
+        "LinkId" : 150,
+        "ToPinId" : 143
+      }, {
+        "FromPinId" : 48,
+        "LinkId" : 151,
+        "ToPinId" : 148
       }],
-    "NextId" : 68,
+    "NextId" : 152,
     "Nodes" : [{
         "DisplayName" : "Material Output",
         "Mask" : "RGBA",
@@ -35,43 +38,43 @@
             "DisplayName" : "BaseColor",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 32,
+            "PinId" : 143,
             "Type" : "Float3"
           }, {
             "DisplayName" : "Normal",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 33,
+            "PinId" : 144,
             "Type" : "Float3"
           }, {
             "DisplayName" : "Roughness",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 34,
+            "PinId" : 145,
             "Type" : "Float"
           }, {
             "DisplayName" : "Metallic",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 35,
+            "PinId" : 146,
             "Type" : "Float"
           }, {
             "DisplayName" : "Emissive",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 36,
+            "PinId" : 147,
             "Type" : "Float3"
           }, {
             "DisplayName" : "Opacity",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 37,
+            "PinId" : 148,
             "Type" : "Float"
           }, {
             "DisplayName" : "OpacityMask",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 38,
+            "PinId" : 149,
             "Type" : "Float"
           }],
         "PosX" : 328.000000,
@@ -98,24 +101,6 @@
         "TextureSlot" : "Diffuse",
         "Type" : "ConstantFloat",
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
-      }, {
-        "DisplayName" : "ConstantFloat3",
-        "Mask" : "RGBA",
-        "NodeId" : 62,
-        "ParameterName" : "",
-        "Pins" : [{
-            "DisplayName" : "Value",
-            "Kind" : "Output",
-            "OwningNodeId" : 62,
-            "PinId" : 63,
-            "Type" : "Float3"
-          }],
-        "PosX" : 48.000000,
-        "PosY" : 2.000000,
-        "TexturePath" : "",
-        "TextureSlot" : "Diffuse",
-        "Type" : "ConstantFloat3",
-        "Value" : [1.000000, 0.000000, 0.000000, 1.000000]
       }, {
         "DisplayName" : "TexCoord",
         "Mask" : "RGBA",

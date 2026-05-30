@@ -965,7 +965,7 @@ float4 PS(PS_Input_MaterialParticle input) : SV_TARGET
 )";
 	}
 
-	FString BuildParticleMeshMain(bool bReceiveLighting = false)
+	FString BuildParticleMeshMain(bool bReceiveLighting = false, bool bTranslucentPass = true)
 	{
 		std::stringstream SS;
 		SS << R"(
@@ -1035,9 +1035,18 @@ float4 PS(PS_Input_MaterialMeshParticle input) : SV_TARGET
 		SS << R"(
     float4 FinalColor = float4(BaseColor + Result.Emissive, Result.Opacity);
     clip(FinalColor.a - 0.01f);
-    return ApplyFogTranslucent(FinalColor, input.worldPos, CameraWorldPos);
-}
 )";
+
+		if (bTranslucentPass)
+		{
+			SS << "    return ApplyFogTranslucent(FinalColor, input.worldPos, CameraWorldPos);\n";
+		}
+		else
+		{
+			SS << "    return FinalColor;\n";
+		}
+
+		SS << "}\n";
 		return SS.str();
 	}
 
@@ -1179,7 +1188,7 @@ bool FMaterialHlslGenerator::Generate(const FMaterialGraph& Graph, const FMateri
 		SS << BuildParticleSpriteMain();
 		break;
 	case EMaterialDomain::ParticleMesh:
-		SS << BuildParticleMeshMain(Options.bReceiveLighting);
+		SS << BuildParticleMeshMain(Options.bReceiveLighting, Options.RenderPass == ERenderPass::AlphaBlend);
 		break;
 	case EMaterialDomain::PostProcess:
 		SS << BuildPostProcessMain();
