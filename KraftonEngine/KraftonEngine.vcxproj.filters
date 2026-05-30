@@ -1514,6 +1514,12 @@
     <ClCompile Include="Source\Engine\Physics\BodyInstance.cpp">
       <Filter>Source\Engine\Physics</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\CollisionDebugDraw.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\CollisionWireUtils.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Physics\BodySetup\BodySetup.cpp">
       <Filter>Source\Engine\Physics\BodySetup</Filter>
     </ClCompile>

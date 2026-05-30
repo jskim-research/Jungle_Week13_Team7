@@ -111,6 +111,8 @@ public:
 
 	void RequestEndPlayMap();
 	bool IsPlayingInEditor() const { return PlayInEditorSessionInfo.has_value(); }
+	// 활성 PIE 월드 (없으면 nullptr). UE 게임 뷰포트 렌더/디버그 수집용.
+	UWorld* GetPlayInEditorWorld() const;
 	enum class EPIEControlMode : uint8
 	{
 		Possessed,

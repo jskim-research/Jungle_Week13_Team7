@@ -60,8 +60,7 @@ struct FShowFlags
 	bool bViewLightCulling = false;
 	bool bVisualize25DCulling = false;
 	bool bShowShadowFrustum = false;
-	bool bCollision = true;
-	bool bShowCollisionShape = false;	// PIE/Game에서 콘솔로 콜리전 shape 와이어프레임 강제 표시
+	bool bCollision = true; // Simple collision 와이어 (BodySetup / Shape — Editor·PIE·Game, PhysX 불필요)
 	bool bParticle = true;
 };
 

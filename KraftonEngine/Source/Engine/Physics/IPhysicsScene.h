@@ -16,8 +16,8 @@ struct FCollisionShape;
 // 물리 백엔드 선택
 enum class EPhysicsBackend : uint8
 {
-	Native,		// Hand-written collision math (O(N²) brute-force)
-	PhysX,		// NVIDIA PhysX 4.1
+	Native,		// Legacy hand-written collision (query/overlap; UE 기본은 PhysX)
+	PhysX,		// NVIDIA PhysX 4.1 (UE 정렬 기본 백엔드)
 };
 
 // ============================================================

@@ -6,8 +6,9 @@
 #include "Render/Shader/ShaderManager.h"
 #include "Render/Proxy/TextRenderSceneProxy.h"
 #include "Render/Proxy/DecalSceneProxy.h"
-#include "Render/Proxy/ShapeSceneProxy.h"
 #include "Render/Proxy/BoneDebugSceneProxy.h"
+#include "Physics/CollisionDebugDraw.h"
+#include "GameFramework/World.h"
 #include "Render/Proxy/SkeletalMeshSceneProxy.h"
 #include "Render/Proxy/ParticleSystemSceneProxy.h"
 #include "Render/Scene/FScene.h"
@@ -342,7 +343,7 @@ void FDrawCommandBuilder::AddWorldText(const FTextRenderSceneProxy* TextProxy, c
 // ============================================================
 // BuildCommands — 프록시 커맨드 + 동적 커맨드 일괄 생성
 // ============================================================
-void FDrawCommandBuilder::BuildCommands(const FFrameContext& Frame, FScene* Scene, const FCollectOutput& Output)
+void FDrawCommandBuilder::BuildCommands(const FFrameContext& Frame, FScene* Scene, const FCollectOutput& Output, UWorld* World)
 {
 	if (Scene)
 	{
@@ -350,7 +351,7 @@ void FDrawCommandBuilder::BuildCommands(const FFrameContext& Frame, FScene* Scen
 		BuildProxyCommands(Frame, *Scene, Output);
 	}
 
-	BuildDynamicCommands(Frame, Scene);
+	BuildDynamicCommands(Frame, Scene, World);
 }
 
 // ============================================================
@@ -359,10 +360,6 @@ void FDrawCommandBuilder::BuildCommands(const FFrameContext& Frame, FScene* Scen
 void FDrawCommandBuilder::BuildProxyCommands(const FFrameContext& Frame, FScene& Scene, const FCollectOutput& Output)
 {
 	const bool bShowBoundingVolume = Frame.RenderOptions.ShowFlags.bBoundingVolume;
-	const bool bIsEditor = (Frame.WorldType == EWorldType::Editor);
-	const bool bShowCollision = bIsEditor
-		? Frame.RenderOptions.ShowFlags.bCollision
-		: Frame.RenderOptions.ShowFlags.bShowCollisionShape;
 
 	for (FPrimitiveSceneProxy* Proxy : Output.RenderableProxies)
 	{
@@ -381,18 +378,6 @@ void FDrawCommandBuilder::BuildProxyCommands(const FFrameContext& Frame, FScene&
 			for (const FWireLine& Line : BoneProxy->GetCachedParentBoneLines())
 			{
 				DebugBoneLines.AddLine(Line.Start, Line.End, BoneProxy->GetParentBoneColor());
-			}
-		}
-		else if (Proxy->HasProxyFlag(EPrimitiveProxyFlags::WireShape))
-		{
-			if (bShowCollision)
-			{
-				const FShapeSceneProxy* ShapeProxy = static_cast<const FShapeSceneProxy*>(Proxy);
-				const FVector4& Color = ShapeProxy->GetWireColor();
-				for (const FWireLine& Line : ShapeProxy->GetCachedLines())
-				{
-					EditorLines.AddLine(Line.Start, Line.End, Color);
-				}
 			}
 		}
 		else if (Proxy->HasProxyFlag(EPrimitiveProxyFlags::FontBatched))
@@ -504,18 +489,23 @@ void FDrawCommandBuilder::BuildSelectionCommands(FPrimitiveSceneProxy* Proxy, bo
 // ============================================================
 // BuildDynamicCommands — Scene 경량 데이터 → 동적 지오메트리 → FDrawCommand
 // ============================================================
-void FDrawCommandBuilder::BuildDynamicCommands(const FFrameContext& Frame, const FScene* Scene)
+void FDrawCommandBuilder::BuildDynamicCommands(const FFrameContext& Frame, const FScene* Scene, UWorld* World)
 {
-	PrepareDynamicGeometry(Frame, Scene);
+	PrepareDynamicGeometry(Frame, Scene, World);
 	BuildDynamicDrawCommands(Frame, Scene);
 }
 
 // ============================================================
 // PrepareDynamicGeometry — FScene의 경량 데이터 → 라인/폰트 지오메트리
 // ============================================================
-void FDrawCommandBuilder::PrepareDynamicGeometry(const FFrameContext& Frame, const FScene* Scene)
+void FDrawCommandBuilder::PrepareDynamicGeometry(const FFrameContext& Frame, const FScene* Scene, UWorld* World)
 {
 	if (!Scene) return;
+
+	if (World && Frame.RenderOptions.ShowFlags.bCollision)
+	{
+		CollisionDebugDraw::AppendCollisionWireframes(World, Frame, EditorLines);
+	}
 
 	// --- Editor 패스: AABB 디버그 박스 + DebugDraw 라인 ---
 	for (const auto& AABB : Scene->GetDebugAABBs())

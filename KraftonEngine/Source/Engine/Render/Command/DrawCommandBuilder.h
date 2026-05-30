@@ -9,6 +9,7 @@
 class FPassRenderStateTable;
 class FTextRenderSceneProxy;
 class FScene;
+class UWorld;
 struct FCollectOutput;
 
 /*
@@ -32,7 +33,7 @@ public:
 	void AddWorldText(const FTextRenderSceneProxy* TextProxy, const FFrameContext& Frame);
 
 	// FCollectOutput → 프록시 커맨드 + 동적 커맨드 일괄 생성
-	void BuildCommands(const FFrameContext& Frame, FScene* Scene, const FCollectOutput& Output);
+	void BuildCommands(const FFrameContext& Frame, FScene* Scene, const FCollectOutput& Output, UWorld* World);
 
 	// 결과 접근
 	FDrawCommandList& GetCommandList() { return DrawCommandList; }
@@ -46,9 +47,9 @@ private:
 	void BuildSelectionCommands(FPrimitiveSceneProxy* Proxy, bool bShowBoundingVolume, FScene& Scene);
 
 	// Scene 경량 데이터 → 동적 지오메트리 → FDrawCommand
-	void BuildDynamicCommands(const FFrameContext& Frame, const FScene* Scene);
+	void BuildDynamicCommands(const FFrameContext& Frame, const FScene* Scene, UWorld* World);
 
-	void PrepareDynamicGeometry(const FFrameContext& Frame, const FScene* Scene);
+	void PrepareDynamicGeometry(const FFrameContext& Frame, const FScene* Scene, UWorld* World);
 	void BuildDynamicDrawCommands(const FFrameContext& Frame, const FScene* Scene);
 
 	// BuildDynamicDrawCommands 서브 메서드
