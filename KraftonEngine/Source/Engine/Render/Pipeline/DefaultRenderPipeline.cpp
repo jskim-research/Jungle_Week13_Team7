@@ -41,13 +41,13 @@ void FDefaultRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 		FCollectOutput Output;
 		Collector.Collect(World, Frame, Output);
 		Collector.CollectDebugDraw(Frame, *Scene);
-		Builder.BuildCommands(Frame, Scene, Output);
+		Builder.BuildCommands(Frame, Scene, Output, World);
 	}
 	else
 	{
 		Builder.BeginCollect(Frame);
 		FCollectOutput EmptyOutput;
-		Builder.BuildCommands(Frame, nullptr, EmptyOutput);
+		Builder.BuildCommands(Frame, nullptr, EmptyOutput, nullptr);
 	}
 
 	Renderer.BeginFrame();

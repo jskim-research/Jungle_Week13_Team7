@@ -4,6 +4,7 @@
 
 class UBodySetup;
 class UPrimitiveComponent;
+struct FPhysicsBodyDebugInfo;
 
 namespace physx
 {
@@ -56,4 +57,6 @@ struct FBodyInstance
 	void SyncComponentToBody();
 
 	bool IsValidBodyInstance() const { return Actor != nullptr; }
+
+	void GatherDebugInfo(FPhysicsBodyDebugInfo& OutInfo) const;
 };

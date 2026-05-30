@@ -58,6 +58,8 @@ public:
 	const FString& GetCurrentLevelFilePath() const { return CurrentLevelFilePath; }
 	void RefreshContentBrowser() { MainPanel.RefreshContentBrowser(); }
 	void OpenAssetEditorForObject(UObject* Object) { MainPanel.OpenAssetEditorForObject(Object); }
+	void OpenMeshEditorForObject(UObject* Object) { MainPanel.OpenMeshEditorForObject(Object); }
+	void OpenPhysicsAssetEditorForObject(UObject* Object) { MainPanel.OpenPhysicsAssetEditorForObject(Object); }
 	void SetContentBrowserIconSize(float Size) { MainPanel.SetContentBrowserIconSize(Size); }
 	float GetContentBrowserIconSize() const { return MainPanel.GetContentBrowserIconSize(); }
 	void HideEditorWindows() { MainPanel.HideEditorWindows(); }
@@ -111,6 +113,8 @@ public:
 
 	void RequestEndPlayMap();
 	bool IsPlayingInEditor() const { return PlayInEditorSessionInfo.has_value(); }
+	// 활성 PIE 월드 (없으면 nullptr). UE 게임 뷰포트 렌더/디버그 수집용.
+	UWorld* GetPlayInEditorWorld() const;
 	enum class EPIEControlMode : uint8
 	{
 		Possessed,

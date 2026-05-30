@@ -1,5 +1,7 @@
 ﻿#include "Physics/BodyInstance.h"
 
+#include "Physics/PhysicsBodyDebug.h"
+
 #include "Component/PrimitiveComponent.h"
 #include "Component/SceneComponent.h"
 #include "Component/Shape/BoxComponent.h"
@@ -380,4 +382,94 @@ void FBodyInstance::SyncComponentToBody()
 	}
 
 	Actor->setGlobalPose(GetPxTransform(OwnerComponent));
+}
+
+void FBodyInstance::GatherDebugInfo(FPhysicsBodyDebugInfo& OutInfo) const
+{
+	OutInfo = FPhysicsBodyDebugInfo{};
+	OutInfo.OwnerComponent = OwnerComponent;
+	OutInfo.bSimulatePhysics = bSimulatePhysics;
+
+	if (!Actor)
+	{
+		return;
+	}
+
+	OutInfo.PhysXActor = Actor;
+	OutInfo.bHasBody = true;
+
+	const PxTransform GlobalPose = Actor->getGlobalPose();
+	OutInfo.WorldPosition = ToFVector(GlobalPose.p);
+	OutInfo.WorldRotation = ToFQuat(GlobalPose.q);
+
+	if (PxRigidDynamic* Dynamic = Actor->is<PxRigidDynamic>())
+	{
+		OutInfo.bIsDynamic = true;
+		OutInfo.bIsKinematic = Dynamic->getRigidBodyFlags().isSet(PxRigidBodyFlag::eKINEMATIC);
+	}
+
+	const PxU32 NumShapes = Actor->getNbShapes();
+	if (NumShapes == 0)
+	{
+		return;
+	}
+
+	TArray<PxShape*> ShapeBuffer;
+	ShapeBuffer.resize(static_cast<size_t>(NumShapes));
+	const PxU32 Fetched = Actor->getShapes(ShapeBuffer.data(), NumShapes);
+	OutInfo.Shapes.reserve(static_cast<size_t>(Fetched));
+
+	for (PxU32 ShapeIndex = 0; ShapeIndex < Fetched; ++ShapeIndex)
+	{
+		PxShape* Shape = ShapeBuffer[ShapeIndex];
+		if (!Shape)
+		{
+			continue;
+		}
+
+		FPhysicsShapeDebugInfo ShapeInfo;
+		const PxTransform LocalPose = Shape->getLocalPose();
+		ShapeInfo.LocalPosition = ToFVector(LocalPose.p);
+		ShapeInfo.LocalRotation = ToFQuat(LocalPose.q);
+
+		switch (Shape->getGeometryType())
+		{
+		case PxGeometryType::eBOX:
+		{
+			PxBoxGeometry Geom;
+			if (Shape->getBoxGeometry(Geom))
+			{
+				ShapeInfo.ShapeType = EPhysicsDebugShapeType::Box;
+				ShapeInfo.BoxHalfExtents = ToFVector(Geom.halfExtents);
+			}
+			break;
+		}
+		case PxGeometryType::eSPHERE:
+		{
+			PxSphereGeometry Geom;
+			if (Shape->getSphereGeometry(Geom))
+			{
+				ShapeInfo.ShapeType = EPhysicsDebugShapeType::Sphere;
+				ShapeInfo.SphereRadius = Geom.radius;
+			}
+			break;
+		}
+		case PxGeometryType::eCAPSULE:
+		{
+			PxCapsuleGeometry Geom;
+			if (Shape->getCapsuleGeometry(Geom))
+			{
+				ShapeInfo.ShapeType = EPhysicsDebugShapeType::Capsule;
+				ShapeInfo.CapsuleRadius = Geom.radius;
+				ShapeInfo.CapsuleHalfHeight = Geom.halfHeight;
+			}
+			break;
+		}
+		default:
+			ShapeInfo.ShapeType = EPhysicsDebugShapeType::Unknown;
+			break;
+		}
+
+		OutInfo.Shapes.push_back(ShapeInfo);
+	}
 }

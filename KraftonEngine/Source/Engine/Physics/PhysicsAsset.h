@@ -56,9 +56,12 @@ public:
 
 public:
 	void Serialize(FArchive& Ar) override;
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
 
 	const FString& GetSourcePath() const { return SourcePath; }
-	void SetSourcePath(const FString& InSourcePath) { SourcePath = InSourcePath; }
+	void SetSourcePath(const FString& InPath) { SourcePath = InPath; }
+	const FString& GetPreviewSkeletalMeshPath() const { return PreviewSkeletalMeshPath; }
+	void SetPreviewSkeletalMeshPath(const FString& InPath) { PreviewSkeletalMeshPath = InPath.empty() ? FString("None") : InPath; }
 
 	// BodySetup access
 	int32 GetBodySetupCount() const { return static_cast<int32>(SkeletalBodySetups.size()); }
@@ -126,8 +129,10 @@ public:
 	void RefreshPhysicsAssetChange();
 
 private:
-	UPROPERTY(Save)
-	FString SourcePath;
+	FString SourcePath = "None";
+
+	UPROPERTY(Edit, Save, Category = "Physics Asset", DisplayName = "Preview Skeletal Mesh", AssetType = "SkeletalMesh")
+	FString PreviewSkeletalMeshPath = "None";
 
 	UPROPERTY(Edit, Save, Category = "Physics Asset", DisplayName = "Skeletal Body Setups")
 	TArray<USkeletalBodySetup*> SkeletalBodySetups;

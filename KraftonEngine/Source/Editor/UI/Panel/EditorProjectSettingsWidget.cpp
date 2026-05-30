@@ -90,7 +90,7 @@ void EditorProjectSettingsWidget::Render()
 
 	if (ImGui::CollapsingHeader("Physics", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		static const char* kBackendLabels[] = { "Native", "PhysX" };
+		static const char* kBackendLabels[] = { "Legacy (Native)", "PhysX" };
 		int CurrentBackend = static_cast<int>(PS.Physics.Backend);
 		if (ImGui::Combo("Backend", &CurrentBackend, kBackendLabels, 2))
 		{

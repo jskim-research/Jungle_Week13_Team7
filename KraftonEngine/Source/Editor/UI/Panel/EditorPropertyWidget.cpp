@@ -1580,7 +1580,11 @@ void FEditorPropertyWidget::RenderSkeletalMeshPhysicsAssetTools()
 		ImGui::Text("Using: %s", CurrentPath.empty() ? "None" : CurrentPath.c_str());
 		ImGui::Text("Source: %s", OverrideAsset ? "Override" : "SkeletalMesh Default");
 
-		FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+		if (!bPhysicsAssetListInitialized)
+		{
+			FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+			bPhysicsAssetListInitialized = true;
+		}
 		const TArray<FAssetListItem>& AssetFiles = FPhysicsAssetManager::Get().GetAvailablePhysicsAssetFiles();
 		const char* Preview = OverrideAsset && !SkelComp->GetPhysicsAssetOverridePath().empty()
 			? SkelComp->GetPhysicsAssetOverridePath().c_str()
@@ -1641,6 +1645,12 @@ void FEditorPropertyWidget::RenderSkeletalMeshPhysicsAssetTools()
 				SkelComp->SetPhysicsAsset(NewAsset);
 				FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
 			}
+		}
+
+		if (ImGui::Button("Refresh PhysicsAsset List"))
+		{
+			FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
+			bPhysicsAssetListInitialized = true;
 		}
 
 		if (ImGui::Button("Save PhysicsAsset"))
@@ -2105,6 +2115,44 @@ bool FEditorPropertyWidget::RenderSoftObjectPropertyWidget(FPropertyValue& Prop)
 					bChanged = true;
 				}
 
+				if (bSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+
+		return bChanged;
+	}
+
+	if (AssetType == "UPhysicsAsset")
+	{
+		FString Preview = (CurrentPath.empty() || CurrentPath == "None") ? "None" : GetStemFromPath(CurrentPath);
+
+		if (ImGui::BeginCombo("##PhysicsAsset", Preview.c_str()))
+		{
+			const bool bSelectedNone = (CurrentPath == "None" || CurrentPath.empty());
+			if (ImGui::Selectable("None", bSelectedNone))
+			{
+				SetPath("None");
+				bChanged = true;
+			}
+			if (bSelectedNone)
+			{
+				ImGui::SetItemDefaultFocus();
+			}
+
+			const TArray<FAssetListItem>& PhysicsAssetFiles = FAssetRegistry::ListByTypeName("UPhysicsAsset");
+			for (const FAssetListItem& Item : PhysicsAssetFiles)
+			{
+				const bool bSelected = CurrentPath == Item.FullPath;
+				if (ImGui::Selectable(Item.DisplayName.c_str(), bSelected))
+				{
+					SetPath(Item.FullPath);
+					bChanged = true;
+				}
 				if (bSelected)
 				{
 					ImGui::SetItemDefaultFocus();

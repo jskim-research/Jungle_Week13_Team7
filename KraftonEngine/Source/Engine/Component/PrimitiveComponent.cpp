@@ -5,6 +5,7 @@
 #include "Collision/Ray/RayUtils.h"
 #include "Collision/Octree/SpatialPartition.h"
 #include "Physics/IPhysicsScene.h"
+#include "Physics/PhysicsBodyDebug.h"
 #include "Render/Resource/MeshBufferManager.h"
 #include "Core/Types/CollisionTypes.h"
 #include "Render/Scene/FScene.h"
@@ -137,6 +138,18 @@ void UPrimitiveComponent::DestroyPhysicsState()
 			PS->UnregisterComponent(this);
 		}
 	}
+}
+
+bool UPrimitiveComponent::GetPhysicsBodyDebugInfo(FPhysicsBodyDebugInfo& OutInfo) const
+{
+	if (!BodyInstance.IsValidBodyInstance())
+	{
+		OutInfo = FPhysicsBodyDebugInfo{};
+		return false;
+	}
+
+	BodyInstance.GatherDebugInfo(OutInfo);
+	return OutInfo.bHasBody;
 }
 
 void UPrimitiveComponent::EndPlay()

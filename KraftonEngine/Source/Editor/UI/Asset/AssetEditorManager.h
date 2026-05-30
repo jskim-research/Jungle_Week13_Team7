@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <memory>
+#include <type_traits>
 
 class UObject;
 class IEditorPreviewViewportClient;
@@ -31,6 +32,35 @@ public:
 
 	void CloseAll();
 	bool OpenEditorForObject(UObject* Object);
+
+	template<typename TEditor>
+	bool OpenEditorForObjectAs(UObject* Object)
+	{
+		static_assert(std::is_base_of_v<FAssetEditorWidget, TEditor>, "TEditor must derive from FAssetEditorWidget");
+
+		RemoveClosedEditors();
+
+		for (const auto& Editor : OpenEditors)
+		{
+			TEditor* TypedEditor = dynamic_cast<TEditor*>(Editor.get());
+			if (TypedEditor && TypedEditor->IsEditingObject(Object))
+			{
+				TypedEditor->RequestFocus();
+				return true;
+			}
+		}
+
+		auto Editor = std::make_unique<TEditor>();
+		if (!Editor || !Editor->CanEdit(Object))
+		{
+			return false;
+		}
+
+		Editor->Initialize(EditorEngine);
+		Editor->Open(Object);
+		OpenEditors.push_back(std::move(Editor));
+		return true;
+	}
 
 	void CollectPreviewViewportClients(TArray<IEditorPreviewViewportClient*>& OutClients) const;
 
