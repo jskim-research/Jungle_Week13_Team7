@@ -99,7 +99,7 @@ private:
 	void HandleShowWindows(const TArray<FString>& Args);
 	void HandleShowEditorOnly(const TArray<FString>& Args);
 	void HandleHideEditorOnly(const TArray<FString>& Args);
-	void HandleShowCollisionShape(const TArray<FString>& Args);
+	void HandleToggleCollision(const TArray<FString>& Args);
 	void HandleContentBrowserRefresh(const TArray<FString>& Args);
 	void HandleContentBrowserIconSize(const TArray<FString>& Args);
 	void HandleObjList(const TArray<FString>& Args);

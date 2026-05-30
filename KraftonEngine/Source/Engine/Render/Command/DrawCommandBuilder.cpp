@@ -359,10 +359,7 @@ void FDrawCommandBuilder::BuildCommands(const FFrameContext& Frame, FScene* Scen
 void FDrawCommandBuilder::BuildProxyCommands(const FFrameContext& Frame, FScene& Scene, const FCollectOutput& Output)
 {
 	const bool bShowBoundingVolume = Frame.RenderOptions.ShowFlags.bBoundingVolume;
-	const bool bIsEditor = (Frame.WorldType == EWorldType::Editor);
-	const bool bShowCollision = bIsEditor
-		? Frame.RenderOptions.ShowFlags.bCollision
-		: Frame.RenderOptions.ShowFlags.bShowCollisionShape;
+	const bool bShowCollision = Frame.RenderOptions.ShowFlags.bCollision;
 
 	for (FPrimitiveSceneProxy* Proxy : Output.RenderableProxies)
 	{
