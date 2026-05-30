@@ -3,8 +3,13 @@
   "Compiled" : {
     "GeneratorVersion" : "ParticleMeshLighting_v4",
     "GraphHash" : "3E822CC5288F42EC",
+    "GraphShaderMode" : "UberLit",
     "Parameters" : {
-
+      "HasNormalMap" : 0.000000,
+      "SectionColor" : {
+        "Type" : "Float4",
+        "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
+      }
     },
     "ReceiveLighting" : false,
     "Textures" : {
@@ -13,7 +18,7 @@
   },
   "DepthStencilState" : "Default",
   "Domain" : "Surface",
-  "GeneratedShaderPath" : "Shaders/Generated/Materials/_7A831454B8C8C06A_Surface.hlsl",
+  "GeneratedShaderPath" : "",
   "Graph" : {
     "Links" : [{
         "FromPinId" : 48,
@@ -117,6 +122,7 @@
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }]
   },
+  "GraphShaderMode" : "UberLit",
   "MaterialGuid" : "7A831454B8C8C06A",
   "Origin" : "FbxImport",
   "Parameters" : {
@@ -128,6 +134,6 @@
   "RasterizerState" : "SolidBackCull",
   "ReceiveLighting" : false,
   "RenderPass" : "Opaque",
-  "ShaderPath" : "Shaders/Generated/Materials/_7A831454B8C8C06A_Surface.hlsl",
+  "ShaderPath" : "Shaders/Geometry/UberLit.hlsl",
   "Version" : 2
 }

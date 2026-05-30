@@ -88,6 +88,18 @@ enum class EConstraintMotion : uint8
 };
 
 USTRUCT()
+struct FConstraintFrame
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Edit, Save, Category = "Constraint")
+	FVector Position;
+
+	UPROPERTY(Edit, Save, Category = "Constraint")
+	FRotator Rotation;
+};
+
+USTRUCT()
 struct FConstraintInstance : public FConstraintInstanceBase
 {
 	GENERATED_BODY()
@@ -107,11 +119,11 @@ public:
 	// Local joint frame
 	// Parent body local / Child body local
 
-	// UPROPERTY(Edit, Save, Category = "Constraint")
-	FTransform ParentFrame;
+	UPROPERTY(Edit, Save, Category = "Constraint")
+	FConstraintFrame ParentFrame;
 
-	// UPROPERTY(Edit, Save, Category = "Constraint")
-	FTransform ChildFrame;
+	UPROPERTY(Edit, Save, Category = "Constraint")
+	FConstraintFrame ChildFrame;
 
 	// Collision
 

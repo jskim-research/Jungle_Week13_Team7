@@ -10,8 +10,8 @@
 #include "Source/Engine/Component/Primitive/SkeletalMeshComponent.generated.h"
 
 class UPhysicsAsset;
-class FBodyInstance;
-class FConstraintInstance;
+struct FBodyInstance;
+struct FConstraintInstance;
 class UAnimInstance;
 class UAnimSingleNodeInstance;
 class UAnimSequenceBase;
@@ -94,6 +94,10 @@ public:
 
 	// Physics
 	UPhysicsAsset* GetPhysicsAsset() const;
+	UPhysicsAsset* GetPhysicsAssetOverride() const { return PhysicsAssetOverride.Get(); }
+	const FString& GetPhysicsAssetOverridePath() const { return PhysicsAssetOverridePath; }
+	void SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset);
+	void ClearPhysicsAssetOverride() { SetPhysicsAsset(nullptr); }
 	// PhysicsAsset -> Bodies / Constraints 생성
 	void InstantiatePhysicsAsset();
 
@@ -126,6 +130,10 @@ private:
     void LoadAnimationFromPath();
     void CapturePersistentAnimInstanceSettings();
     void ApplyPersistentAnimInstanceSettings(UAnimInstance* Instance);
+	void CreateBodiesFromPhysicsAsset();
+	void CreateConstraintInstancesFromPhysicsAsset();
+	void UpdateConstraintFrames();
+	void InitConstraints();
 
 protected:
 	TArray<FBodyInstance*> Bodies;
@@ -133,6 +141,11 @@ protected:
 
 	UPROPERTY(EditAnywhere)
 	bool bRagdollActive = false;
+
+	UPROPERTY(Transient, Category="Physics")
+	TObjectPtr<UPhysicsAsset> PhysicsAssetOverride = nullptr;
+	UPROPERTY(Save, Category="Physics", DisplayName="Physics Asset Override", AssetType="PhysicsAsset")
+	FString PhysicsAssetOverridePath = "None";
 
     // Animation 런타임 상태.
     UPROPERTY(Edit, Save, Category="Animation", DisplayName="Animation Mode", Enum=EAnimationMode)

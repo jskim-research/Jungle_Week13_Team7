@@ -2,6 +2,8 @@
 
 #include "Asset/AssetPackage.h"
 #include "Object/Reflection/ObjectFactory.h"
+#include "Core/Logging/Log.h"
+#include "Object/Object.h"
 #include "Physics/PhysicsAsset.h"
 #include "Platform/Paths.h"
 #include "Serialization/WindowsArchive.h"
@@ -74,6 +76,13 @@ UPhysicsAsset* FPhysicsAssetManager::Find(const FString& Path) const
 	return It != LoadedPhysicsAssets.end() ? It->second : nullptr;
 }
 
+UPhysicsAsset* FPhysicsAssetManager::Reload(const FString& Path)
+{
+	const FString NormalizedPath = FPaths::MakeProjectRelative(Path);
+	LoadedPhysicsAssets.erase(NormalizedPath);
+	return Load(NormalizedPath);
+}
+
 bool FPhysicsAssetManager::Save(UPhysicsAsset* Asset)
 {
 	if (!Asset)
@@ -87,6 +96,9 @@ bool FPhysicsAssetManager::Save(UPhysicsAsset* Asset)
 		return false;
 	}
 
+	std::filesystem::path FullPath = std::filesystem::path(FPaths::RootDir()) / FPaths::ToWide(FPaths::MakeProjectRelative(Path));
+	FPaths::CreateDir(FullPath.parent_path().wstring());
+
 	FWindowsBinWriter Ar(Path);
 	if (!Ar.IsValid())
 	{
@@ -95,11 +107,12 @@ bool FPhysicsAssetManager::Save(UPhysicsAsset* Asset)
 
 	FAssetPackageHeader Header;
 	Header.Type = static_cast<uint32>(EAssetPackageType::PhysicsAsset);
-	FAssetImportMetadata Metadata;
 
+	FAssetImportMetadata Metadata;
 	Ar << Header;
 	Ar << Metadata;
 	Asset->Serialize(Ar);
+
 	if (!Ar.IsValid())
 	{
 		return false;
@@ -109,6 +122,26 @@ bool FPhysicsAssetManager::Save(UPhysicsAsset* Asset)
 	LoadedPhysicsAssets[Path] = Asset;
 	RefreshAvailablePhysicsAssets();
 	return true;
+}
+
+UPhysicsAsset* FPhysicsAssetManager::CreatePhysicsAsset(const FString& Path)
+{
+	const FString NormalizedPath = FPaths::MakeProjectRelative(Path);
+	if (NormalizedPath.empty())
+	{
+		return nullptr;
+	}
+
+	auto It = LoadedPhysicsAssets.find(NormalizedPath);
+	if (It != LoadedPhysicsAssets.end())
+	{
+		return It->second;
+	}
+
+	UPhysicsAsset* NewAsset = UObjectManager::Get().CreateObject<UPhysicsAsset>();
+	NewAsset->SetSourcePath(NormalizedPath);
+	LoadedPhysicsAssets.emplace(NormalizedPath, NewAsset);
+	return NewAsset;
 }
 
 void FPhysicsAssetManager::RefreshAvailablePhysicsAssets()

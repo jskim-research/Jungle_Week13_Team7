@@ -64,6 +64,6 @@ private:
 
 	mutable UPhysicsAsset* PhysicsAsset = nullptr;
 
-	UPROPERTY(Edit, Save, Category = "Physics", DisplayName = "Physics Asset", AssetType = "UPhysicsAsset")
+	UPROPERTY(Edit, Save, Category = "Physics", DisplayName = "Physics Asset Path", AssetType = "PhysicsAsset")
 	FString PhysicsAssetPath = "None";
 };

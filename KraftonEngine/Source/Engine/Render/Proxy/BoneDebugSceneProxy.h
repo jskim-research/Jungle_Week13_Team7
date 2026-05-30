@@ -1,6 +1,7 @@
 ﻿#pragma once
 
-#include "ShapeSceneProxy.h"
+#include "Render/Proxy/PrimitiveSceneProxy.h"
+#include "Physics/CollisionWireUtils.h"
 
 class UBoneDebugComponent;
 

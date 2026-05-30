@@ -246,6 +246,18 @@ void UEditorEngine::RequestTransitionToScene(const FString& /*InScenePath*/)
 	RequestEndPlayMap();
 }
 
+UWorld* UEditorEngine::GetPlayInEditorWorld() const
+{
+	for (const FWorldContext& Ctx : WorldList)
+	{
+		if (Ctx.WorldType == EWorldType::PIE && Ctx.World)
+		{
+			return Ctx.World;
+		}
+	}
+	return nullptr;
+}
+
 void UEditorEngine::StartQueuedPlaySessionRequest()
 {
 	if (!PlaySessionRequest.has_value())

@@ -14,11 +14,15 @@ class FPhysicsAssetManager : public TSingleton<FPhysicsAssetManager>, public FGC
 public:
 	UPhysicsAsset* Load(const FString& Path);
 	UPhysicsAsset* Find(const FString& Path) const;
-
+	UPhysicsAsset* Reload(const FString& Path);
 	bool Save(UPhysicsAsset* Asset);
+	UPhysicsAsset* CreatePhysicsAsset(const FString& Path);
 
 	void RefreshAvailablePhysicsAssets();
-	const TArray<FAssetListItem>& GetAvailablePhysicsAssetFiles() const { return AvailablePhysicsAssetFiles; }
+	const TArray<FAssetListItem>& GetAvailablePhysicsAssetFiles() const
+	{
+		return AvailablePhysicsAssetFiles;
+	}
 
 	const char* GetReferencerName() const override { return "FPhysicsAssetManager"; }
 	void AddReferencedObjects(FReferenceCollector& Collector) override;

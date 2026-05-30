@@ -28,7 +28,6 @@ enum class EPrimitiveProxyFlags : uint16
 	SupportsOutline   = 1 << 4, // 선택 시 아웃라인 지원
 	ShowAABB          = 1 << 5, // 선택 시 AABB 표시
 	EditorOnly        = 1 << 6, // 에디터 전용 — PIE/Game 월드에서 비가시
-	WireShape         = 1 << 7, // 와이어프레임 Shape — EditorLines 패스에 라인 기여
 	BoneDebug         = 1 << 8, // 본 디버그 프록시 (본 위치/방향 표시)
 	StaticMesh        = 1 << 9,
 	SkeletalMesh      = 1 << 10,

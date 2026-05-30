@@ -1,4 +1,4 @@
-#include "SkeletalMesh.h"
+﻿#include "SkeletalMesh.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Serialization/Archive.h"
 #include "Animation/Skeleton/Skeleton.h"
@@ -11,13 +11,12 @@ void USkeletalMesh::AddReferencedObjects(FReferenceCollector& Collector)
 	UObject::AddReferencedObjects(Collector);
 
 	Collector.AddReferencedObject(Skeleton);
+	Collector.AddReferencedObject(PhysicsAsset);
 
 	for (FSkeletalMaterial& MaterialSlot : SkeletalMaterials)
 	{
 		Collector.AddReferencedObject(MaterialSlot.MaterialInterface);
 	}
-
-	Collector.AddReferencedObject(PhysicsAsset);
 }
 
 void USkeletalMesh::Serialize(FArchive& Ar)
@@ -46,6 +45,10 @@ void USkeletalMesh::Serialize(FArchive& Ar)
 
 	if (Ar.IsSaving())
 	{
+		if (PhysicsAsset && !PhysicsAsset->GetSourcePath().empty())
+		{
+			PhysicsAssetPath = PhysicsAsset->GetSourcePath();
+		}
 		Ar << PhysicsAssetPath;
 	}
 	else if (Ar.HasRemaining())

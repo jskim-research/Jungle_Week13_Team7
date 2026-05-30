@@ -63,10 +63,7 @@ public:
 	const FString& GetPreviewSkeletalMeshPath() const { return PreviewSkeletalMeshPath; }
 	void SetPreviewSkeletalMeshPath(const FString& InPath) { PreviewSkeletalMeshPath = InPath.empty() ? FString("None") : InPath; }
 
-	// ----------------------------
 	// BodySetup access
-	// ----------------------------
-
 	int32 GetBodySetupCount() const { return static_cast<int32>(SkeletalBodySetups.size()); }
 
 	USkeletalBodySetup* GetBodySetup(int32 BodyIndex);
@@ -82,19 +79,13 @@ public:
 		return SkeletalBodySetups;
 	}
 
-	// ----------------------------
 	// Editor mutation
 	// Physics Asset Editor용
-	// ----------------------------
-
 	USkeletalBodySetup* AddBodySetup(FName BoneName);
 	bool RemoveBodySetup(FName BoneName);
 	bool RemoveBodySetupAt(int32 BodyIndex);
 
-	// ----------------------------
 	// Constraint access
-	// ----------------------------
-
 	int32 GetConstraintSetupCount() const { return static_cast<int32>(ConstraintSetups.size()); }
 
 	UPhysicsConstraintTemplate* GetConstraintSetup(int32 ConstraintIndex);
@@ -112,11 +103,8 @@ public:
 
 	void BodyFindConstraints(int32 BodyIndex, TArray<int32>& OutConstraintIndices) const;
 
-	// ----------------------------
 	// Editor mutation
 	// Physics Asset Editor용
-	// ----------------------------
-
 	UPhysicsConstraintTemplate* AddConstraintSetup(
 		FName ConstraintName,
 		FName ParentBoneName,
@@ -125,31 +113,19 @@ public:
 	bool RemoveConstraintSetup(FName ConstraintName);
 	bool RemoveConstraintSetupAt(int32 ConstraintIndex);
 
-	// ----------------------------
 	// Collision pair setting
-	// ----------------------------
-
 	void DisableCollision(int32 BodyIndexA, int32 BodyIndexB);
 	void EnableCollision(int32 BodyIndexA, int32 BodyIndexB);
 	bool IsCollisionEnabled(int32 BodyIndexA, int32 BodyIndexB) const;
 
-	// ----------------------------
 	// Cache
-	// ----------------------------
-
 	void UpdateBodySetupIndexMap();
 
-	// ----------------------------
 	// Bounds / Debug
-	// ----------------------------
-
 	const TArray<int32>& GetBoundsBodies() const { return BoundsBodies; }
 	void UpdateBoundsBodiesArray();
 
-	// ----------------------------
 	// Editor refresh hook
-	// ----------------------------
-
 	void RefreshPhysicsAssetChange();
 
 private:

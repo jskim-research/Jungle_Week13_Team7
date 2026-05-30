@@ -78,7 +78,7 @@ namespace FAssetRegistry
 			FParticleSystemManager::Get().RefreshAvailableParticleSystems();
 			return FParticleSystemManager::Get().GetAvailableParticleSystemFiles();
 		}
-		if (std::strcmp(AssetTypeName, "UPhysicsAsset") == 0)
+		if (std::strcmp(AssetTypeName, "UPhysicsAsset") == 0 || std::strcmp(AssetTypeName, "PhysicsAsset") == 0)
 		{
 			FPhysicsAssetManager::Get().RefreshAvailablePhysicsAssets();
 			return FPhysicsAssetManager::Get().GetAvailablePhysicsAssetFiles();

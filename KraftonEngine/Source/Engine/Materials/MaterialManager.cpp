@@ -179,17 +179,23 @@ bool FMaterialManager::LoadMaterialFromJson(
 
     FString PathFileName = JsonData.hasKey(MatKeys::PathFileName) ? JsonData[MatKeys::PathFileName].ToString().c_str()
     : MatFilePath;
-    FString ShaderPath = JsonData.hasKey(MatKeys::GeneratedShaderPath) && !JsonData[MatKeys::GeneratedShaderPath].
-                                                                           ToString().empty()
-    ? JsonData[MatKeys::GeneratedShaderPath].ToString().c_str() : JsonData[MatKeys::ShaderPath].ToString().c_str();
+    const EMaterialDomain Domain = StringToDomain(
+        JsonData.hasKey(MatKeys::Domain) ? JsonData[MatKeys::Domain].ToString().c_str() : ""
+    );
+    const EMaterialGraphShaderMode GraphShaderMode = MaterialGraphShaderModeFromString(
+        JsonData.hasKey(MatKeys::GraphShaderMode) ? JsonData[MatKeys::GraphShaderMode].ToString().c_str() : "",
+        EMaterialGraphShaderMode::Generated
+    );
+    FString ShaderPath = GraphShaderMode == EMaterialGraphShaderMode::UberLit
+        ? DefaultShaderPath
+        : (JsonData.hasKey(MatKeys::GeneratedShaderPath) && !JsonData[MatKeys::GeneratedShaderPath].ToString().empty()
+            ? JsonData[MatKeys::GeneratedShaderPath].ToString().c_str()
+            : JsonData[MatKeys::ShaderPath].ToString().c_str());
     if (ShaderPath.empty())
     {
         ShaderPath = DefaultShaderPath;
     }
 
-    const EMaterialDomain Domain = StringToDomain(
-        JsonData.hasKey(MatKeys::Domain) ? JsonData[MatKeys::Domain].ToString().c_str() : ""
-    );
     const FString RenderPassStr = JsonData.hasKey(MatKeys::RenderPass)
     ? JsonData[MatKeys::RenderPass].ToString().c_str() : "";
 	ERenderPass RenderPass = StringToRenderPass(RenderPassStr);
@@ -203,12 +209,14 @@ bool FMaterialManager::LoadMaterialFromJson(
 	ERasterizerState RasterState = StringToRasterizerState(RasterStr, RenderPass);
 
     FShaderKey ShaderKey(ShaderPath);
-    if (bGraphMaterial)
+    if (bGraphMaterial && GraphShaderMode == EMaterialGraphShaderMode::Generated)
     {
         ShaderKey.SetVertexFactory(DomainToVertexFactory(Domain));
     }
 
-    FMaterialTemplate* Template = bGraphMaterial ? GetOrCreateTemplate(ShaderKey) : GetOrCreateTemplate(ShaderPath);
+    FMaterialTemplate* Template = (bGraphMaterial && GraphShaderMode == EMaterialGraphShaderMode::Generated)
+        ? GetOrCreateTemplate(ShaderKey)
+        : GetOrCreateTemplate(ShaderPath);
     if (!Template)
     {
         return false;
@@ -226,6 +234,7 @@ bool FMaterialManager::LoadMaterialFromJson(
         JsonData.hasKey(MatKeys::MaterialGuid) ? JsonData[MatKeys::MaterialGuid].ToString().c_str() : ""
     );
     Material->SetDomain(Domain);
+    Material->SetGraphShaderMode(GraphShaderMode);
     Material->SetGeneratedShaderPath(
         JsonData.hasKey(MatKeys::GeneratedShaderPath) ? JsonData[MatKeys::GeneratedShaderPath].ToString().c_str() : ""
     );
@@ -250,6 +259,7 @@ bool FMaterialManager::LoadMaterialFromJson(
 	JsonData[MatKeys::BlendState] = BlendStr.empty() ? "" : BlendStr.c_str();
 	JsonData[MatKeys::DepthStencilState] = DepthStr.empty() ? "" : DepthStr.c_str();
 	JsonData[MatKeys::RasterizerState] = RasterStr.empty() ? "" : RasterStr.c_str();
+	JsonData[MatKeys::GraphShaderMode] = ToString(GraphShaderMode);
 
 	if (bInjected || bPurged)
 	{
@@ -536,6 +546,7 @@ bool FMaterialManager::SaveMaterialAsset(UMaterial* Material)
         RenderStateStrings::RasterizerStateMap,
         Material->GetRasterizerState()
     );
+    JsonData[MatKeys::GraphShaderMode] = ToString(Material->GetGraphShaderMode());
     JsonData[MatKeys::GeneratedShaderPath] = Material->GetGeneratedShaderPath();
     JsonData[MatKeys::ReceiveLighting] = Material->GetReceiveLighting();
 
@@ -583,6 +594,16 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     hasKey(MatKeys::GeneratorVersion) ? InOutJson[MatKeys::Compiled][MatKeys::GeneratorVersion].ToString() : FString();
     const FString ExistingGeneratedPath = InOutJson.hasKey(MatKeys::GeneratedShaderPath)
     ? InOutJson[MatKeys::GeneratedShaderPath].ToString() : FString();
+    const EMaterialGraphShaderMode CurrentShaderMode = MaterialGraphShaderModeFromString(
+        InOutJson.hasKey(MatKeys::GraphShaderMode) ? InOutJson[MatKeys::GraphShaderMode].ToString() : FString(),
+        EMaterialGraphShaderMode::Generated
+    );
+    const EMaterialGraphShaderMode CompiledShaderMode = MaterialGraphShaderModeFromString(
+        InOutJson.hasKey(MatKeys::Compiled) && InOutJson[MatKeys::Compiled].hasKey(MatKeys::GraphShaderMode)
+            ? InOutJson[MatKeys::Compiled][MatKeys::GraphShaderMode].ToString()
+            : FString(),
+        EMaterialGraphShaderMode::Generated
+    );
 
     // ReceiveLighting 상태를 Compiled 섹션에 저장해 변경 감지
     const bool bCurrentReceiveLighting = InOutJson.hasKey(MatKeys::ReceiveLighting) && InOutJson[MatKeys::ReceiveLighting].ToBool();
@@ -593,8 +614,9 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     const bool bNeedsCompile =
         GraphHash != OldHash
         || OldGeneratorVersion != MaterialGraphGeneratorVersion
-        || ExistingGeneratedPath.empty()
-        || !ProjectFileExists(ExistingGeneratedPath)
+        || CurrentShaderMode != CompiledShaderMode
+        || (CurrentShaderMode == EMaterialGraphShaderMode::Generated && ExistingGeneratedPath.empty())
+        || (CurrentShaderMode == EMaterialGraphShaderMode::Generated && !ProjectFileExists(ExistingGeneratedPath))
         || bCurrentReceiveLighting != bCompiledReceiveLighting;
     if (!bNeedsCompile)
     {
@@ -632,6 +654,53 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
         return false;
     }
 
+    if (CurrentShaderMode == EMaterialGraphShaderMode::UberLit)
+    {
+        InOutJson[MatKeys::GeneratedShaderPath]                       = "";
+        InOutJson[MatKeys::ShaderPath]                                = DefaultShaderPath;
+        InOutJson[MatKeys::Compiled]                                  = json::JSON::Make(json::JSON::Class::Object);
+        InOutJson[MatKeys::Compiled][MatKeys::GraphHash]              = GraphHash;
+        InOutJson[MatKeys::Compiled][MatKeys::GeneratorVersion]       = MaterialGraphGeneratorVersion;
+        InOutJson[MatKeys::Compiled][MatKeys::GraphShaderMode]        = ToString(CurrentShaderMode);
+        InOutJson[MatKeys::Compiled][MatKeys::ReceiveLighting]        = bCurrentReceiveLighting;
+        InOutJson[MatKeys::Compiled][MatKeys::Parameters]             = json::JSON::Make(json::JSON::Class::Object);
+        InOutJson[MatKeys::Compiled][MatKeys::Textures]               = json::JSON::Make(json::JSON::Class::Object);
+
+        for (const auto& Pair : Result.Parameters)
+        {
+            const FString&                    Name = Pair.first;
+            const FMaterialCompiledParameter& Param = Pair.second;
+            json::JSON                        ParamJson = json::JSON::Make(json::JSON::Class::Object);
+            ParamJson["Type"] = ToString(Param.Type);
+            ParamJson["Value"] = json::Array(Param.Value.X, Param.Value.Y, Param.Value.Z, Param.Value.W);
+            InOutJson[MatKeys::Compiled][MatKeys::Parameters][Name] = std::move(ParamJson);
+        }
+
+        bool bHasNormalTexture = false;
+        for (const auto& Pair : Result.Textures)
+        {
+            const FString&                  Name = Pair.first;
+            const FMaterialCompiledTexture& Texture = Pair.second;
+            json::JSON                      TexJson = json::JSON::Make(json::JSON::Class::Object);
+            TexJson["Path"] = Texture.Path;
+            TexJson["Slot"] = ToString(Texture.Slot);
+            InOutJson[MatKeys::Compiled][MatKeys::Textures][Name] = std::move(TexJson);
+            bHasNormalTexture = bHasNormalTexture || Texture.Slot == EMaterialTextureSlot::Normal;
+        }
+
+        if (InOutJson[MatKeys::Compiled][MatKeys::Parameters]["SectionColor"].IsNull())
+        {
+            json::JSON SectionColorJson = json::JSON::Make(json::JSON::Class::Object);
+            SectionColorJson["Type"] = ToString(EMaterialGraphPinType::Float4);
+            SectionColorJson["Value"] = json::Array(1.0f, 1.0f, 1.0f, 1.0f);
+            InOutJson[MatKeys::Compiled][MatKeys::Parameters]["SectionColor"] = std::move(SectionColorJson);
+        }
+
+        InOutJson[MatKeys::Compiled][MatKeys::Parameters]["HasNormalMap"] = bHasNormalTexture ? 1.0f : 0.0f;
+        SaveToJSON(InOutJson, MatFilePath);
+        return true;
+    }
+
     const std::filesystem::path GeneratedPath = std::filesystem::path(FPaths::RootDir()) / FPaths::ToWide(
         Result.GeneratedShaderPath
     );
@@ -651,6 +720,7 @@ bool FMaterialManager::CompileMaterialGraph(const FString& MatFilePath, json::JS
     InOutJson[MatKeys::Compiled]                                  = json::JSON::Make(json::JSON::Class::Object);
     InOutJson[MatKeys::Compiled][MatKeys::GraphHash]              = GraphHash;
     InOutJson[MatKeys::Compiled][MatKeys::GeneratorVersion]       = MaterialGraphGeneratorVersion;
+    InOutJson[MatKeys::Compiled][MatKeys::GraphShaderMode]        = ToString(CurrentShaderMode);
     InOutJson[MatKeys::Compiled][MatKeys::ReceiveLighting]        = bCurrentReceiveLighting;
     InOutJson[MatKeys::Compiled][MatKeys::Parameters]             = json::JSON::Make(json::JSON::Class::Object);
     InOutJson[MatKeys::Compiled][MatKeys::Textures]               = json::JSON::Make(json::JSON::Class::Object);
@@ -723,6 +793,7 @@ void FMaterialManager::EnsureGraphMaterialJsonDefaults(const FString& MatFilePat
     if (!JsonData.hasKey(MatKeys::BlendState)) JsonData[MatKeys::BlendState] = "AlphaBlend";
     if (!JsonData.hasKey(MatKeys::DepthStencilState)) JsonData[MatKeys::DepthStencilState] = "DepthReadOnly";
     if (!JsonData.hasKey(MatKeys::RasterizerState)) JsonData[MatKeys::RasterizerState] = "SolidNoCull";
+    if (!JsonData.hasKey(MatKeys::GraphShaderMode)) JsonData[MatKeys::GraphShaderMode] = ToString(EMaterialGraphShaderMode::Generated);
     if (!JsonData.hasKey(MatKeys::GeneratedShaderPath)) JsonData[MatKeys::GeneratedShaderPath] = "";
     if (!JsonData.hasKey(MatKeys::Compiled))
     {

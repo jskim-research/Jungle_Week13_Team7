@@ -146,8 +146,8 @@ void FEditorRenderPipeline::RenderViewport(FLevelEditorViewportClient* VC, FRend
 	ID3D11DeviceContext* Ctx = Renderer.GetFD3DDevice().GetDeviceContext();
 	if (!Ctx) return;
 
-	UWorld* World = Editor->GetWorld();
-	if (!World) return;
+	UWorld* EditorWorld = Editor->GetWorld();
+	if (!EditorWorld) return;
 
 	// ── 카메라 POV 통화 결정 ──────────────────────────────────────
 	// 기본은 viewport 자체 카메라. PIE possessed 모드의 게임 뷰포트만 게임 ActiveCamera 사용.
@@ -163,11 +163,16 @@ void FEditorRenderPipeline::RenderViewport(FLevelEditorViewportClient* VC, FRend
 		}
 	}
 
+	// UE: 레벨 뷰포트 = Editor 월드, PIE 게임 뷰포트 = PIE 월드.
+	UWorld* World = EditorWorld;
 	if (bShouldUseGameCamera)
 	{
-		// E.2/2: PC 경로 — World 의 GetCameraManager 의존 제거.
-		// shake/blend 가 적용된 최종 POV 가 필요하므로 GetCameraCachePOV 사용
-		// (UpdateCamera 가 매 프레임 채워 둠).
+		if (UWorld* PIEWorld = Editor->GetPlayInEditorWorld())
+		{
+			World = PIEWorld;
+		}
+
+		// shake/blend 가 적용된 최종 POV (PIE 월드 PC).
 		if (APlayerController* PC = World->GetFirstPlayerController())
 		{
 			if (APlayerCameraManager* CamManager = PC->GetPlayerCameraManager())
@@ -354,7 +359,7 @@ void FEditorRenderPipeline::CollectCommands(FLevelEditorViewportClient* VC, UWor
 	// ── 3. 커맨드 일괄 생성 (프록시 + 동적) ──
 	{
 		SCOPE_STAT_CAT("BuildCommands", "3_Collect");
-		Builder.BuildCommands(Frame, &Scene, Output);
+		Builder.BuildCommands(Frame, &Scene, Output, World);
 	}
 }
 
@@ -416,7 +421,7 @@ void FEditorRenderPipeline::RenderPreviewViewport(IEditorPreviewViewportClient* 
 		}
 	}
 
-	Builder.BuildCommands(Frame, &Scene, Output);
+	Builder.BuildCommands(Frame, &Scene, Output, World);
 
 	Renderer.Render(Frame, World, Scene);
 }

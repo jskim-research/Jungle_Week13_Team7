@@ -29,8 +29,13 @@
 #include "Physics/ConstraintInstance.h"
 #include "Physics/BodyInstance.h"
 #include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsAssetManager.h"
 #include "Physics/PhysicsConstraintTemplate.h"
 #include "GameFramework/World.h"
+
+#include <PxPhysicsAPI.h>
+
+using namespace physx;
 
 namespace
 {
@@ -57,6 +62,49 @@ namespace
 
 		return Params;
 	}
+
+	PxVec3 ToPxVec3(const FVector& V)
+	{
+		return PxVec3(V.X, V.Y, V.Z);
+	}
+
+	PxQuat ToPxQuat(const FQuat& Q)
+	{
+		return PxQuat(Q.X, Q.Y, Q.Z, Q.W);
+	}
+
+	PxTransform ToPxTransform(const FTransform& Transform)
+	{
+		return PxTransform(ToPxVec3(Transform.Location), ToPxQuat(Transform.Rotation));
+	}
+
+	int32 FindBoneIndex(const FSkeletalMesh* Asset, FName BoneName)
+	{
+		if (!Asset)
+		{
+			return -1;
+		}
+
+		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
+		{
+			if (FName(Asset->Bones[BoneIndex].Name) == BoneName)
+			{
+				return BoneIndex;
+			}
+		}
+
+		return -1;
+	}
+
+	FConstraintFrame ToConstraintFrame(const FMatrix& Matrix)
+	{
+		const FTransform Transform(Matrix);
+
+		FConstraintFrame Frame;
+		Frame.Position = Transform.Location;
+		Frame.Rotation = Transform.Rotation.ToRotator();
+		return Frame;
+	}
 }
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
@@ -76,6 +124,10 @@ void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
     // Mesh 가 바뀌면 이전 AnimInstance 가 가리키던 본 인덱스/카운트가 무의미해진다.
     // 새 SkeletalMesh 기준으로 AnimInstance 를 재인스턴스화한다.
     InitializeAnimation();
+	if (GetPhysicsAsset() && GetWorld() && GetWorld()->GetPhysicsScene())
+	{
+		InstantiatePhysicsAsset();
+	}
 }
 
 void USkeletalMeshComponent::PlayAnimation(UAnimSequenceBase* NewAnimToPlay, bool bLooping)
@@ -511,10 +563,32 @@ void USkeletalMeshComponent::Serialize(FArchive& Ar)
     Ar << AnimationData.bLooping;
     Ar << AnimationData.bPlaying;
 
+	FString OverridePath = Ar.IsSaving() ? PhysicsAssetOverridePath : FString();
+	if (Ar.IsSaving() && PhysicsAssetOverride && !PhysicsAssetOverride->GetSourcePath().empty())
+	{
+		OverridePath = PhysicsAssetOverride->GetSourcePath();
+	}
+	if (Ar.IsSaving() || Ar.HasRemaining())
+	{
+		Ar << OverridePath;
+	}
+	if (Ar.IsLoading())
+	{
+		PhysicsAssetOverridePath = OverridePath;
+		if (!PhysicsAssetOverridePath.empty() && PhysicsAssetOverridePath != "None")
+		{
+			PhysicsAssetOverride = FPhysicsAssetManager::Get().Load(PhysicsAssetOverridePath);
+		}
+	}
 }
 
 UPhysicsAsset* USkeletalMeshComponent::GetPhysicsAsset() const
 {
+	if (PhysicsAssetOverride)
+	{
+		return PhysicsAssetOverride.Get();
+	}
+
 	USkeletalMesh* SkelMesh = GetSkeletalMesh();
 	if (!SkelMesh)
 	{
@@ -524,15 +598,48 @@ UPhysicsAsset* USkeletalMeshComponent::GetPhysicsAsset() const
 	return SkelMesh->GetPhysicsAsset();
 }
 
+void USkeletalMeshComponent::SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset)
+{
+	if (PhysicsAssetOverride.Get() == InPhysicsAsset)
+	{
+		return;
+	}
+
+	TermPhysicsAsset();
+	PhysicsAssetOverride = InPhysicsAsset;
+	PhysicsAssetOverridePath = (InPhysicsAsset && !InPhysicsAsset->GetSourcePath().empty())
+		? InPhysicsAsset->GetSourcePath()
+		: FString("None");
+
+	UWorld* World = GetWorld();
+	if (World && World->GetPhysicsScene())
+	{
+		InstantiatePhysicsAsset();
+	}
+}
+
 void USkeletalMeshComponent::InstantiatePhysicsAsset()
+{
+	TermPhysicsAsset();
+
+	CreateBodiesFromPhysicsAsset();
+
+	SyncBodiesFromAnimationPose();
+
+	CreateConstraintInstancesFromPhysicsAsset();
+
+	UpdateConstraintFrames();
+
+	InitConstraints();
+}
+
+void USkeletalMeshComponent::CreateBodiesFromPhysicsAsset()
 {
 	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
 	if (!PhysicsAsset)
 	{
 		return;
 	}
-
-	TermPhysicsAsset();
 
 	PhysicsAsset->UpdateBodySetupIndexMap();
 
@@ -554,6 +661,15 @@ void USkeletalMeshComponent::InstantiatePhysicsAsset()
 		FBodyInstance* BodyInstance = new FBodyInstance();
 		BodyInstance->InitBody(BodySetup, this, InitParams, SpawnParams);
 		Bodies[BodyIndex] = BodyInstance;
+	}
+}
+
+void USkeletalMeshComponent::CreateConstraintInstancesFromPhysicsAsset()
+{
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	if (!PhysicsAsset)
+	{
+		return;
 	}
 
 	// 2. PhysicsAsset의 ConstraintTemplate을 BodyInstance끼리 연결하는 런타임 ConstraintInstance로 복제한다.
@@ -597,8 +713,81 @@ void USkeletalMeshComponent::InstantiatePhysicsAsset()
 		FConstraintInstance* RuntimeConstraint = new FConstraintInstance();
 		*RuntimeConstraint = DefaultInstance;
 		RuntimeConstraint->ConstraintIndex = ConstraintIndex;
-		RuntimeConstraint->InitConstraint(ParentBody, ChildBody, InitParams);
 		Constraints[ConstraintIndex] = RuntimeConstraint;
+	}
+}
+
+void USkeletalMeshComponent::UpdateConstraintFrames()
+{
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!PhysicsAsset || !Asset)
+	{
+		return;
+	}
+
+	TArray<FMatrix> BoneGlobalMatrices;
+	GetCurrentBoneGlobalMatrices(BoneGlobalMatrices);
+
+	const FMatrix ComponentWorldMatrix = GetWorldMatrix();
+	for (FConstraintInstance* Constraint : Constraints)
+	{
+		if (!Constraint)
+		{
+			continue;
+		}
+
+		const int32 ParentBoneIndex = FindBoneIndex(Asset, Constraint->ParentBoneName);
+		const int32 ChildBoneIndex = FindBoneIndex(Asset, Constraint->ChildBoneName);
+		if (ParentBoneIndex < 0 || ChildBoneIndex < 0 ||
+			ParentBoneIndex >= static_cast<int32>(BoneGlobalMatrices.size()) ||
+			ChildBoneIndex >= static_cast<int32>(BoneGlobalMatrices.size()))
+		{
+			continue;
+		}
+
+		const FMatrix ParentBodyWorld = BoneGlobalMatrices[ParentBoneIndex] * ComponentWorldMatrix;
+		const FMatrix ChildBodyWorld = BoneGlobalMatrices[ChildBoneIndex] * ComponentWorldMatrix;
+		const FMatrix JointWorld = ChildBodyWorld;
+
+		Constraint->ParentFrame = ToConstraintFrame(JointWorld * ParentBodyWorld.GetInverse());
+		Constraint->ChildFrame = ToConstraintFrame(JointWorld * ChildBodyWorld.GetInverse());
+	}
+}
+
+void USkeletalMeshComponent::InitConstraints()
+{
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	if (!PhysicsAsset)
+	{
+		return;
+	}
+
+	const FBodyInstanceInitParams InitParams = MakeBodyInstanceInitParams(this, false);
+	for (int32 ConstraintIndex = 0; ConstraintIndex < static_cast<int32>(Constraints.size()); ++ConstraintIndex)
+	{
+		FConstraintInstance* Constraint = Constraints[ConstraintIndex];
+		if (!Constraint)
+		{
+			continue;
+		}
+
+		const int32 ParentBodyIndex = PhysicsAsset->FindBodyIndex(Constraint->ParentBoneName);
+		const int32 ChildBodyIndex = PhysicsAsset->FindBodyIndex(Constraint->ChildBoneName);
+		if (ParentBodyIndex < 0 || ChildBodyIndex < 0)
+		{
+			continue;
+		}
+
+		FBodyInstance* ParentBody = GetBodyInstance(ParentBodyIndex);
+		FBodyInstance* ChildBody = GetBodyInstance(ChildBodyIndex);
+		if (!ParentBody || !ChildBody)
+		{
+			continue;
+		}
+
+		Constraint->InitConstraint(ParentBody, ChildBody, InitParams);
 	}
 }
 
@@ -637,6 +826,42 @@ void USkeletalMeshComponent::EndRagdoll()
 
 void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 {
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!PhysicsAsset || !Asset)
+	{
+		return;
+	}
+
+	TArray<FMatrix> BoneGlobalMatrices;
+	GetCurrentBoneGlobalMatrices(BoneGlobalMatrices);
+
+	for (int32 BodyIndex = 0; BodyIndex < static_cast<int32>(Bodies.size()); ++BodyIndex)
+	{
+		FBodyInstance* Body = Bodies[BodyIndex];
+		USkeletalBodySetup* BodySetup = PhysicsAsset->GetBodySetup(BodyIndex);
+		if (!Body || !Body->Actor || !BodySetup)
+		{
+			continue;
+		}
+
+		const FName BoneName = BodySetup->GetBoneName();
+		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
+		{
+			if (FName(Asset->Bones[BoneIndex].Name) != BoneName)
+			{
+				continue;
+			}
+
+			if (BoneIndex < static_cast<int32>(BoneGlobalMatrices.size()))
+			{
+				const FTransform BodyTransform(BoneGlobalMatrices[BoneIndex] * GetWorldMatrix());
+				Body->Actor->setGlobalPose(ToPxTransform(BodyTransform));
+			}
+			break;
+		}
+	}
 }
 
 void USkeletalMeshComponent::SyncSkeletonPoseFromBodies()
@@ -720,4 +945,5 @@ void USkeletalMeshComponent::AddReferencedObjects(FReferenceCollector& Collector
 
     Collector.AddReferencedObject(AnimationData.AnimToPlay, "USkeletalMeshComponent.AnimationData.AnimToPlay");
     Collector.AddReferencedObject(AnimInstance, "USkeletalMeshComponent.AnimInstance");
+	Collector.AddReferencedObject(PhysicsAssetOverride, "USkeletalMeshComponent.PhysicsAssetOverride");
 }
