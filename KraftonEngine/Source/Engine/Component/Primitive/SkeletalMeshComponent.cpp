@@ -76,6 +76,34 @@ namespace
 	{
 		return PxTransform(ToPxVec3(Transform.Location), ToPxQuat(Transform.Rotation));
 	}
+
+	int32 FindBoneIndex(const FSkeletalMesh* Asset, FName BoneName)
+	{
+		if (!Asset)
+		{
+			return -1;
+		}
+
+		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
+		{
+			if (FName(Asset->Bones[BoneIndex].Name) == BoneName)
+			{
+				return BoneIndex;
+			}
+		}
+
+		return -1;
+	}
+
+	FConstraintFrame ToConstraintFrame(const FMatrix& Matrix)
+	{
+		const FTransform Transform(Matrix);
+
+		FConstraintFrame Frame;
+		Frame.Position = Transform.Location;
+		Frame.Rotation = Transform.Rotation.ToRotator();
+		return Frame;
+	}
 }
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
@@ -644,6 +672,41 @@ void USkeletalMeshComponent::CreateConstraintInstancesFromPhysicsAsset()
 
 void USkeletalMeshComponent::UpdateConstraintFrames()
 {
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!PhysicsAsset || !Asset)
+	{
+		return;
+	}
+
+	TArray<FMatrix> BoneGlobalMatrices;
+	GetCurrentBoneGlobalMatrices(BoneGlobalMatrices);
+
+	const FMatrix ComponentWorldMatrix = GetWorldMatrix();
+	for (FConstraintInstance* Constraint : Constraints)
+	{
+		if (!Constraint)
+		{
+			continue;
+		}
+
+		const int32 ParentBoneIndex = FindBoneIndex(Asset, Constraint->ParentBoneName);
+		const int32 ChildBoneIndex = FindBoneIndex(Asset, Constraint->ChildBoneName);
+		if (ParentBoneIndex < 0 || ChildBoneIndex < 0 ||
+			ParentBoneIndex >= static_cast<int32>(BoneGlobalMatrices.size()) ||
+			ChildBoneIndex >= static_cast<int32>(BoneGlobalMatrices.size()))
+		{
+			continue;
+		}
+
+		const FMatrix ParentBodyWorld = BoneGlobalMatrices[ParentBoneIndex] * ComponentWorldMatrix;
+		const FMatrix ChildBodyWorld = BoneGlobalMatrices[ChildBoneIndex] * ComponentWorldMatrix;
+		const FMatrix JointWorld = ChildBodyWorld;
+
+		Constraint->ParentFrame = ToConstraintFrame(JointWorld * ParentBodyWorld.GetInverse());
+		Constraint->ChildFrame = ToConstraintFrame(JointWorld * ChildBodyWorld.GetInverse());
+	}
 }
 
 void USkeletalMeshComponent::InitConstraints()
