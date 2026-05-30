@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Core/Singleton.h"
 #include "Object/GarbageCollection.h"
@@ -22,6 +22,7 @@ namespace MatKeys
 	static constexpr const char* BlendState = "BlendState";
 	static constexpr const char* DepthStencilState = "DepthStencilState";
 	static constexpr const char* RasterizerState = "RasterizerState";
+	static constexpr const char* GraphShaderMode = "GraphShaderMode";
 	static constexpr const char* GeneratedShaderPath = "GeneratedShaderPath";
 	static constexpr const char* Graph = "Graph";
 	static constexpr const char* Compiled = "Compiled";

@@ -148,6 +148,7 @@
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }]
   },
+  "GraphShaderMode" : "Generated",
   "MaterialGuid" : "DD233DA453A759A600000623DB3018D0",
   "PathFileName" : "Content/Material/Material_Emitter0_5.mat",
   "RasterizerState" : "SolidBackCull",

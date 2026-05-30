@@ -16,6 +16,12 @@ enum class EMaterialDomain : uint8
 	PostProcess
 };
 
+enum class EMaterialGraphShaderMode : uint8
+{
+	Generated,
+	UberLit
+};
+
 enum class EMaterialGraphPinKind : uint8
 {
 	Input,
@@ -162,11 +168,13 @@ struct FMaterialGraph
 };
 
 const char* ToString(EMaterialDomain Domain);
+const char* ToString(EMaterialGraphShaderMode Mode);
 const char* ToString(EMaterialGraphPinType Type);
 const char* ToString(EMaterialGraphNodeType Type);
 const char* ToString(EMaterialTextureSlot Slot);
 
 EMaterialDomain        MaterialDomainFromString(const FString& Str, EMaterialDomain Default = EMaterialDomain::Surface);
+EMaterialGraphShaderMode MaterialGraphShaderModeFromString(const FString& Str, EMaterialGraphShaderMode Default = EMaterialGraphShaderMode::Generated);
 EMaterialGraphPinType  MaterialPinTypeFromString(const FString& Str, EMaterialGraphPinType Default = EMaterialGraphPinType::Float);
 EMaterialGraphNodeType MaterialNodeTypeFromString(const FString& Str, EMaterialGraphNodeType Default = EMaterialGraphNodeType::Output);
 EMaterialTextureSlot   MaterialTextureSlotFromString(const FString& Str, EMaterialTextureSlot Default = EMaterialTextureSlot::Diffuse);

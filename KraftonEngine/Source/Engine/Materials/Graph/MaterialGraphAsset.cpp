@@ -712,6 +712,16 @@ const char* ToString(EMaterialDomain Domain)
 	return "Surface";
 }
 
+const char* ToString(EMaterialGraphShaderMode Mode)
+{
+	switch (Mode)
+	{
+	case EMaterialGraphShaderMode::UberLit: return "UberLit";
+	case EMaterialGraphShaderMode::Generated:
+	default: return "Generated";
+	}
+}
+
 const char* ToString(EMaterialGraphPinType Type)
 {
 	switch (Type)
@@ -793,6 +803,13 @@ EMaterialDomain MaterialDomainFromString(const FString& Str, EMaterialDomain Def
 	if (Str == "ParticleMesh") return EMaterialDomain::ParticleMesh;
 	if (Str == "Decal") return EMaterialDomain::Decal;
 	if (Str == "PostProcess") return EMaterialDomain::PostProcess;
+	return Default;
+}
+
+EMaterialGraphShaderMode MaterialGraphShaderModeFromString(const FString& Str, EMaterialGraphShaderMode Default)
+{
+	if (Str == "Generated") return EMaterialGraphShaderMode::Generated;
+	if (Str == "UberLit") return EMaterialGraphShaderMode::UberLit;
 	return Default;
 }
 
@@ -978,6 +995,7 @@ json::JSON MaterialGraphAsset::MakeDefaultMaterialJson(const FString& ProjectRel
 	Root["BlendState"] = "AlphaBlend";
 	Root["DepthStencilState"] = "DepthReadOnly";
 	Root["RasterizerState"] = "SolidNoCull";
+	Root["GraphShaderMode"] = ToString(EMaterialGraphShaderMode::Generated);
 	Root["GeneratedShaderPath"] = "";
 	Root["Graph"] = std::move(GraphJson);
 	Root["Compiled"] = json::JSON::Make(json::JSON::Class::Object);
