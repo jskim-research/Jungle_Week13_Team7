@@ -55,11 +55,19 @@ public:
 	GENERATED_BODY()
 
 public:
+	void Serialize(FArchive& Ar) override;
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
+
+	const FString& GetSourcePath() const { return SourcePath; }
+	void SetSourcePath(const FString& InPath) { SourcePath = InPath; }
+	const FString& GetPreviewSkeletalMeshPath() const { return PreviewSkeletalMeshPath; }
+	void SetPreviewSkeletalMeshPath(const FString& InPath) { PreviewSkeletalMeshPath = InPath.empty() ? FString("None") : InPath; }
+
 	// ----------------------------
 	// BodySetup access
 	// ----------------------------
 
-	int32 GetBodySetupCount() const { return SkeletalBodySetups.size(); }
+	int32 GetBodySetupCount() const { return static_cast<int32>(SkeletalBodySetups.size()); }
 
 	USkeletalBodySetup* GetBodySetup(int32 BodyIndex);
 	const USkeletalBodySetup* GetBodySetup(int32 BodyIndex) const;
@@ -87,7 +95,7 @@ public:
 	// Constraint access
 	// ----------------------------
 
-	int32 GetConstraintSetupCount() const { return ConstraintSetups.size(); }
+	int32 GetConstraintSetupCount() const { return static_cast<int32>(ConstraintSetups.size()); }
 
 	UPhysicsConstraintTemplate* GetConstraintSetup(int32 ConstraintIndex);
 	const UPhysicsConstraintTemplate* GetConstraintSetup(int32 ConstraintIndex) const;
@@ -145,6 +153,11 @@ public:
 	void RefreshPhysicsAssetChange();
 
 private:
+	FString SourcePath = "None";
+
+	UPROPERTY(Edit, Save, Category = "Physics Asset", DisplayName = "Preview Skeletal Mesh", AssetType = "SkeletalMesh")
+	FString PreviewSkeletalMeshPath = "None";
+
 	UPROPERTY(Edit, Save, Category = "Physics Asset", DisplayName = "Skeletal Body Setups")
 	TArray<USkeletalBodySetup*> SkeletalBodySetups;
 

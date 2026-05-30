@@ -1,9 +1,206 @@
 ﻿#include "PhysicsAsset.h"
 #include "PhysicsConstraintTemplate.h"
+#include "Object/GarbageCollection.h"
+#include "Object/Reflection/ObjectFactory.h"
+#include "Serialization/Archive.h"
 
 static bool IsValidIndex(int32 Index, int32 Count)
 {
 	return Index >= 0 && Index < Count;
+}
+
+namespace
+{
+	static constexpr int32 PhysicsAssetSerializeVersion = 2;
+
+	void SerializeTransform(FArchive& Ar, FTransform& Transform)
+	{
+		Ar << Transform.Location;
+		Ar << Transform.Rotation;
+		Ar << Transform.Scale;
+	}
+
+	void SerializeConstraintMotion(FArchive& Ar, EConstraintMotion& Motion)
+	{
+		uint8 Value = static_cast<uint8>(Motion);
+		Ar << Value;
+		if (Ar.IsLoading())
+		{
+			Motion = static_cast<EConstraintMotion>(Value);
+		}
+	}
+
+	void SerializeConstraintInstance(FArchive& Ar, FConstraintInstance& Instance)
+	{
+		Ar << Instance.ConstraintName;
+		Ar << Instance.ParentBoneName;
+		Ar << Instance.ChildBoneName;
+		SerializeTransform(Ar, Instance.ParentFrame);
+		SerializeTransform(Ar, Instance.ChildFrame);
+		Ar << Instance.bDisableCollision;
+		SerializeConstraintMotion(Ar, Instance.LinearXMotion);
+		SerializeConstraintMotion(Ar, Instance.LinearYMotion);
+		SerializeConstraintMotion(Ar, Instance.LinearZMotion);
+		Ar << Instance.LinearLimitSize;
+		SerializeConstraintMotion(Ar, Instance.Swing1Motion);
+		SerializeConstraintMotion(Ar, Instance.Swing2Motion);
+		SerializeConstraintMotion(Ar, Instance.TwistMotion);
+		Ar << Instance.Swing1LimitDegrees;
+		Ar << Instance.Swing2LimitDegrees;
+		Ar << Instance.TwistLimitMinDegrees;
+		Ar << Instance.TwistLimitMaxDegrees;
+	}
+}
+
+void UPhysicsAsset::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	UObject::AddReferencedObjects(Collector);
+
+	for (USkeletalBodySetup* BodySetup : SkeletalBodySetups)
+	{
+		Collector.AddReferencedObject(BodySetup);
+	}
+
+	for (UPhysicsConstraintTemplate* ConstraintSetup : ConstraintSetups)
+	{
+		Collector.AddReferencedObject(ConstraintSetup);
+	}
+}
+
+void UPhysicsAsset::Serialize(FArchive& Ar)
+{
+	int32 Version = PhysicsAssetSerializeVersion;
+	Ar << Version;
+
+	if (Version >= 2)
+	{
+		Ar << PreviewSkeletalMeshPath;
+		if (Ar.IsLoading() && PreviewSkeletalMeshPath.empty())
+		{
+			PreviewSkeletalMeshPath = "None";
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		PreviewSkeletalMeshPath = "None";
+	}
+
+	if (Ar.IsLoading())
+	{
+		for (USkeletalBodySetup* BodySetup : SkeletalBodySetups)
+		{
+			if (BodySetup)
+			{
+				UObjectManager::Get().DestroyObject(BodySetup);
+			}
+		}
+		for (UPhysicsConstraintTemplate* ConstraintSetup : ConstraintSetups)
+		{
+			if (ConstraintSetup)
+			{
+				UObjectManager::Get().DestroyObject(ConstraintSetup);
+			}
+		}
+		SkeletalBodySetups.clear();
+		ConstraintSetups.clear();
+		BoundsBodies.clear();
+		BodySetupIndexMap.clear();
+		CollisionDisableTable.clear();
+	}
+
+	uint32 BodyCount = static_cast<uint32>(SkeletalBodySetups.size());
+	Ar << BodyCount;
+	if (Ar.IsLoading())
+	{
+		SkeletalBodySetups.reserve(BodyCount);
+	}
+	for (uint32 BodyIndex = 0; BodyIndex < BodyCount; ++BodyIndex)
+	{
+		bool bValid = Ar.IsSaving() && SkeletalBodySetups[BodyIndex] != nullptr;
+		Ar << bValid;
+		if (!bValid)
+		{
+			if (Ar.IsLoading())
+			{
+				SkeletalBodySetups.push_back(nullptr);
+			}
+			continue;
+		}
+
+		USkeletalBodySetup* BodySetup = Ar.IsSaving()
+			? SkeletalBodySetups[BodyIndex]
+			: UObjectManager::Get().CreateObject<USkeletalBodySetup>(this);
+		BodySetup->SerializeCollision(Ar);
+		Ar << BodySetup->bSkipScaleFromAnimation;
+		if (Ar.IsLoading())
+		{
+			SkeletalBodySetups.push_back(BodySetup);
+		}
+	}
+
+	uint32 ConstraintCount = static_cast<uint32>(ConstraintSetups.size());
+	Ar << ConstraintCount;
+	if (Ar.IsLoading())
+	{
+		ConstraintSetups.reserve(ConstraintCount);
+	}
+	for (uint32 ConstraintIndex = 0; ConstraintIndex < ConstraintCount; ++ConstraintIndex)
+	{
+		bool bValid = Ar.IsSaving() && ConstraintSetups[ConstraintIndex] != nullptr;
+		Ar << bValid;
+		if (!bValid)
+		{
+			if (Ar.IsLoading())
+			{
+				ConstraintSetups.push_back(nullptr);
+			}
+			continue;
+		}
+
+		UPhysicsConstraintTemplate* ConstraintSetup = Ar.IsSaving()
+			? ConstraintSetups[ConstraintIndex]
+			: UObjectManager::Get().CreateObject<UPhysicsConstraintTemplate>(this);
+		FConstraintInstance Instance = ConstraintSetup->GetDefaultInstance();
+		SerializeConstraintInstance(Ar, Instance);
+		ConstraintSetup->SetDefaultInstance(Instance);
+		if (Ar.IsLoading())
+		{
+			ConstraintSetups.push_back(ConstraintSetup);
+		}
+	}
+
+	uint32 DisabledPairCount = static_cast<uint32>(CollisionDisableTable.size());
+	Ar << DisabledPairCount;
+	if (Ar.IsSaving())
+	{
+		for (auto& Pair : CollisionDisableTable)
+		{
+			FRigidBodyIndexPair BodyPair = Pair.first;
+			bool bDisabled = Pair.second;
+			Ar << BodyPair.BodyIndexA;
+			Ar << BodyPair.BodyIndexB;
+			Ar << bDisabled;
+		}
+	}
+	else
+	{
+		for (uint32 Index = 0; Index < DisabledPairCount; ++Index)
+		{
+			int32 BodyIndexA = -1;
+			int32 BodyIndexB = -1;
+			bool bDisabled = false;
+			Ar << BodyIndexA;
+			Ar << BodyIndexB;
+			Ar << bDisabled;
+			if (bDisabled)
+			{
+				CollisionDisableTable[FRigidBodyIndexPair(BodyIndexA, BodyIndexB)] = true;
+			}
+		}
+
+		UpdateBodySetupIndexMap();
+		UpdateBoundsBodiesArray();
+	}
 }
 
 USkeletalBodySetup* UPhysicsAsset::GetBodySetup(int32 BodyIndex)
@@ -66,7 +263,7 @@ USkeletalBodySetup* UPhysicsAsset::AddBodySetup(FName BoneName)
 		return Existing;
 	}
 
-	USkeletalBodySetup* NewBodySetup = new USkeletalBodySetup();
+	USkeletalBodySetup* NewBodySetup = UObjectManager::Get().CreateObject<USkeletalBodySetup>(this);
 	NewBodySetup->SetBoneName(BoneName);
 
 	SkeletalBodySetups.push_back(NewBodySetup);
@@ -115,7 +312,10 @@ bool UPhysicsAsset::RemoveBodySetupAt(int32 BodyIndex)
 	USkeletalBodySetup* Removed = SkeletalBodySetups[BodyIndex];
 	SkeletalBodySetups.erase(SkeletalBodySetups.begin() + BodyIndex);
 
-	delete Removed;
+	if (Removed)
+	{
+		UObjectManager::Get().DestroyObject(Removed);
+	}
 
 	// Body index가 밀렸으므로 index 기반 collision table은 무효화
 	CollisionDisableTable.clear();
@@ -237,7 +437,7 @@ UPhysicsConstraintTemplate* UPhysicsAsset::AddConstraintSetup(
 		return nullptr;
 	}
 
-	UPhysicsConstraintTemplate* NewConstraint = new UPhysicsConstraintTemplate();
+	UPhysicsConstraintTemplate* NewConstraint = UObjectManager::Get().CreateObject<UPhysicsConstraintTemplate>(this);
 
 	NewConstraint->SetConstraintName(ConstraintName);
 	NewConstraint->SetParentBoneName(ParentBoneName);
@@ -271,7 +471,10 @@ bool UPhysicsAsset::RemoveConstraintSetupAt(int32 ConstraintIndex)
 	UPhysicsConstraintTemplate* Removed = ConstraintSetups[ConstraintIndex];
 	ConstraintSetups.erase(ConstraintSetups.begin() + ConstraintIndex);
 
-	delete Removed;
+	if (Removed)
+	{
+		UObjectManager::Get().DestroyObject(Removed);
+	}
 
 	RefreshPhysicsAssetChange();
 

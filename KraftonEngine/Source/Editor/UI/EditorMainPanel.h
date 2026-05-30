@@ -41,6 +41,8 @@ public:
 	float GetContentBrowserIconSize() const { return ContentBrowserWidget.GetIconSize(); }
 
 	void OpenAssetEditorForObject(UObject* Object);
+	void OpenMeshEditorForObject(UObject* Object);
+	void OpenPhysicsAssetEditorForObject(UObject* Object);
 	void CollectAssetEditorPreviewViewportClients(TArray<IEditorPreviewViewportClient*>& OutClients) const { AssetEditorManager.CollectPreviewViewportClients(OutClients); }
 	bool IsMouseOverAssetEditorPreviewViewport() const { return AssetEditorManager.IsMouseOverAnyEditorViewport(); }
 

@@ -435,6 +435,46 @@ bool FMeshManager::ReadSkeletalMeshBinding(const FString& PackagePath, FSkeleton
 	return bLoaded;
 }
 
+bool FMeshManager::SaveSkeletalMeshPackage(USkeletalMesh* SkeletalMesh)
+{
+	if (!SkeletalMesh)
+	{
+		return false;
+	}
+
+	const FString PackagePath = NormalizeProjectPath(SkeletalMesh->GetAssetPathFileName());
+	if (PackagePath.empty() || PackagePath == "None")
+	{
+		return false;
+	}
+
+	FAssetImportMetadata Metadata;
+	FAssetPackage::ReadMetadata(PackagePath, EAssetPackageType::SkeletalMesh, Metadata);
+
+	FWindowsBinWriter Writer(PackagePath);
+	if (!Writer.IsValid())
+	{
+		UE_LOG("SkeletalMesh package save failed: could not open file. Path=%s", PackagePath.c_str());
+		return false;
+	}
+
+	try
+	{
+		FAssetPackageHeader Header;
+		Header.Type = static_cast<uint32>(EAssetPackageType::SkeletalMesh);
+		Writer << Header;
+		Writer << Metadata;
+		SkeletalMesh->Serialize(Writer);
+	}
+	catch (const std::exception&)
+	{
+		UE_LOG("SkeletalMesh package save failed: serialization threw an exception. Path=%s", PackagePath.c_str());
+		return false;
+	}
+
+	return Writer.IsValid();
+}
+
 static bool SaveSkeletalMeshBinary(USkeletalMesh* SkeletalMesh, const FString& BinaryPath, const FString& SourcePath)
 {
 	FWindowsBinWriter Writer(BinaryPath);

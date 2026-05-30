@@ -131,9 +131,8 @@ void FEditorMainPanel::Create(FWindowsWindow* InWindow, FRenderer& InRenderer, U
     
 	AssetEditorManager.RegisterEditor<FFloatCurveEditorWidget>();
 	AssetEditorManager.RegisterEditor<FCameraShakeEditorWidget>();
-	//TODO : Add PhysicsAssetLater
-	//AssetEditorManager.RegisterEditor<FPhysicsAssetEditorWidget>();
 	AssetEditorManager.RegisterEditor<FMeshEditorWidget>();
+	AssetEditorManager.RegisterEditor<FPhysicsAssetEditorWidget>();
 	AssetEditorManager.RegisterEditor<FStaticMeshEditorWidget>();
 	AssetEditorManager.RegisterEditor<FAnimGraphEditorWidget>();
 	AssetEditorManager.RegisterEditor<FLuaBlueprintEditorWidget>();
@@ -1112,4 +1111,14 @@ void FEditorMainPanel::RestoreEditorWindowsAfterPIE()
 void FEditorMainPanel::OpenAssetEditorForObject(UObject* Object)
 {
 	AssetEditorManager.OpenEditorForObject(Object);
+}
+
+void FEditorMainPanel::OpenMeshEditorForObject(UObject* Object)
+{
+	AssetEditorManager.OpenEditorForObjectAs<FMeshEditorWidget>(Object);
+}
+
+void FEditorMainPanel::OpenPhysicsAssetEditorForObject(UObject* Object)
+{
+	AssetEditorManager.OpenEditorForObjectAs<FPhysicsAssetEditorWidget>(Object);
 }
