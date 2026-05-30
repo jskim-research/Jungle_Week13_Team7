@@ -126,6 +126,10 @@ private:
     void LoadAnimationFromPath();
     void CapturePersistentAnimInstanceSettings();
     void ApplyPersistentAnimInstanceSettings(UAnimInstance* Instance);
+	void CreateBodiesFromPhysicsAsset();
+	void CreateConstraintInstancesFromPhysicsAsset();
+	void UpdateConstraintFrames();
+	void InitConstraints();
 
 protected:
 	TArray<FBodyInstance*> Bodies;

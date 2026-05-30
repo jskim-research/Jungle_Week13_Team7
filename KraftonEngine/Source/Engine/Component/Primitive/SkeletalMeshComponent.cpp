@@ -32,6 +32,10 @@
 #include "Physics/PhysicsConstraintTemplate.h"
 #include "GameFramework/World.h"
 
+#include <PxPhysicsAPI.h>
+
+using namespace physx;
+
 namespace
 {
 	FBodyInstanceInitParams MakeBodyInstanceInitParams(const USkeletalMeshComponent* Component, bool bEvenIfPendingKill)
@@ -56,6 +60,21 @@ namespace
 		}
 
 		return Params;
+	}
+
+	PxVec3 ToPxVec3(const FVector& V)
+	{
+		return PxVec3(V.X, V.Y, V.Z);
+	}
+
+	PxQuat ToPxQuat(const FQuat& Q)
+	{
+		return PxQuat(Q.X, Q.Y, Q.Z, Q.W);
+	}
+
+	PxTransform ToPxTransform(const FTransform& Transform)
+	{
+		return PxTransform(ToPxVec3(Transform.Location), ToPxQuat(Transform.Rotation));
 	}
 }
 
@@ -526,13 +545,26 @@ UPhysicsAsset* USkeletalMeshComponent::GetPhysicsAsset() const
 
 void USkeletalMeshComponent::InstantiatePhysicsAsset()
 {
+	TermPhysicsAsset();
+
+	CreateBodiesFromPhysicsAsset();
+
+	SyncBodiesFromAnimationPose();
+
+	CreateConstraintInstancesFromPhysicsAsset();
+
+	UpdateConstraintFrames();
+
+	InitConstraints();
+}
+
+void USkeletalMeshComponent::CreateBodiesFromPhysicsAsset()
+{
 	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
 	if (!PhysicsAsset)
 	{
 		return;
 	}
-
-	TermPhysicsAsset();
 
 	PhysicsAsset->UpdateBodySetupIndexMap();
 
@@ -554,6 +586,15 @@ void USkeletalMeshComponent::InstantiatePhysicsAsset()
 		FBodyInstance* BodyInstance = new FBodyInstance();
 		BodyInstance->InitBody(BodySetup, this, InitParams, SpawnParams);
 		Bodies[BodyIndex] = BodyInstance;
+	}
+}
+
+void USkeletalMeshComponent::CreateConstraintInstancesFromPhysicsAsset()
+{
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	if (!PhysicsAsset)
+	{
+		return;
 	}
 
 	// 2. PhysicsAsset의 ConstraintTemplate을 BodyInstance끼리 연결하는 런타임 ConstraintInstance로 복제한다.
@@ -597,8 +638,46 @@ void USkeletalMeshComponent::InstantiatePhysicsAsset()
 		FConstraintInstance* RuntimeConstraint = new FConstraintInstance();
 		*RuntimeConstraint = DefaultInstance;
 		RuntimeConstraint->ConstraintIndex = ConstraintIndex;
-		RuntimeConstraint->InitConstraint(ParentBody, ChildBody, InitParams);
 		Constraints[ConstraintIndex] = RuntimeConstraint;
+	}
+}
+
+void USkeletalMeshComponent::UpdateConstraintFrames()
+{
+}
+
+void USkeletalMeshComponent::InitConstraints()
+{
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	if (!PhysicsAsset)
+	{
+		return;
+	}
+
+	const FBodyInstanceInitParams InitParams = MakeBodyInstanceInitParams(this, false);
+	for (int32 ConstraintIndex = 0; ConstraintIndex < static_cast<int32>(Constraints.size()); ++ConstraintIndex)
+	{
+		FConstraintInstance* Constraint = Constraints[ConstraintIndex];
+		if (!Constraint)
+		{
+			continue;
+		}
+
+		const int32 ParentBodyIndex = PhysicsAsset->FindBodyIndex(Constraint->ParentBoneName);
+		const int32 ChildBodyIndex = PhysicsAsset->FindBodyIndex(Constraint->ChildBoneName);
+		if (ParentBodyIndex < 0 || ChildBodyIndex < 0)
+		{
+			continue;
+		}
+
+		FBodyInstance* ParentBody = GetBodyInstance(ParentBodyIndex);
+		FBodyInstance* ChildBody = GetBodyInstance(ChildBodyIndex);
+		if (!ParentBody || !ChildBody)
+		{
+			continue;
+		}
+
+		Constraint->InitConstraint(ParentBody, ChildBody, InitParams);
 	}
 }
 
@@ -637,6 +716,42 @@ void USkeletalMeshComponent::EndRagdoll()
 
 void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 {
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!PhysicsAsset || !Asset)
+	{
+		return;
+	}
+
+	TArray<FMatrix> BoneGlobalMatrices;
+	GetCurrentBoneGlobalMatrices(BoneGlobalMatrices);
+
+	for (int32 BodyIndex = 0; BodyIndex < static_cast<int32>(Bodies.size()); ++BodyIndex)
+	{
+		FBodyInstance* Body = Bodies[BodyIndex];
+		USkeletalBodySetup* BodySetup = PhysicsAsset->GetBodySetup(BodyIndex);
+		if (!Body || !Body->Actor || !BodySetup)
+		{
+			continue;
+		}
+
+		const FName BoneName = BodySetup->GetBoneName();
+		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
+		{
+			if (FName(Asset->Bones[BoneIndex].Name) != BoneName)
+			{
+				continue;
+			}
+
+			if (BoneIndex < static_cast<int32>(BoneGlobalMatrices.size()))
+			{
+				const FTransform BodyTransform(BoneGlobalMatrices[BoneIndex] * GetWorldMatrix());
+				Body->Actor->setGlobalPose(ToPxTransform(BodyTransform));
+			}
+			break;
+		}
+	}
 }
 
 void USkeletalMeshComponent::SyncSkeletonPoseFromBodies()

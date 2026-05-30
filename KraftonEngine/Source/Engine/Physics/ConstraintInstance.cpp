@@ -23,6 +23,26 @@ namespace
 		}
 	}
 
+	PxTransform ToPxTransform(const FConstraintFrame& Frame)
+	{
+		PxVec3 P(
+			Frame.Position.X,
+			Frame.Position.Y,
+			Frame.Position.Z
+		);
+
+		FQuat Q = Frame.Rotation.ToQuaternion();
+
+		PxQuat R(
+			Q.X,
+			Q.Y,
+			Q.Z,
+			Q.W
+		);
+
+		return PxTransform(P, R);
+	}
+
 	float DegreesToRadians(float Degrees)
 	{
 		constexpr float Pi = 3.14159265358979323846f;
@@ -45,9 +65,9 @@ void FConstraintInstance::InitConstraint(
 	PxD6Joint* Joint = PxD6JointCreate(
 		*InitParams.Physics,
 		ParentBody->Actor,
-		PxTransform(PxIdentity),
+		ToPxTransform(ParentFrame),
 		ChildBody->Actor,
-		PxTransform(PxIdentity));
+		ToPxTransform(ChildFrame));
 
 	if (!Joint)
 	{
