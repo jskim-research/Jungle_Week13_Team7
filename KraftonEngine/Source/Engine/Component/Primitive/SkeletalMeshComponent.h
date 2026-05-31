@@ -28,6 +28,8 @@ public:
 	USkeletalMeshComponent() = default;
 	~USkeletalMeshComponent() override;
 
+	void EndPlay() override;
+
     // Render access 섹션: SceneProxy
     FPrimitiveSceneProxy* CreateSceneProxy() override;
 
@@ -140,7 +142,8 @@ protected:
 	TArray<FConstraintInstance*> Constraints;
 
 	UPROPERTY(EditAnywhere)
-	bool bRagdollActive = false;
+	bool bRagdollActive = false; 
+	bool bSimulatePhysicsBeforeRagdoll = false;
 
 	UPROPERTY(Transient, Category="Physics")
 	TObjectPtr<UPhysicsAsset> PhysicsAssetOverride = nullptr;

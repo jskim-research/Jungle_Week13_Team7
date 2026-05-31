@@ -68,9 +68,19 @@ namespace
 		return PxVec3(V.X, V.Y, V.Z);
 	}
 
+	FVector ToFVector(const PxVec3& V)
+	{
+		return FVector(V.x, V.y, V.z);
+	}
+
 	PxQuat ToPxQuat(const FQuat& Q)
 	{
 		return PxQuat(Q.X, Q.Y, Q.Z, Q.W);
+	}
+
+	FQuat ToFQuat(const PxQuat& Q)
+	{
+		return FQuat(Q.x, Q.y, Q.z, Q.w);
 	}
 
 	PxTransform ToPxTransform(const FTransform& Transform)
@@ -109,8 +119,14 @@ namespace
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
 {
-	TermPhysicsAsset();
     ClearAnimInstance();
+}
+
+void USkeletalMeshComponent::EndPlay()
+{
+	TermPhysicsAsset();
+	Super::EndPlay();
+
 }
 
 FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
@@ -418,8 +434,16 @@ void USkeletalMeshComponent::ClearAnimInstance()
 
 void USkeletalMeshComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction& ThisTickFunction)
 {
+	if (bRagdollActive)
+	{
+		Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+		SyncSkeletonPoseFromBodies();
+		return;
+	}
+
     if (EvaluateAnimInstance(DeltaTime))
     {
+		SyncBodiesFromAnimationPose();
         UMeshComponent::TickComponent(DeltaTime, TickType, ThisTickFunction);
         return;
     }
@@ -510,6 +534,21 @@ void USkeletalMeshComponent::PostEditProperty(const char* PropertyName)
             LuaAnim->ReloadScript();
         }
     }
+	else if (std::strcmp(PropertyName, "bRagdollActive") == 0)
+	{
+		// Start or End Ragdoll 가 정상적으로 반영되지 않은 경우 변경 이전 값을 쓰도록 함
+		const bool bRequested = bRagdollActive;
+		if (bRequested)
+		{
+			bRagdollActive = false;
+			StartRagdoll();
+		}
+		else
+		{
+			bRagdollActive = true;
+			EndRagdoll();
+		}
+	}
 
     // AnimInstance 자체 properties 는 자식이 자체 PostEdit 처리. 컴포넌트는 dispatch 만.
     // 컴포넌트가 인식한 이름과 겹치지 않는 한 무해 (자식이 모르는 이름은 no-op).
@@ -818,10 +857,25 @@ void USkeletalMeshComponent::TermPhysicsAsset()
 
 void USkeletalMeshComponent::StartRagdoll()
 {
+	if (bRagdollActive) return;
+	if (!GetSkeletalMesh() || !GetPhysicsAsset()) return;
+
+	bSimulatePhysicsBeforeRagdoll = bSimulatePhysics;
+	bRagdollActive = true;
+	bSimulatePhysics = true;
+
+	EnsureBoneEditPose();
+	InstantiatePhysicsAsset();
 }
 
 void USkeletalMeshComponent::EndRagdoll()
 {
+	if (!bRagdollActive) return;
+
+	SyncSkeletonPoseFromBodies();
+	bRagdollActive = false;
+	bSimulatePhysics = bSimulatePhysicsBeforeRagdoll;
+	InstantiatePhysicsAsset();
 }
 
 void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
@@ -866,6 +920,51 @@ void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 
 void USkeletalMeshComponent::SyncSkeletonPoseFromBodies()
 {
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!PhysicsAsset || !Asset)
+	{
+		return;
+	}
+
+	bool bPoseChanged = false;
+	for (int32 BodyIndex = 0; BodyIndex < static_cast<int32>(Bodies.size()); ++BodyIndex)
+	{
+		FBodyInstance* Body = Bodies[BodyIndex];
+		USkeletalBodySetup* BodySetup = PhysicsAsset->GetBodySetup(BodyIndex);
+		if (!Body || !Body->Actor || !BodySetup)
+		{
+			continue;
+		}
+
+		const FName BoneName = BodySetup->GetBoneName();
+		for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
+		{
+			if (FName(Asset->Bones[BoneIndex].Name) != BoneName)
+			{
+				continue;
+			}
+
+			if (BoneEditLocalMatrices.size() > BoneIndex)
+			{
+				FTransform T(BoneEditLocalMatrices[BoneIndex]);
+				T.Location = ToFVector(Body->Actor->getGlobalPose().p);
+				T.Rotation = ToFQuat(Body->Actor->getGlobalPose().q);
+
+				BoneEditLocalMatrices[BoneIndex] = T.ToMatrix();
+				bPoseChanged = true;
+			}
+			break;
+		}
+	}
+
+	if (bPoseChanged)
+	{
+		bUseBoneEditPose = true;
+		RefreshSkinningAfterPoseChanged();
+		MarkWorldBoundsDirty();
+	}
 }
 
 FBodyInstance* USkeletalMeshComponent::GetBodyInstance(FName BoneName) const
