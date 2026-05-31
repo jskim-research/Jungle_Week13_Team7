@@ -58,6 +58,8 @@ public:
 	const FString& GetCurrentLevelFilePath() const { return CurrentLevelFilePath; }
 	void RefreshContentBrowser() { MainPanel.RefreshContentBrowser(); }
 	void OpenAssetEditorForObject(UObject* Object) { MainPanel.OpenAssetEditorForObject(Object); }
+	void OpenMeshEditorForObject(UObject* Object) { MainPanel.OpenMeshEditorForObject(Object); }
+	void OpenPhysicsAssetEditorForObject(UObject* Object) { MainPanel.OpenPhysicsAssetEditorForObject(Object); }
 	void SetContentBrowserIconSize(float Size) { MainPanel.SetContentBrowserIconSize(Size); }
 	float GetContentBrowserIconSize() const { return MainPanel.GetContentBrowserIconSize(); }
 	void HideEditorWindows() { MainPanel.HideEditorWindows(); }

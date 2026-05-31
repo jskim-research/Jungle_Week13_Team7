@@ -94,5 +94,5 @@ bool FName::IsValid() const
 
 bool FName::IsNone() const
 {
-	return DisplayIndex != 0 || ComparisonIndex != 0;
+	return *this == FName::None || (DisplayIndex == 0 && ComparisonIndex == 0);
 }

@@ -209,6 +209,24 @@ void FDrawCommandBuilder::BuildCommandForProxy(FScene& Scene, const FPrimitiveSc
 		FShader* SectionShader = (Section.Material && Section.Material->GetShader())
 			? Section.Material->GetShader()
 			: Proxy.GetShader();
+
+		// Generated Surface material emits EvaluateMaterial() only.
+		// Mode decides pass/render state; domain decides the Static/Skeletal entry point.
+		if (Section.Material
+			&& Section.Material->GetGraphShaderMode() == EMaterialGraphShaderMode::Generated
+			&& Section.Material->GetDomain() == EMaterialDomain::Surface
+			&& !Section.Material->GetGeneratedShaderPath().empty())
+		{
+			FShaderKey GeneratedSurfaceKey(Section.Material->GetGeneratedShaderPath());
+			GeneratedSurfaceKey.SetVertexFactory(
+				bGPUSkinning ? EShaderVertexFactory::SkeletalMesh : EShaderVertexFactory::StaticMesh);
+
+			if (FShader* GeneratedSurfaceShader = FShaderManager::Get().FindOrCreate(GeneratedSurfaceKey))
+			{
+				SectionShader = GeneratedSurfaceShader;
+			}
+		}
+
 		FShader* EffectiveShader = SelectEffectiveShader(SectionShader, CollectViewMode, bGPUSkinning, bWeightBoneHeatMap, bSectionIsTranslucent);
 
 		FDrawCommand& Cmd = DrawCommandList.AddCommand();
@@ -502,7 +520,7 @@ void FDrawCommandBuilder::PrepareDynamicGeometry(const FFrameContext& Frame, con
 {
 	if (!Scene) return;
 
-	if (World && Frame.RenderOptions.ShowFlags.bCollision)
+	if (World && Frame.RenderOptions.ShowFlags.bDebugDraw && Frame.RenderOptions.ShowFlags.bCollision)
 	{
 		CollisionDebugDraw::AppendCollisionWireframes(World, Frame, EditorLines);
 	}

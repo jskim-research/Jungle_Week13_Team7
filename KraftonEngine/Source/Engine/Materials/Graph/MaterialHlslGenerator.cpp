@@ -740,9 +740,18 @@ namespace
 		return ConvertExpr(Source.Expr, Source.Type, TargetType, &Result.Errors);
 	}
 
+	bool IsInputConnected(const FMaterialGraph& Graph, const FMaterialGraphNode& Output, const char* PinName)
+	{
+		const FMaterialGraphPin* InputPin = FindPinByName(Output, PinName, EMaterialGraphPinKind::Input);
+		return InputPin && FindInputLink(Graph, InputPin->PinId);
+	}
+
 	FString BuildEvaluateMaterial(const FMaterialGraph& Graph, FHlslBuildContext& Context, EMaterialDomain Domain, FMaterialCompileResult& Result)
 	{
 		const FMaterialGraphNode* Output = Graph.FindFirstNodeOfType(EMaterialGraphNodeType::Output);
+		const bool bGeneratedSurface = Domain == EMaterialDomain::Surface;
+		const bool bSurfaceLike = Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal;
+
 		std::stringstream SS;
 		SS << "FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)\n";
 		SS << "{\n";
@@ -750,17 +759,42 @@ namespace
 		if (!Output)
 		{
 			SS << "    FMaterialResult Result;\n";
-			SS << "    Result.Color = float3(1, 1, 1);\n";
-			SS << "    Result.Emissive = float3(0, 0, 0);\n";
-			SS << "    Result.Opacity = 1.0f;\n";
-			SS << "    Result.UVOffset = float2(0, 0);\n";
+			if (bGeneratedSurface)
+			{
+				SS << "    Result.BaseColor = float3(1, 1, 1);\n";
+				SS << "    Result.Normal = float3(0, 0, 1);\n";
+				SS << "    Result.Roughness = 0.5f;\n";
+				SS << "    Result.Metallic = 0.0f;\n";
+				SS << "    Result.Emissive = float3(0, 0, 0);\n";
+				SS << "    Result.Opacity = 1.0f;\n";
+				SS << "    Result.OpacityMask = 1.0f;\n";
+				SS << "    Result.NormalConnected = 0.0f;\n";
+			}
+			else if (bSurfaceLike)
+			{
+				SS << "    Result.BaseColor = float3(1, 1, 1);\n";
+				SS << "    Result.Normal = float3(0, 0, 1);\n";
+				SS << "    Result.Roughness = 0.5f;\n";
+				SS << "    Result.Metallic = 0.0f;\n";
+				SS << "    Result.Emissive = float3(0, 0, 0);\n";
+				SS << "    Result.Opacity = 1.0f;\n";
+			}
+			else
+			{
+				SS << "    Result.Color = float3(1, 1, 1);\n";
+				SS << "    Result.Emissive = float3(0, 0, 0);\n";
+				SS << "    Result.Opacity = 1.0f;\n";
+				SS << "    Result.UVOffset = float2(0, 0);\n";
+			}
 			SS << "    return Result;\n";
 			SS << "}\n\n";
 			return SS.str();
 		}
 
-		FString ColorExpr, NormalExpr, RoughExpr, MetalExpr, EmissiveExpr, OpacityExpr, UVOffsetExpr;
-		if (Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal)
+		FString ColorExpr, NormalExpr, RoughExpr, MetalExpr, EmissiveExpr, OpacityExpr, OpacityMaskExpr, UVOffsetExpr;
+		const bool bNormalConnected = bGeneratedSurface && IsInputConnected(Graph, *Output, "Normal");
+
+		if (bSurfaceLike)
 		{
 			ColorExpr    = OutputInputExpr(Context, Graph, *Output, "BaseColor", "float3(1, 1, 1)", EMaterialGraphPinType::Float3, EMaterialGraphPinType::Float3, Result);
 			NormalExpr   = OutputInputExpr(Context, Graph, *Output, "Normal",    "float3(0, 0, 1)", EMaterialGraphPinType::Float3, EMaterialGraphPinType::Float3, Result);
@@ -768,6 +802,10 @@ namespace
 			MetalExpr    = OutputInputExpr(Context, Graph, *Output, "Metallic",  "0.0f",            EMaterialGraphPinType::Float,  EMaterialGraphPinType::Float,  Result);
 			EmissiveExpr = OutputInputExpr(Context, Graph, *Output, "Emissive",  "float3(0, 0, 0)", EMaterialGraphPinType::Float3, EMaterialGraphPinType::Float3, Result);
 			OpacityExpr  = OutputInputExpr(Context, Graph, *Output, "Opacity",   "1.0f",            EMaterialGraphPinType::Float,  EMaterialGraphPinType::Float,  Result);
+			if (bGeneratedSurface)
+			{
+				OpacityMaskExpr = OutputInputExpr(Context, Graph, *Output, "OpacityMask", "1.0f", EMaterialGraphPinType::Float, EMaterialGraphPinType::Float, Result);
+			}
 		}
 		else
 		{
@@ -782,7 +820,7 @@ namespace
 		// 모든 노드 로컬 선언을 먼저 흘려보내고, 마지막에 Result로 모은다.
 		SS << Context.BuildBody();
 		SS << "    FMaterialResult Result;\n";
-		if (Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal)
+		if (bSurfaceLike)
 		{
 			SS << "    Result.BaseColor = " << ColorExpr << ";\n";
 			SS << "    Result.Normal = "    << NormalExpr << ";\n";
@@ -790,6 +828,11 @@ namespace
 			SS << "    Result.Metallic = "  << MetalExpr << ";\n";
 			SS << "    Result.Emissive = "  << EmissiveExpr << ";\n";
 			SS << "    Result.Opacity = "   << OpacityExpr << ";\n";
+			if (bGeneratedSurface)
+			{
+				SS << "    Result.OpacityMask = " << OpacityMaskExpr << ";\n";
+				SS << "    Result.NormalConnected = " << (bNormalConnected ? "1.0f" : "0.0f") << ";\n";
+			}
 		}
 		else
 		{
@@ -810,6 +853,16 @@ namespace
 		SS << "#include \"Common/VertexLayouts.hlsli\"\n";
 		SS << "#include \"Common/Functions.hlsli\"\n";
 		SS << "#include \"Common/SystemSamplers.hlsli\"\n";
+
+		// Surface generated materials emit material values only. The common pass owns
+		// static/skeletal VS, normal mapping, lighting, and MRT output.
+		if (Domain == EMaterialDomain::Surface)
+		{
+			SS << "#include \"Common/ForwardLighting.hlsli\"\n";
+			SS << "#include \"Common/GeneratedSurfacePass.hlsli\"\n\n";
+			return SS.str();
+		}
+
 		// AlphaBlend 도메인에서는 per-pixel fog 적용
 		if (Domain == EMaterialDomain::ParticleSprite || Domain == EMaterialDomain::ParticleMesh)
 		{
@@ -835,7 +888,7 @@ namespace
 		SS << "};\n\n";
 		SS << "struct FMaterialResult\n";
 		SS << "{\n";
-		if (Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal)
+		if (Domain == EMaterialDomain::Decal)
 		{
 			SS << "    float3 BaseColor;\n";
 			SS << "    float3 Normal;\n";
@@ -912,7 +965,7 @@ float4 PS(PS_Input_MaterialParticle input) : SV_TARGET
 )";
 	}
 
-	FString BuildParticleMeshMain(bool bReceiveLighting = false)
+	FString BuildParticleMeshMain(bool bReceiveLighting = false, bool bTranslucentPass = true)
 	{
 		std::stringstream SS;
 		SS << R"(
@@ -982,13 +1035,50 @@ float4 PS(PS_Input_MaterialMeshParticle input) : SV_TARGET
 		SS << R"(
     float4 FinalColor = float4(BaseColor + Result.Emissive, Result.Opacity);
     clip(FinalColor.a - 0.01f);
-    return ApplyFogTranslucent(FinalColor, input.worldPos, CameraWorldPos);
-}
 )";
+
+		if (bTranslucentPass)
+		{
+			SS << "    return ApplyFogTranslucent(FinalColor, input.worldPos, CameraWorldPos);\n";
+		}
+		else
+		{
+			SS << "    return FinalColor;\n";
+		}
+
+		SS << "}\n";
 		return SS.str();
 	}
 
 	FString BuildSurfaceMain()
+	{
+		return R"(
+MaterialSurfaceVSOutput VS_StaticMesh(VS_Input_PNCTT input)
+{
+    return BuildGeneratedSurfaceStaticMesh(input);
+}
+
+MaterialSurfaceVSOutput VS_SkeletalMesh(VS_Input_PNCTTBB input)
+{
+    return BuildGeneratedSurfaceSkeletalMesh(input);
+}
+
+// Legacy entry point. Kept so old cache paths that compile "VS" still render as StaticMesh.
+MaterialSurfaceVSOutput VS(VS_Input_PNCTT input)
+{
+    return VS_StaticMesh(input);
+}
+
+MaterialSurfacePSOutput PS(MaterialSurfaceVSOutput input)
+{
+    FMaterialPixelInput MaterialInput = BuildGeneratedSurfaceMaterialInput(input);
+    FMaterialResult Result = EvaluateMaterial(MaterialInput);
+    return ShadeGeneratedSurface(input, Result);
+}
+)";
+	}
+
+	FString BuildLegacySurfaceMain()
 	{
 		return R"(
 struct MaterialSurfaceVSOutput
@@ -1098,15 +1188,17 @@ bool FMaterialHlslGenerator::Generate(const FMaterialGraph& Graph, const FMateri
 		SS << BuildParticleSpriteMain();
 		break;
 	case EMaterialDomain::ParticleMesh:
-		SS << BuildParticleMeshMain(Options.bReceiveLighting);
+		SS << BuildParticleMeshMain(Options.bReceiveLighting, Options.RenderPass == ERenderPass::AlphaBlend);
 		break;
 	case EMaterialDomain::PostProcess:
 		SS << BuildPostProcessMain();
 		break;
 	case EMaterialDomain::Surface:
+		SS << BuildSurfaceMain();
+		break;
 	case EMaterialDomain::Decal:
 	default:
-		SS << BuildSurfaceMain();
+		SS << BuildLegacySurfaceMain();
 		break;
 	}
 

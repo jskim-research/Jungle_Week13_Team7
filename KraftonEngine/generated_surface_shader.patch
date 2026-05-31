@@ -1,0 +1,459 @@
+diff --git a/Shaders/Common/GeneratedSurfacePass.hlsli b/Shaders/Common/GeneratedSurfacePass.hlsli
+new file mode 100644
+index 0000000..895c4fd
+--- /dev/null
++++ b/Shaders/Common/GeneratedSurfacePass.hlsli
+@@ -0,0 +1,197 @@
++#ifndef GENERATED_SURFACE_PASS_HLSLI
++#define GENERATED_SURFACE_PASS_HLSLI
++
++// Generated material shaders must only provide EvaluateMaterial().
++// This include owns the shared Surface/Opaque vertex factory + lighting/output path.
++
++#ifndef GENERATED_SURFACE_ALPHA_CLIP
++#define GENERATED_SURFACE_ALPHA_CLIP 0.333f
++#endif
++
++StructuredBuffer<float4x4> SkinMatrices : register(t13);
++
++struct FMaterialPixelInput
++{
++    float2 UV0;
++    float2 UV1;
++    float2 UV2;
++    float4 ParticleColor;
++    float4 VertexColor;
++    float  Time;
++    float  SubImageIndex;
++    float4 DynamicParam;
++};
++
++struct FMaterialResult
++{
++    float3 BaseColor;
++    float3 Normal;           // Tangent-space normal. If connected from texture, 0..1 encoded is accepted.
++    float  Roughness;
++    float  Metallic;
++    float3 Emissive;
++    float  Opacity;
++    float  OpacityMask;
++    float  NormalConnected;  // 0: use vertex normal, 1: apply Result.Normal through TBN.
++};
++
++struct MaterialSurfaceVSOutput
++{
++    float4 position     : SV_POSITION;
++    float3 worldPos     : TEXCOORD0;
++    float3 worldNormal  : TEXCOORD1;
++    float4 worldTangent : TEXCOORD2;
++    float2 texcoord     : TEXCOORD3;
++    float4 color        : COLOR0;
++};
++
++struct MaterialSurfacePSOutput
++{
++    float4 Color   : SV_TARGET0;
++    float4 Normal  : SV_TARGET1;
++    float4 Culling : SV_TARGET2;
++};
++
++float4x4 GeneratedSurfaceIdentity4x4()
++{
++    return float4x4(
++        1, 0, 0, 0,
++        0, 1, 0, 0,
++        0, 0, 1, 0,
++        0, 0, 0, 1);
++}
++
++float4x4 BuildGeneratedSurfaceSkinMatrix(int4 BoneIndices, float4 BoneWeights)
++{
++    float4x4 Skin = float4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
++    float WeightSum = 0.0f;
++
++    [unroll]
++    for (int i = 0; i < 4; ++i)
++    {
++        const int BoneIndex = BoneIndices[i];
++        const float Weight = BoneWeights[i];
++        if (Weight > 0.0f && BoneIndex >= 0)
++        {
++            Skin += SkinMatrices[BoneIndex] * Weight;
++            WeightSum += Weight;
++        }
++    }
++
++    return WeightSum > 0.0f ? Skin : GeneratedSurfaceIdentity4x4();
++}
++
++float3 GeneratedSurfaceTransformNormal(float3 LocalNormal)
++{
++    return normalize(mul(LocalNormal, (float3x3)NormalMatrix));
++}
++
++float4 GeneratedSurfaceTransformTangent(float4 LocalTangent)
++{
++    float3 WorldTangent = normalize(mul(LocalTangent.xyz, (float3x3)NormalMatrix));
++    return float4(WorldTangent, LocalTangent.w);
++}
++
++MaterialSurfaceVSOutput BuildGeneratedSurfaceVaryings(float3 LocalPosition, float3 LocalNormal, float4 LocalTangent, float2 UV, float4 Color)
++{
++    float4 WorldPos = mul(float4(LocalPosition, 1.0f), Model);
++
++    MaterialSurfaceVSOutput Output;
++    Output.position = mul(mul(WorldPos, View), Projection);
++    Output.worldPos = WorldPos.xyz / max(WorldPos.w, 0.00001f);
++    Output.worldNormal = GeneratedSurfaceTransformNormal(LocalNormal);
++    Output.worldTangent = GeneratedSurfaceTransformTangent(LocalTangent);
++    Output.texcoord = UV;
++    Output.color = Color;
++    return Output;
++}
++
++MaterialSurfaceVSOutput BuildGeneratedSurfaceStaticMesh(VS_Input_PNCTT Input)
++{
++    return BuildGeneratedSurfaceVaryings(Input.position, Input.normal, Input.tangent, Input.texcoord, Input.color);
++}
++
++MaterialSurfaceVSOutput BuildGeneratedSurfaceSkeletalMesh(VS_Input_PNCTBW Input)
++{
++    float4x4 Skin = BuildGeneratedSurfaceSkinMatrix(Input.boneIndices, Input.boneWeights);
++
++    float3 SkinnedPosition = mul(float4(Input.position, 1.0f), Skin).xyz;
++    float3 SkinnedNormal = normalize(mul(float4(Input.normal, 0.0f), Skin).xyz);
++    float3 SkinnedTangent = normalize(mul(float4(Input.tangent.xyz, 0.0f), Skin).xyz);
++
++    return BuildGeneratedSurfaceVaryings(
++        SkinnedPosition,
++        SkinnedNormal,
++        float4(SkinnedTangent, Input.tangent.w),
++        Input.texcoord,
++        Input.color);
++}
++
++FMaterialPixelInput BuildGeneratedSurfaceMaterialInput(MaterialSurfaceVSOutput Input)
++{
++    FMaterialPixelInput MaterialInput;
++    MaterialInput.UV0           = Input.texcoord;
++    MaterialInput.UV1           = float2(0, 0);
++    MaterialInput.UV2           = float2(0, 0);
++    MaterialInput.ParticleColor = float4(1, 1, 1, 1);
++    MaterialInput.VertexColor   = Input.color;
++    MaterialInput.Time          = Time;
++    MaterialInput.SubImageIndex = 0.0f;
++    MaterialInput.DynamicParam  = float4(0, 0, 0, 0);
++    return MaterialInput;
++}
++
++float3 DecodeGeneratedSurfaceTangentNormal(float3 N)
++{
++    const bool bLooksTextureEncoded = all(N >= float3(0.0f, 0.0f, 0.0f)) && all(N <= float3(1.0f, 1.0f, 1.0f));
++    return normalize(bLooksTextureEncoded ? (N * 2.0f - 1.0f) : N);
++}
++
++float3 ApplyGeneratedSurfaceNormal(MaterialSurfaceVSOutput Input, FMaterialResult Material)
++{
++    float3 VertexN = normalize(Input.worldNormal);
++    if (Material.NormalConnected < 0.5f)
++    {
++        return VertexN;
++    }
++
++    float3 T = normalize(Input.worldTangent.xyz);
++    T = normalize(T - VertexN * dot(VertexN, T));
++    float3 B = normalize(cross(VertexN, T) * Input.worldTangent.w);
++    float3 TangentN = DecodeGeneratedSurfaceTangentNormal(Material.Normal);
++
++    return normalize(T * TangentN.x + B * TangentN.y + VertexN * TangentN.z);
++}
++
++float3 ComputeGeneratedSurfaceLighting(float3 WorldPos, float4 ClipPos, float3 N, FMaterialResult Material)
++{
++    float3 Lighting = AmbientLight.Color.rgb * AmbientLight.Intensity;
++
++    float3 L = normalize(-DirectionalLight.Direction);
++    float NdotL = saturate(dot(N, L));
++    Lighting += DirectionalLight.Color.rgb * DirectionalLight.Intensity * NdotL;
++
++    AccumulatePointSpotDiffuse(WorldPos, N, ClipPos, Lighting);
++
++    float3 V = normalize(CameraWorldPos - WorldPos);
++    float3 H = normalize(L + V);
++    float SpecPower = lerp(128.0f, 8.0f, saturate(Material.Roughness));
++    float3 SpecColor = lerp(float3(0.04f, 0.04f, 0.04f), Material.BaseColor, saturate(Material.Metallic));
++    float3 Specular = SpecColor * pow(saturate(dot(N, H)), SpecPower) * DirectionalLight.Intensity;
++
++    return saturate(Lighting) * Material.BaseColor + Specular + Material.Emissive;
++}
++
++MaterialSurfacePSOutput ShadeGeneratedSurface(MaterialSurfaceVSOutput Input, FMaterialResult Material)
++{
++    clip(min(Material.Opacity, Material.OpacityMask) - GENERATED_SURFACE_ALPHA_CLIP);
++
++    const float3 N = ApplyGeneratedSurfaceNormal(Input, Material);
++
++    MaterialSurfacePSOutput Output;
++    Output.Color = float4(ComputeGeneratedSurfaceLighting(Input.worldPos, Input.position, N, Material), Material.Opacity);
++    Output.Normal = float4(N, 1.0f);
++    Output.Culling = float4(0, 0, 0, 0);
++    return Output;
++}
++
++#endif // GENERATED_SURFACE_PASS_HLSLI
+diff --git a/Source/Engine/Materials/Graph/MaterialHlslGenerator.cpp b/Source/Engine/Materials/Graph/MaterialHlslGenerator.cpp
+index 9cd140b..edb7fef 100644
+--- a/Source/Engine/Materials/Graph/MaterialHlslGenerator.cpp
++++ b/Source/Engine/Materials/Graph/MaterialHlslGenerator.cpp
+@@ -740,9 +740,18 @@ namespace
+ 		return ConvertExpr(Source.Expr, Source.Type, TargetType, &Result.Errors);
+ 	}
+ 
++	bool IsInputConnected(const FMaterialGraph& Graph, const FMaterialGraphNode& Output, const char* PinName)
++	{
++		const FMaterialGraphPin* InputPin = FindPinByName(Output, PinName, EMaterialGraphPinKind::Input);
++		return InputPin && FindInputLink(Graph, InputPin->PinId);
++	}
++
+ 	FString BuildEvaluateMaterial(const FMaterialGraph& Graph, FHlslBuildContext& Context, EMaterialDomain Domain, FMaterialCompileResult& Result)
+ 	{
+ 		const FMaterialGraphNode* Output = Graph.FindFirstNodeOfType(EMaterialGraphNodeType::Output);
++		const bool bGeneratedSurface = (Domain == EMaterialDomain::Surface);
++		const bool bSurfaceLike = (Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal);
++
+ 		std::stringstream SS;
+ 		SS << "FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)\n";
+ 		SS << "{\n";
+@@ -750,17 +759,42 @@ namespace
+ 		if (!Output)
+ 		{
+ 			SS << "    FMaterialResult Result;\n";
+-			SS << "    Result.Color = float3(1, 1, 1);\n";
+-			SS << "    Result.Emissive = float3(0, 0, 0);\n";
+-			SS << "    Result.Opacity = 1.0f;\n";
+-			SS << "    Result.UVOffset = float2(0, 0);\n";
++			if (bGeneratedSurface)
++			{
++				SS << "    Result.BaseColor = float3(1, 1, 1);\n";
++				SS << "    Result.Normal = float3(0, 0, 1);\n";
++				SS << "    Result.Roughness = 0.5f;\n";
++				SS << "    Result.Metallic = 0.0f;\n";
++				SS << "    Result.Emissive = float3(0, 0, 0);\n";
++				SS << "    Result.Opacity = 1.0f;\n";
++				SS << "    Result.OpacityMask = 1.0f;\n";
++				SS << "    Result.NormalConnected = 0.0f;\n";
++			}
++			else if (bSurfaceLike)
++			{
++				SS << "    Result.BaseColor = float3(1, 1, 1);\n";
++				SS << "    Result.Normal = float3(0, 0, 1);\n";
++				SS << "    Result.Roughness = 0.5f;\n";
++				SS << "    Result.Metallic = 0.0f;\n";
++				SS << "    Result.Emissive = float3(0, 0, 0);\n";
++				SS << "    Result.Opacity = 1.0f;\n";
++			}
++			else
++			{
++				SS << "    Result.Color = float3(1, 1, 1);\n";
++				SS << "    Result.Emissive = float3(0, 0, 0);\n";
++				SS << "    Result.Opacity = 1.0f;\n";
++				SS << "    Result.UVOffset = float2(0, 0);\n";
++			}
+ 			SS << "    return Result;\n";
+ 			SS << "}\n\n";
+ 			return SS.str();
+ 		}
+ 
+-		FString ColorExpr, NormalExpr, RoughExpr, MetalExpr, EmissiveExpr, OpacityExpr, UVOffsetExpr;
+-		if (Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal)
++		FString ColorExpr, NormalExpr, RoughExpr, MetalExpr, EmissiveExpr, OpacityExpr, OpacityMaskExpr, UVOffsetExpr;
++		const bool bNormalConnected = bGeneratedSurface && IsInputConnected(Graph, *Output, "Normal");
++
++		if (bSurfaceLike)
+ 		{
+ 			ColorExpr    = OutputInputExpr(Context, Graph, *Output, "BaseColor", "float3(1, 1, 1)", EMaterialGraphPinType::Float3, EMaterialGraphPinType::Float3, Result);
+ 			NormalExpr   = OutputInputExpr(Context, Graph, *Output, "Normal",    "float3(0, 0, 1)", EMaterialGraphPinType::Float3, EMaterialGraphPinType::Float3, Result);
+@@ -768,6 +802,10 @@ namespace
+ 			MetalExpr    = OutputInputExpr(Context, Graph, *Output, "Metallic",  "0.0f",            EMaterialGraphPinType::Float,  EMaterialGraphPinType::Float,  Result);
+ 			EmissiveExpr = OutputInputExpr(Context, Graph, *Output, "Emissive",  "float3(0, 0, 0)", EMaterialGraphPinType::Float3, EMaterialGraphPinType::Float3, Result);
+ 			OpacityExpr  = OutputInputExpr(Context, Graph, *Output, "Opacity",   "1.0f",            EMaterialGraphPinType::Float,  EMaterialGraphPinType::Float,  Result);
++			if (bGeneratedSurface)
++			{
++				OpacityMaskExpr = OutputInputExpr(Context, Graph, *Output, "OpacityMask", "1.0f", EMaterialGraphPinType::Float, EMaterialGraphPinType::Float, Result);
++			}
+ 		}
+ 		else
+ 		{
+@@ -782,7 +820,7 @@ namespace
+ 		// 모든 노드 로컬 선언을 먼저 흘려보내고, 마지막에 Result로 모은다.
+ 		SS << Context.BuildBody();
+ 		SS << "    FMaterialResult Result;\n";
+-		if (Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal)
++		if (bSurfaceLike)
+ 		{
+ 			SS << "    Result.BaseColor = " << ColorExpr << ";\n";
+ 			SS << "    Result.Normal = "    << NormalExpr << ";\n";
+@@ -790,6 +828,11 @@ namespace
+ 			SS << "    Result.Metallic = "  << MetalExpr << ";\n";
+ 			SS << "    Result.Emissive = "  << EmissiveExpr << ";\n";
+ 			SS << "    Result.Opacity = "   << OpacityExpr << ";\n";
++			if (bGeneratedSurface)
++			{
++				SS << "    Result.OpacityMask = " << OpacityMaskExpr << ";\n";
++				SS << "    Result.NormalConnected = " << (bNormalConnected ? "1.0f" : "0.0f") << ";\n";
++			}
+ 		}
+ 		else
+ 		{
+@@ -810,6 +853,16 @@ namespace
+ 		SS << "#include \"Common/VertexLayouts.hlsli\"\n";
+ 		SS << "#include \"Common/Functions.hlsli\"\n";
+ 		SS << "#include \"Common/SystemSamplers.hlsli\"\n";
++
++		// Surface generated material은 material value 계산만 생성하고,
++		// VS/normal map/lighting/MRT output은 공통 Surface pass include를 재사용한다.
++		if (Domain == EMaterialDomain::Surface)
++		{
++			SS << "#include \"Common/ForwardLighting.hlsli\"\n";
++			SS << "#include \"Common/GeneratedSurfacePass.hlsli\"\n\n";
++			return SS.str();
++		}
++
+ 		// AlphaBlend 도메인에서는 per-pixel fog 적용
+ 		if (Domain == EMaterialDomain::ParticleSprite || Domain == EMaterialDomain::ParticleMesh)
+ 		{
+@@ -835,7 +888,7 @@ namespace
+ 		SS << "};\n\n";
+ 		SS << "struct FMaterialResult\n";
+ 		SS << "{\n";
+-		if (Domain == EMaterialDomain::Surface || Domain == EMaterialDomain::Decal)
++		if (Domain == EMaterialDomain::Decal)
+ 		{
+ 			SS << "    float3 BaseColor;\n";
+ 			SS << "    float3 Normal;\n";
+@@ -991,6 +1044,34 @@ float4 PS(PS_Input_MaterialMeshParticle input) : SV_TARGET
+ 	FString BuildSurfaceMain()
+ 	{
+ 		return R"(
++MaterialSurfaceVSOutput VS_StaticMesh(VS_Input_PNCTT input)
++{
++    return BuildGeneratedSurfaceStaticMesh(input);
++}
++
++MaterialSurfaceVSOutput VS_SkeletalMesh(VS_Input_PNCTBW input)
++{
++    return BuildGeneratedSurfaceSkeletalMesh(input);
++}
++
++// Legacy entry point. Kept so old cache paths that compile "VS" still render as StaticMesh.
++MaterialSurfaceVSOutput VS(VS_Input_PNCTT input)
++{
++    return VS_StaticMesh(input);
++}
++
++MaterialSurfacePSOutput PS(MaterialSurfaceVSOutput input)
++{
++    FMaterialPixelInput MaterialInput = BuildGeneratedSurfaceMaterialInput(input);
++    FMaterialResult Result = EvaluateMaterial(MaterialInput);
++    return ShadeGeneratedSurface(input, Result);
++}
++)";
++	}
++
++	FString BuildLegacySurfaceMain()
++	{
++		return R"(
+ struct MaterialSurfaceVSOutput
+ {
+     float4 position : SV_POSITION;
+@@ -1104,9 +1185,11 @@ bool FMaterialHlslGenerator::Generate(const FMaterialGraph& Graph, const FMateri
+ 		SS << BuildPostProcessMain();
+ 		break;
+ 	case EMaterialDomain::Surface:
++		SS << BuildSurfaceMain();
++		break;
+ 	case EMaterialDomain::Decal:
+ 	default:
+-		SS << BuildSurfaceMain();
++		SS << BuildLegacySurfaceMain();
+ 		break;
+ 	}
+ 
+diff --git a/Source/Engine/Materials/MaterialManager.cpp b/Source/Engine/Materials/MaterialManager.cpp
+index cb628c7..9ff877e 100644
+--- a/Source/Engine/Materials/MaterialManager.cpp
++++ b/Source/Engine/Materials/MaterialManager.cpp
+@@ -45,7 +45,7 @@ namespace
+         }
+         return std::filesystem::exists(Full);
+     }
+-    constexpr const char* MaterialGraphGeneratorVersion = "ParticleMeshLighting_v4";
++    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedSurfacePass_v1";
+ }
+ 
+ void FMaterialManager::ScanMaterialAssets()
+diff --git a/Source/Engine/Render/Command/DrawCommandBuilder.cpp b/Source/Engine/Render/Command/DrawCommandBuilder.cpp
+index 5b8a646..abdd5fb 100644
+--- a/Source/Engine/Render/Command/DrawCommandBuilder.cpp
++++ b/Source/Engine/Render/Command/DrawCommandBuilder.cpp
+@@ -208,6 +208,27 @@ void FDrawCommandBuilder::BuildCommandForProxy(FScene& Scene, const FPrimitiveSc
+ 		FShader* SectionShader = (Section.Material && Section.Material->GetShader())
+ 			? Section.Material->GetShader()
+ 			: Proxy.GetShader();
++
++		// Generated Surface/Opaque material은 EvaluateMaterial()만 material별로 생성하고,
++		// Static/Skeletal vertex path는 공통 Surface entry point를 선택한다.
++		// CPU skinning은 이미 FVertexPNCTT로 변환된 버퍼를 쓰므로 StaticMesh entry가 맞고,
++		// GPU skinning만 FVertexPNCTBW + SkinMatrixSRV를 쓰는 SkeletalMesh entry가 필요하다.
++		if (Section.Material
++			&& Section.Material->GetGraphShaderMode() == EMaterialGraphShaderMode::Generated
++			&& Section.Material->GetDomain() == EMaterialDomain::Surface
++			&& Section.Material->GetRenderPass() == ERenderPass::Opaque
++			&& !Section.Material->GetGeneratedShaderPath().empty())
++		{
++			FShaderKey GeneratedSurfaceKey(Section.Material->GetGeneratedShaderPath());
++			GeneratedSurfaceKey.SetVertexFactory(
++				bGPUSkinning ? EShaderVertexFactory::SkeletalMesh : EShaderVertexFactory::StaticMesh);
++
++			if (FShader* GeneratedSurfaceShader = FShaderManager::Get().FindOrCreate(GeneratedSurfaceKey))
++			{
++				SectionShader = GeneratedSurfaceShader;
++			}
++		}
++
+ 		FShader* EffectiveShader = SelectEffectiveShader(SectionShader, CollectViewMode, bGPUSkinning, bWeightBoneHeatMap, bSectionIsTranslucent);
+ 
+ 		FDrawCommand& Cmd = DrawCommandList.AddCommand();
+diff --git a/Source/Engine/Render/Shader/ShaderManager.h b/Source/Engine/Render/Shader/ShaderManager.h
+index c5a1628..e0938d1 100644
+--- a/Source/Engine/Render/Shader/ShaderManager.h
++++ b/Source/Engine/Render/Shader/ShaderManager.h
+@@ -60,10 +60,28 @@ struct FShaderKey
+ 		SetVertexFactory(InVertexFactory);
+ 	}
+ 
++	void SetEntryPoints(const FString& InVSEntryPoint, const FString& InPSEntryPoint = "PS")
++	{
++		VSEntryPoint = InVSEntryPoint;
++		PSEntryPoint = InPSEntryPoint;
++		EntryHash = HashEntryPoints(VSEntryPoint, PSEntryPoint);
++	}
++
+ 	void SetVertexFactory(EShaderVertexFactory InVertexFactory)
+ 	{
+ 		VertexFactory = InVertexFactory;
+ 		VertexFactoryHash = HashVertexFactory(VertexFactory);
++
++		// Generated Surface shaders expose the same entry names as UberLit/BasePass.
++		// Particle/PostProcess generated shaders keep the legacy VS entry point.
++		if (InVertexFactory == EShaderVertexFactory::StaticMesh)
++		{
++			SetEntryPoints("VS_StaticMesh", "PS");
++		}
++		else if (InVertexFactory == EShaderVertexFactory::SkeletalMesh)
++		{
++			SetEntryPoints("VS_SkeletalMesh", "PS");
++		}
+ 	}
+ 
+ 	bool operator==(const FShaderKey& Other) const

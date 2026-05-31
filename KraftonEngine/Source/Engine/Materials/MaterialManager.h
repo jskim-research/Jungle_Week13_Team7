@@ -109,7 +109,7 @@ private:
 	
 	bool InjectDefaultParameters(json::JSON& JsonData, FMaterialTemplate* Template, UMaterial* Material);
 	bool PurgeStaleParameters(json::JSON& JsonData, FMaterialTemplate* Template);
-	void EnsureGraphMaterialJsonDefaults(const FString& MatFilePath, json::JSON& JsonData);
+	bool EnsureGraphMaterialJsonDefaults(const FString& MatFilePath, json::JSON& JsonData);
 	
 	const FString DefaultShaderPath = "Shaders/Geometry/UberLit.hlsl";
 

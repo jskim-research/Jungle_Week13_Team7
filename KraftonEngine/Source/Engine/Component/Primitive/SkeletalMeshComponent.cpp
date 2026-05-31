@@ -22,6 +22,7 @@
 #include "Serialization/Archive.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "Object/GarbageCollection.h"
@@ -68,14 +69,101 @@ namespace
 		return PxVec3(V.X, V.Y, V.Z);
 	}
 
+	FVector ToFVector(const PxVec3& V)
+	{
+		return FVector(V.x, V.y, V.z);
+	}
+
 	PxQuat ToPxQuat(const FQuat& Q)
 	{
 		return PxQuat(Q.X, Q.Y, Q.Z, Q.W);
 	}
 
+	FQuat ToFQuat(const PxQuat& Q)
+	{
+		return FQuat(Q.x, Q.y, Q.z, Q.w);
+	}
+
 	PxTransform ToPxTransform(const FTransform& Transform)
 	{
 		return PxTransform(ToPxVec3(Transform.Location), ToPxQuat(Transform.Rotation));
+	}
+
+	constexpr float MatrixDecomposeTolerance = 1.0e-6f;
+
+	FMatrix GetAffineInverseForPoseSync(const FMatrix& Matrix)
+	{
+		const double A = Matrix.M[0][0];
+		const double B = Matrix.M[0][1];
+		const double C = Matrix.M[0][2];
+		const double D = Matrix.M[1][0];
+		const double E = Matrix.M[1][1];
+		const double F = Matrix.M[1][2];
+		const double G = Matrix.M[2][0];
+		const double H = Matrix.M[2][1];
+		const double I = Matrix.M[2][2];
+
+		const double Det = A * (E * I - F * H) - B * (D * I - F * G) + C * (D * H - E * G);
+		if (std::fabs(Det) < 1.0e-12)
+		{
+			return Matrix.GetInverse();
+		}
+
+		const double InvDet = 1.0 / Det;
+
+		FMatrix Result = FMatrix::Identity;
+		Result.M[0][0] = static_cast<float>((E * I - F * H) * InvDet);
+		Result.M[0][1] = static_cast<float>((C * H - B * I) * InvDet);
+		Result.M[0][2] = static_cast<float>((B * F - C * E) * InvDet);
+		Result.M[1][0] = static_cast<float>((F * G - D * I) * InvDet);
+		Result.M[1][1] = static_cast<float>((A * I - C * G) * InvDet);
+		Result.M[1][2] = static_cast<float>((C * D - A * F) * InvDet);
+		Result.M[2][0] = static_cast<float>((D * H - E * G) * InvDet);
+		Result.M[2][1] = static_cast<float>((B * G - A * H) * InvDet);
+		Result.M[2][2] = static_cast<float>((A * E - B * D) * InvDet);
+
+		const FVector Translation = Matrix.GetLocation();
+		Result.M[3][0] = -(Translation.X * Result.M[0][0] + Translation.Y * Result.M[1][0] + Translation.Z * Result.M[2][0]);
+		Result.M[3][1] = -(Translation.X * Result.M[0][1] + Translation.Y * Result.M[1][1] + Translation.Z * Result.M[2][1]);
+		Result.M[3][2] = -(Translation.X * Result.M[0][2] + Translation.Y * Result.M[1][2] + Translation.Z * Result.M[2][2]);
+		return Result;
+	}
+
+	FTransform MatrixToPoseSyncTransform(const FMatrix& Matrix)
+	{
+		FTransform Result;
+		Result.Location = Matrix.GetLocation();
+		Result.Scale = Matrix.GetScale();
+
+		FMatrix RotationMatrix = Matrix;
+		RotationMatrix.M[3][0] = 0.0f;
+		RotationMatrix.M[3][1] = 0.0f;
+		RotationMatrix.M[3][2] = 0.0f;
+		RotationMatrix.M[3][3] = 1.0f;
+
+		if (std::fabs(Result.Scale.X) > MatrixDecomposeTolerance)
+		{
+			RotationMatrix.M[0][0] /= Result.Scale.X;
+			RotationMatrix.M[0][1] /= Result.Scale.X;
+			RotationMatrix.M[0][2] /= Result.Scale.X;
+		}
+
+		if (std::fabs(Result.Scale.Y) > MatrixDecomposeTolerance)
+		{
+			RotationMatrix.M[1][0] /= Result.Scale.Y;
+			RotationMatrix.M[1][1] /= Result.Scale.Y;
+			RotationMatrix.M[1][2] /= Result.Scale.Y;
+		}
+
+		if (std::fabs(Result.Scale.Z) > MatrixDecomposeTolerance)
+		{
+			RotationMatrix.M[2][0] /= Result.Scale.Z;
+			RotationMatrix.M[2][1] /= Result.Scale.Z;
+			RotationMatrix.M[2][2] /= Result.Scale.Z;
+		}
+
+		Result.Rotation = RotationMatrix.ToQuat().GetNormalized();
+		return Result;
 	}
 
 	int32 FindBoneIndex(const FSkeletalMesh* Asset, FName BoneName)
@@ -105,12 +193,26 @@ namespace
 		Frame.Rotation = Transform.Rotation.ToRotator();
 		return Frame;
 	}
+
+	FConstraintFrame ToConstraintFrame(const PxTransform& Transform)
+	{
+		FConstraintFrame Frame;
+		Frame.Position = ToFVector(Transform.p);
+		Frame.Rotation = ToFQuat(Transform.q.getNormalized()).ToRotator();
+		return Frame;
+	}
 }
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
 {
-	TermPhysicsAsset();
     ClearAnimInstance();
+}
+
+void USkeletalMeshComponent::EndPlay()
+{
+	TermPhysicsAsset();
+	Super::EndPlay();
+
 }
 
 FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
@@ -418,8 +520,16 @@ void USkeletalMeshComponent::ClearAnimInstance()
 
 void USkeletalMeshComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction& ThisTickFunction)
 {
+	if (bRagdollActive)
+	{
+		Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+		SyncSkeletonPoseFromBodies();
+		return;
+	}
+
     if (EvaluateAnimInstance(DeltaTime))
     {
+		SyncBodiesFromAnimationPose();
         UMeshComponent::TickComponent(DeltaTime, TickType, ThisTickFunction);
         return;
     }
@@ -510,6 +620,21 @@ void USkeletalMeshComponent::PostEditProperty(const char* PropertyName)
             LuaAnim->ReloadScript();
         }
     }
+	else if (std::strcmp(PropertyName, "bRagdollActive") == 0)
+	{
+		// Start or End Ragdoll 가 정상적으로 반영되지 않은 경우 변경 이전 값을 쓰도록 함
+		const bool bRequested = bRagdollActive;
+		if (bRequested)
+		{
+			bRagdollActive = false;
+			StartRagdoll();
+		}
+		else
+		{
+			bRagdollActive = true;
+			EndRagdoll();
+		}
+	}
 
     // AnimInstance 자체 properties 는 자식이 자체 PostEdit 처리. 컴포넌트는 dispatch 만.
     // 컴포넌트가 인식한 이름과 겹치지 않는 한 무해 (자식이 모르는 이름은 no-op).
@@ -720,17 +845,11 @@ void USkeletalMeshComponent::CreateConstraintInstancesFromPhysicsAsset()
 void USkeletalMeshComponent::UpdateConstraintFrames()
 {
 	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
-	USkeletalMesh* SkelMesh = GetSkeletalMesh();
-	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
-	if (!PhysicsAsset || !Asset)
+	if (!PhysicsAsset)
 	{
 		return;
 	}
 
-	TArray<FMatrix> BoneGlobalMatrices;
-	GetCurrentBoneGlobalMatrices(BoneGlobalMatrices);
-
-	const FMatrix ComponentWorldMatrix = GetWorldMatrix();
 	for (FConstraintInstance* Constraint : Constraints)
 	{
 		if (!Constraint)
@@ -738,21 +857,33 @@ void USkeletalMeshComponent::UpdateConstraintFrames()
 			continue;
 		}
 
-		const int32 ParentBoneIndex = FindBoneIndex(Asset, Constraint->ParentBoneName);
-		const int32 ChildBoneIndex = FindBoneIndex(Asset, Constraint->ChildBoneName);
-		if (ParentBoneIndex < 0 || ChildBoneIndex < 0 ||
-			ParentBoneIndex >= static_cast<int32>(BoneGlobalMatrices.size()) ||
-			ChildBoneIndex >= static_cast<int32>(BoneGlobalMatrices.size()))
+		const int32 ParentBodyIndex = PhysicsAsset->FindBodyIndex(Constraint->ParentBoneName);
+		const int32 ChildBodyIndex = PhysicsAsset->FindBodyIndex(Constraint->ChildBoneName);
+		if (ParentBodyIndex < 0 || ChildBodyIndex < 0)
 		{
 			continue;
 		}
 
-		const FMatrix ParentBodyWorld = BoneGlobalMatrices[ParentBoneIndex] * ComponentWorldMatrix;
-		const FMatrix ChildBodyWorld = BoneGlobalMatrices[ChildBoneIndex] * ComponentWorldMatrix;
-		const FMatrix JointWorld = ChildBodyWorld;
+		FBodyInstance* ParentBody = GetBodyInstance(ParentBodyIndex);
+		FBodyInstance* ChildBody = GetBodyInstance(ChildBodyIndex);
+		if (!ParentBody || !ChildBody || !ParentBody->Actor || !ChildBody->Actor)
+		{
+			continue;
+		}
 
-		Constraint->ParentFrame = ToConstraintFrame(JointWorld * ParentBodyWorld.GetInverse());
-		Constraint->ChildFrame = ToConstraintFrame(JointWorld * ChildBodyWorld.GetInverse());
+		const PxTransform ParentWorld = ParentBody->Actor->getGlobalPose();
+		const PxTransform ChildWorld = ChildBody->Actor->getGlobalPose();
+		if (!ParentWorld.isValid() || !ChildWorld.isValid())
+		{
+			continue;
+		}
+
+		// PxD6JointCreate()의 localFrame은 각 actor local 기준이다.
+		// 따라서 엔진 FMatrix 조합 대신 실제 PhysX actor pose로부터
+		// actor^-1 * jointWorld 형태로 계산해야 locked linear가 시작 pose에서 만족된다.
+		const PxTransform JointWorld = ChildWorld;
+		Constraint->ParentFrame = ToConstraintFrame(ParentWorld.getInverse() * JointWorld);
+		Constraint->ChildFrame = ToConstraintFrame(ChildWorld.getInverse() * JointWorld);
 	}
 }
 
@@ -818,10 +949,25 @@ void USkeletalMeshComponent::TermPhysicsAsset()
 
 void USkeletalMeshComponent::StartRagdoll()
 {
+	if (bRagdollActive) return;
+	if (!GetSkeletalMesh() || !GetPhysicsAsset()) return;
+
+	bSimulatePhysicsBeforeRagdoll = bSimulatePhysics;
+	bRagdollActive = true;
+	bSimulatePhysics = true;
+
+	EnsureBoneEditPose();
+	InstantiatePhysicsAsset();
 }
 
 void USkeletalMeshComponent::EndRagdoll()
 {
+	if (!bRagdollActive) return;
+
+	SyncSkeletonPoseFromBodies();
+	bRagdollActive = false;
+	bSimulatePhysics = bSimulatePhysicsBeforeRagdoll;
+	InstantiatePhysicsAsset();
 }
 
 void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
@@ -856,7 +1002,8 @@ void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 
 			if (BoneIndex < static_cast<int32>(BoneGlobalMatrices.size()))
 			{
-				const FTransform BodyTransform(BoneGlobalMatrices[BoneIndex] * GetWorldMatrix());
+				// Rotation 에서 Scale 분리 필수
+				const FTransform BodyTransform = MatrixToPoseSyncTransform(BoneGlobalMatrices[BoneIndex] * GetWorldMatrix());
 				Body->Actor->setGlobalPose(ToPxTransform(BodyTransform));
 			}
 			break;
@@ -866,6 +1013,105 @@ void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 
 void USkeletalMeshComponent::SyncSkeletonPoseFromBodies()
 {
+	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
+	USkeletalMesh* SkelMesh = GetSkeletalMesh();
+	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!PhysicsAsset || !Asset)
+	{
+		return;
+	}
+
+	EnsureBoneEditPose();
+
+	const int32 BoneCount = static_cast<int32>(Asset->Bones.size());
+	if (BoneCount <= 0 || BoneEditLocalMatrices.size() != Asset->Bones.size())
+	{
+		return;
+	}
+
+	TArray<FMatrix> BodyTargetGlobals;
+	TArray<uint8> bHasBodyTarget;
+	BodyTargetGlobals.resize(BoneCount, FMatrix::Identity);
+	bHasBodyTarget.resize(BoneCount, 0);
+
+	TArray<FMatrix> CurrentGlobals;
+	GetCurrentBoneGlobalMatrices(CurrentGlobals);
+	if (CurrentGlobals.size() != Asset->Bones.size())
+	{
+		return;
+	}
+
+	const FMatrix ComponentWorldInv = GetAffineInverseForPoseSync(GetWorldMatrix());
+	bool bPoseChanged = false;
+	for (int32 BodyIndex = 0; BodyIndex < static_cast<int32>(Bodies.size()); ++BodyIndex)
+	{
+		FBodyInstance* Body = Bodies[BodyIndex];
+		USkeletalBodySetup* BodySetup = PhysicsAsset->GetBodySetup(BodyIndex);
+		if (!Body || !Body->Actor || !BodySetup)
+		{
+			continue;
+		}
+
+		const int32 BoneIndex = FindBoneIndex(Asset, BodySetup->GetBoneName());
+		if (BoneIndex < 0 || BoneIndex >= BoneCount)
+		{
+			continue;
+		}
+
+		const PxTransform BodyPose = Body->Actor->getGlobalPose();
+		FTransform BodyWorldTransform;
+		BodyWorldTransform.Location = ToFVector(BodyPose.p);
+		BodyWorldTransform.Rotation = ToFQuat(BodyPose.q).GetNormalized();
+		BodyWorldTransform.Scale = FVector(1.0f, 1.0f, 1.0f);
+
+		FTransform BodyComponentTransform = MatrixToPoseSyncTransform(BodyWorldTransform.ToMatrix() * ComponentWorldInv);
+
+		// PhysX rigid actor에는 scale이 없으므로 현재 skeleton global scale을 유지한다.
+		BodyComponentTransform.Scale = MatrixToPoseSyncTransform(CurrentGlobals[BoneIndex]).Scale;
+
+		BodyTargetGlobals[BoneIndex] = BodyComponentTransform.ToMatrix();
+		bHasBodyTarget[BoneIndex] = 1;
+		bPoseChanged = true;
+	}
+
+	if (!bPoseChanged)
+	{
+		return;
+	}
+
+	TArray<FMatrix> NewGlobals;
+	NewGlobals.resize(BoneCount, FMatrix::Identity);
+	for (int32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+	{
+		const int32 ParentIndex = Asset->Bones[BoneIndex].ParentIndex;
+
+		FMatrix DesiredGlobal = FMatrix::Identity;
+		if (bHasBodyTarget[BoneIndex])
+		{
+			DesiredGlobal = BodyTargetGlobals[BoneIndex];
+		}
+		else
+		{
+			const FMatrix& CurrentLocal = BoneEditLocalMatrices[BoneIndex];
+			DesiredGlobal = (ParentIndex >= 0)
+				? CurrentLocal * NewGlobals[ParentIndex]
+				: CurrentLocal;
+		}
+
+		NewGlobals[BoneIndex] = DesiredGlobal;
+		if (ParentIndex >= 0)
+		{
+			BoneEditLocalMatrices[BoneIndex] = DesiredGlobal * GetAffineInverseForPoseSync(NewGlobals[ParentIndex]);
+		}
+		else
+		{
+			BoneEditLocalMatrices[BoneIndex] = DesiredGlobal;
+		}
+	}
+
+	bUseBoneEditPose = true;
+	RefreshSkinningAfterPoseChanged();
+	MarkWorldBoundsDirty();
 }
 
 FBodyInstance* USkeletalMeshComponent::GetBodyInstance(FName BoneName) const

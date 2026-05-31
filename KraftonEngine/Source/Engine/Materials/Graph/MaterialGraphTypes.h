@@ -18,8 +18,7 @@ enum class EMaterialDomain : uint8
 
 enum class EMaterialGraphShaderMode : uint8
 {
-	Generated,
-	UberLit
+	Generated
 };
 
 enum class EMaterialGraphPinKind : uint8

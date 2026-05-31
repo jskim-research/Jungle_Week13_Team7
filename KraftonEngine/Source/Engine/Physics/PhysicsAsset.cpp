@@ -1,5 +1,7 @@
 ﻿#include "PhysicsAsset.h"
 #include "PhysicsConstraintTemplate.h"
+#include "Object/GarbageCollection.h"
+#include "Object/Reflection/ObjectFactory.h"
 #include "Serialization/Archive.h"
 
 #include <utility>
@@ -11,7 +13,7 @@ static bool IsValidIndex(int32 Index, int32 Count)
 
 namespace
 {
-	static constexpr uint32 PhysicsAssetSerializeVersion = 1;
+	static constexpr uint32 PhysicsAssetSerializeVersion = 2;
 
 	void SerializeConstraintFrame(FArchive& Ar, FConstraintFrame& Frame)
 	{
@@ -61,6 +63,21 @@ namespace
 	}
 }
 
+void UPhysicsAsset::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	UObject::AddReferencedObjects(Collector);
+
+	for (USkeletalBodySetup* BodySetup : SkeletalBodySetups)
+	{
+		Collector.AddReferencedObject(BodySetup);
+	}
+
+	for (UPhysicsConstraintTemplate* ConstraintSetup : ConstraintSetups)
+	{
+		Collector.AddReferencedObject(ConstraintSetup);
+	}
+}
+
 void UPhysicsAsset::Serialize(FArchive& Ar)
 {
 	UObject::Serialize(Ar);
@@ -68,17 +85,36 @@ void UPhysicsAsset::Serialize(FArchive& Ar)
 	uint32 Version = PhysicsAssetSerializeVersion;
 	Ar << Version;
 
+	if (Version >= 2)
+	{
+		Ar << PreviewSkeletalMeshPath;
+		if (Ar.IsLoading() && PreviewSkeletalMeshPath.empty())
+		{
+			PreviewSkeletalMeshPath = "None";
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		PreviewSkeletalMeshPath = "None";
+	}
+
 	if (Ar.IsLoading())
 	{
 		for (USkeletalBodySetup* BodySetup : SkeletalBodySetups)
 		{
-			delete BodySetup;
+			if (BodySetup)
+			{
+				UObjectManager::Get().DestroyObject(BodySetup);
+			}
 		}
 		SkeletalBodySetups.clear();
 
 		for (UPhysicsConstraintTemplate* ConstraintSetup : ConstraintSetups)
 		{
-			delete ConstraintSetup;
+			if (ConstraintSetup)
+			{
+				UObjectManager::Get().DestroyObject(ConstraintSetup);
+			}
 		}
 		ConstraintSetups.clear();
 		CollisionDisableTable.clear();
@@ -96,7 +132,7 @@ void UPhysicsAsset::Serialize(FArchive& Ar)
 	{
 		if (Ar.IsLoading())
 		{
-			SkeletalBodySetups[BodyIndex] = new USkeletalBodySetup();
+			SkeletalBodySetups[BodyIndex] = nullptr;
 		}
 
 		USkeletalBodySetup* BodySetup = SkeletalBodySetups[BodyIndex];
@@ -109,6 +145,12 @@ void UPhysicsAsset::Serialize(FArchive& Ar)
 				SkeletalBodySetups[BodyIndex] = nullptr;
 			}
 			continue;
+		}
+
+		if (Ar.IsLoading())
+		{
+			BodySetup = UObjectManager::Get().CreateObject<USkeletalBodySetup>(this);
+			SkeletalBodySetups[BodyIndex] = BodySetup;
 		}
 
 		BodySetup->SerializeCollision(Ar);
@@ -153,7 +195,7 @@ void UPhysicsAsset::Serialize(FArchive& Ar)
 
 		if (Ar.IsLoading())
 		{
-			Template = new UPhysicsConstraintTemplate();
+			Template = UObjectManager::Get().CreateObject<UPhysicsConstraintTemplate>(this);
 			Template->SetDefaultInstance(Instance);
 			ConstraintSetups[ConstraintIndex] = Template;
 		}
@@ -280,7 +322,7 @@ USkeletalBodySetup* UPhysicsAsset::AddBodySetup(FName BoneName)
 		return Existing;
 	}
 
-	USkeletalBodySetup* NewBodySetup = new USkeletalBodySetup();
+	USkeletalBodySetup* NewBodySetup = UObjectManager::Get().CreateObject<USkeletalBodySetup>(this);
 	NewBodySetup->SetBoneName(BoneName);
 
 	SkeletalBodySetups.push_back(NewBodySetup);
@@ -329,7 +371,10 @@ bool UPhysicsAsset::RemoveBodySetupAt(int32 BodyIndex)
 	USkeletalBodySetup* Removed = SkeletalBodySetups[BodyIndex];
 	SkeletalBodySetups.erase(SkeletalBodySetups.begin() + BodyIndex);
 
-	delete Removed;
+	if (Removed)
+	{
+		UObjectManager::Get().DestroyObject(Removed);
+	}
 
 	// Body index가 밀렸으므로 index 기반 collision table은 무효화
 	CollisionDisableTable.clear();
@@ -451,7 +496,7 @@ UPhysicsConstraintTemplate* UPhysicsAsset::AddConstraintSetup(
 		return nullptr;
 	}
 
-	UPhysicsConstraintTemplate* NewConstraint = new UPhysicsConstraintTemplate();
+	UPhysicsConstraintTemplate* NewConstraint = UObjectManager::Get().CreateObject<UPhysicsConstraintTemplate>(this);
 
 	NewConstraint->SetConstraintName(ConstraintName);
 	NewConstraint->SetParentBoneName(ParentBoneName);
@@ -485,7 +530,10 @@ bool UPhysicsAsset::RemoveConstraintSetupAt(int32 ConstraintIndex)
 	UPhysicsConstraintTemplate* Removed = ConstraintSetups[ConstraintIndex];
 	ConstraintSetups.erase(ConstraintSetups.begin() + ConstraintIndex);
 
-	delete Removed;
+	if (Removed)
+	{
+		UObjectManager::Get().DestroyObject(Removed);
+	}
 
 	RefreshPhysicsAssetChange();
 

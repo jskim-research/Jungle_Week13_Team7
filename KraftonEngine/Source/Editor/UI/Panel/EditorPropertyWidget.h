@@ -55,6 +55,7 @@ private:
 	char RenameBuffer[256] = {};
 	bool bShowDuplicateWarning = false;
 	bool bOpenAddComponentPopup = false;
+	bool bPhysicsAssetListInitialized = false;
 	FString PendingStaticMeshImportPath;
 	FString* PendingStaticMeshImportTarget = nullptr;
 	int32 PendingStaticFbxSkinnedMeshPolicy = 0;

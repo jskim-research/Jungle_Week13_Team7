@@ -27,6 +27,8 @@
 #include "Editor/UI/Asset/Mesh/MeshEditorWidget.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialManager.h"
+#include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsAssetManager.h"
 
 #include <algorithm>
 #include <chrono>
@@ -695,6 +697,35 @@ void MeshElement::RenderContextMenu(ContentBrowserContext& Context)
 	if (Extension == ".uasset" && FMeshManager::IsSkeletalMeshPackage(PackagePath))
 	{
 		ImGui::Separator();
+		auto LoadSkeletalMeshForMenu = [&]() -> USkeletalMesh*
+		{
+			if (!Context.EditorEngine)
+			{
+				return nullptr;
+			}
+
+			return FMeshManager::LoadSkeletalMesh(
+				FilePath,
+				Context.EditorEngine->GetRenderer().GetFD3DDevice().GetDevice());
+		};
+
+		if (ImGui::MenuItem("Open Mesh Editor"))
+		{
+			if (USkeletalMesh* MeshAsset = LoadSkeletalMeshForMenu())
+			{
+				FMeshEditorWidget::ClearImportDurationForAsset(MeshAsset->GetAssetPathFileName());
+				Context.EditorEngine->OpenMeshEditorForObject(MeshAsset);
+			}
+		}
+
+		if (ImGui::MenuItem("Open Physics Asset Editor"))
+		{
+			if (USkeletalMesh* MeshAsset = LoadSkeletalMeshForMenu())
+			{
+				Context.EditorEngine->OpenPhysicsAssetEditorForObject(MeshAsset);
+			}
+		}
+
 		if (ImGui::MenuItem("Reimport"))
 		{
 			USkeletalMesh* Reimported = nullptr;
@@ -877,5 +908,19 @@ void ParticleSystemElement::OnDoubleLeftClicked(ContentBrowserContext& Context)
 	if (UParticleSystem* ParticleSystem = FParticleSystemManager::Get().Load(FilePath))
 	{
 		Context.EditorEngine->OpenAssetEditorForObject(ParticleSystem);
+	}
+}
+
+void PhysicsAssetElement::OnDoubleLeftClicked(ContentBrowserContext& Context)
+{
+	if (!Context.EditorEngine)
+	{
+		return;
+	}
+
+	const FString FilePath = FPaths::ToUtf8(ContentItem.Path.wstring());
+	if (UPhysicsAsset* PhysicsAsset = FPhysicsAssetManager::Get().Load(FilePath))
+	{
+		Context.EditorEngine->OpenPhysicsAssetEditorForObject(PhysicsAsset);
 	}
 }

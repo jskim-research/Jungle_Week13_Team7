@@ -1,35 +1,34 @@
 {
   "BlendState" : "Opaque",
   "Compiled" : {
-    "GeneratorVersion" : "ParticleMeshLighting_v4",
-    "GraphHash" : "492B61D5AE4F395F",
-    "GraphShaderMode" : "UberLit",
+    "BlendState" : "Opaque",
+    "Domain" : "Surface",
+    "GeneratorVersion" : "GeneratedMaterialPass_v2",
+    "GraphHash" : "586C34B451876751",
+    "GraphShaderMode" : "Generated",
     "Parameters" : {
-      "HasNormalMap" : 0.000000,
-      "SectionColor" : {
-        "Type" : "Float4",
-        "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
-      }
+
     },
     "ReceiveLighting" : false,
+    "RenderPass" : "Opaque",
     "Textures" : {
 
     }
   },
   "DepthStencilState" : "Default",
   "Domain" : "Surface",
-  "GeneratedShaderPath" : "",
+  "GeneratedShaderPath" : "Shaders/Generated/Materials/CCE0A28865D142F8_Surface.hlsl",
   "Graph" : {
     "Links" : [{
-        "FromPinId" : 48,
-        "LinkId" : 49,
-        "ToPinId" : 37
+        "FromPinId" : 66,
+        "LinkId" : 150,
+        "ToPinId" : 143
       }, {
-        "FromPinId" : 63,
-        "LinkId" : 64,
-        "ToPinId" : 32
+        "FromPinId" : 48,
+        "LinkId" : 151,
+        "ToPinId" : 148
       }],
-    "NextId" : 65,
+    "NextId" : 152,
     "Nodes" : [{
         "DisplayName" : "Material Output",
         "Mask" : "RGBA",
@@ -39,47 +38,47 @@
             "DisplayName" : "BaseColor",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 32,
+            "PinId" : 143,
             "Type" : "Float3"
           }, {
             "DisplayName" : "Normal",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 33,
+            "PinId" : 144,
             "Type" : "Float3"
           }, {
             "DisplayName" : "Roughness",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 34,
+            "PinId" : 145,
             "Type" : "Float"
           }, {
             "DisplayName" : "Metallic",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 35,
+            "PinId" : 146,
             "Type" : "Float"
           }, {
             "DisplayName" : "Emissive",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 36,
+            "PinId" : 147,
             "Type" : "Float3"
           }, {
             "DisplayName" : "Opacity",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 37,
+            "PinId" : 148,
             "Type" : "Float"
           }, {
             "DisplayName" : "OpacityMask",
             "Kind" : "Input",
             "OwningNodeId" : 31,
-            "PinId" : 38,
+            "PinId" : 149,
             "Type" : "Float"
           }],
-        "PosX" : 296.000000,
-        "PosY" : 78.000000,
+        "PosX" : 328.000000,
+        "PosY" : 102.000000,
         "TexturePath" : "",
         "TextureSlot" : "Diffuse",
         "Type" : "Output",
@@ -103,26 +102,26 @@
         "Type" : "ConstantFloat",
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }, {
-        "DisplayName" : "ConstantFloat3",
+        "DisplayName" : "TexCoord",
         "Mask" : "RGBA",
-        "NodeId" : 62,
+        "NodeId" : 65,
         "ParameterName" : "",
         "Pins" : [{
-            "DisplayName" : "Value",
+            "DisplayName" : "UV",
             "Kind" : "Output",
-            "OwningNodeId" : 62,
-            "PinId" : 63,
-            "Type" : "Float3"
+            "OwningNodeId" : 65,
+            "PinId" : 66,
+            "Type" : "Float2"
           }],
-        "PosX" : 0.000000,
-        "PosY" : -62.000000,
+        "PosX" : -2.000000,
+        "PosY" : 160.000000,
         "TexturePath" : "",
         "TextureSlot" : "Diffuse",
-        "Type" : "ConstantFloat3",
-        "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
+        "Type" : "TexCoord",
+        "Value" : [0.000000, 0.000000, 0.000000, 0.000000]
       }]
   },
-  "GraphShaderMode" : "UberLit",
+  "GraphShaderMode" : "Generated",
   "MaterialGuid" : "CCE0A28865D142F8",
   "Origin" : "FbxImport",
   "Parameters" : {
@@ -134,6 +133,6 @@
   "RasterizerState" : "SolidBackCull",
   "ReceiveLighting" : false,
   "RenderPass" : "Opaque",
-  "ShaderPath" : "Shaders/Geometry/UberLit.hlsl",
+  "ShaderPath" : "Shaders/Generated/Materials/CCE0A28865D142F8_Surface.hlsl",
   "Version" : 2
 }

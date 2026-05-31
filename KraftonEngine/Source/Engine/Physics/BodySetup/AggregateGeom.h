@@ -19,13 +19,13 @@ struct FKBoxElem
 	FRotator Rotation = FRotator(0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="X")
-	float X = 100.0f;
+	float X = 0.1f;
 
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Y")
-	float Y = 100.0f;
+	float Y = 0.1f;
 
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Z")
-	float Z = 100.0f;
+	float Z = 0.1f;
 };
 
 USTRUCT()
@@ -37,7 +37,7 @@ struct FKSphereElem
 	FVector Center = FVector(0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Radius")
-	float Radius = 50.0f;
+	float Radius = 0.2f;
 };
 
 USTRUCT()
@@ -52,10 +52,10 @@ struct FKSphylElem
 	FRotator Rotation = FRotator(0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Radius")
-	float Radius = 50.0f;
+	float Radius = 0.2f;
 
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Length")
-	float Length = 100.0f;
+	float Length = 0.5f;
 };
 
 USTRUCT()

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Core/Types/CoreTypes.h"
-#include "Core/Singleton.h"
-#include "Object/GarbageCollection.h"
 #include "Asset/AssetRegistry.h"
+#include "Core/Singleton.h"
+#include "Core/Types/CoreTypes.h"
+#include "Object/GarbageCollection.h"
 
 class UPhysicsAsset;
 
@@ -13,6 +13,7 @@ class FPhysicsAssetManager : public TSingleton<FPhysicsAssetManager>, public FGC
 
 public:
 	UPhysicsAsset* Load(const FString& Path);
+	UPhysicsAsset* Find(const FString& Path) const;
 	UPhysicsAsset* Reload(const FString& Path);
 	bool Save(UPhysicsAsset* Asset);
 	UPhysicsAsset* CreatePhysicsAsset(const FString& Path);
@@ -25,6 +26,7 @@ public:
 
 	const char* GetReferencerName() const override { return "FPhysicsAssetManager"; }
 	void AddReferencedObjects(FReferenceCollector& Collector) override;
+	void ClearCache();
 
 private:
 	TMap<FString, UPhysicsAsset*> LoadedPhysicsAssets;

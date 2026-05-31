@@ -1,4 +1,4 @@
-// Generated from Content/Material/Auto/M_UE4Man_Body.mat
+// Generated from Content/Material/Material_Emitter0_5.mat
 // Domain: Surface
 
 #include "Common/ConstantBuffers.hlsli"
@@ -8,17 +8,19 @@
 #include "Common/ForwardLighting.hlsli"
 #include "Common/GeneratedSurfacePass.hlsli"
 
+Texture2D Tex_Diffuse : register(t0);
+
 FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
 {
-    float2 n_65 = Input.UV0;
-    float n_47 = 1.000000f;
+    float2 n_32 = Input.UV0;
+    float4 n_17 = Tex_Diffuse.Sample(LinearWrapSampler, n_32);
     FMaterialResult Result;
-    Result.BaseColor = float3(n_65, 0.0f);
+    Result.BaseColor = (n_17).xyz;
     Result.Normal = float3(0, 0, 1);
     Result.Roughness = 0.5f;
     Result.Metallic = 0.0f;
     Result.Emissive = float3(0, 0, 0);
-    Result.Opacity = n_47;
+    Result.Opacity = 1.0f;
     Result.OpacityMask = 1.0f;
     Result.NormalConnected = 0.0f;
     return Result;

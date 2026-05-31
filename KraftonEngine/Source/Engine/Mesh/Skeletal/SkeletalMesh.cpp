@@ -54,10 +54,16 @@ void USkeletalMesh::Serialize(FArchive& Ar)
 	else if (Ar.HasRemaining())
 	{
 		Ar << PhysicsAssetPath;
-		if (!PhysicsAssetPath.empty() && PhysicsAssetPath != "None")
+		if (PhysicsAssetPath.empty())
 		{
-			PhysicsAsset = FPhysicsAssetManager::Get().Load(PhysicsAssetPath);
+			PhysicsAssetPath = "None";
 		}
+		PhysicsAsset = nullptr;
+	}
+	else
+	{
+		PhysicsAssetPath = "None";
+		PhysicsAsset = nullptr;
 	}
 
 	if (Ar.IsLoading())
@@ -149,10 +155,31 @@ USkeleton* USkeletalMesh::GetSkeleton() const
 void USkeletalMesh::SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset)
 {
 	PhysicsAsset = InPhysicsAsset;
-	if (PhysicsAsset && !PhysicsAsset->GetSourcePath().empty())
+	if (PhysicsAsset)
 	{
-		PhysicsAssetPath = PhysicsAsset->GetSourcePath();
+		PhysicsAssetPath = PhysicsAsset->GetSourcePath().empty()
+			? FString("None")
+			: PhysicsAsset->GetSourcePath();
 	}
+	else
+	{
+		PhysicsAssetPath = "None";
+	}
+}
+
+UPhysicsAsset* USkeletalMesh::GetPhysicsAsset() const
+{
+	if (!PhysicsAsset && !PhysicsAssetPath.empty() && PhysicsAssetPath != "None")
+	{
+		PhysicsAsset = FPhysicsAssetManager::Get().Load(PhysicsAssetPath);
+	}
+	return PhysicsAsset;
+}
+
+void USkeletalMesh::SetPhysicsAssetPath(const FString& InPath)
+{
+	PhysicsAssetPath = InPath.empty() ? FString("None") : InPath;
+	PhysicsAsset = nullptr;
 }
 
 void USkeletalMesh::SetSkeletonBinding(const FSkeletonBinding& InBinding)

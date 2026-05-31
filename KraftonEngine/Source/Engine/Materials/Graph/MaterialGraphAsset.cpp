@@ -716,7 +716,6 @@ const char* ToString(EMaterialGraphShaderMode Mode)
 {
 	switch (Mode)
 	{
-	case EMaterialGraphShaderMode::UberLit: return "UberLit";
 	case EMaterialGraphShaderMode::Generated:
 	default: return "Generated";
 	}
@@ -809,7 +808,6 @@ EMaterialDomain MaterialDomainFromString(const FString& Str, EMaterialDomain Def
 EMaterialGraphShaderMode MaterialGraphShaderModeFromString(const FString& Str, EMaterialGraphShaderMode Default)
 {
 	if (Str == "Generated") return EMaterialGraphShaderMode::Generated;
-	if (Str == "UberLit") return EMaterialGraphShaderMode::UberLit;
 	return Default;
 }
 

@@ -18,6 +18,8 @@
 #include "Mesh/MeshManager.h"
 #include "Particles/ParticleSystem.h"
 #include "Particles/ParticleSystemManager.h"
+#include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsAssetManager.h"
 #include "Mesh/Skeletal/SkeletalMesh.h"
 #include "Editor/UI/Asset/Mesh/MeshEditorWidget.h"
 #include "EditorEngine.h"
@@ -449,6 +451,9 @@ void FEditorContentBrowserWidget::RefreshContent()
 				case EAssetPackageType::ParticleSystem:
 					Element = std::make_shared<ParticleSystemElement>();
 					break;
+				case EAssetPackageType::PhysicsAsset:
+					Element = std::make_shared<PhysicsAssetElement>();
+					break;
 				case EAssetPackageType::LuaBlueprint:
 					Element = std::make_shared<LuaBlueprintElement>();
 					break;
@@ -638,6 +643,25 @@ void FEditorContentBrowserWidget::DrawContents()
 						if (UParticleSystem* ParticleSystemAsset = FParticleSystemManager::Get().Load(CreatedPath))
 						{
 							BrowserContext.EditorEngine->OpenAssetEditorForObject(ParticleSystemAsset);
+						}
+					}
+				}
+			}
+			if (ImGui::MenuItem("Physics Asset"))
+			{
+				FString CreatedPath;
+				if (FAssetFactory::CreatePhysicsAsset(
+					FPaths::ToUtf8(BrowserContext.CurrentPath),
+					"NewPhysicsAsset",
+					CreatedPath
+				))
+				{
+					Refresh();
+					if (BrowserContext.EditorEngine)
+					{
+						if (UPhysicsAsset* PhysicsAsset = FPhysicsAssetManager::Get().Load(CreatedPath))
+						{
+							BrowserContext.EditorEngine->OpenPhysicsAssetEditorForObject(PhysicsAsset);
 						}
 					}
 				}

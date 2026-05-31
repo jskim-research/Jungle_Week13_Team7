@@ -475,8 +475,11 @@ void FParticleSystemSceneProxy::SubmitSpriteEmitter(
 	FrameCB.CameraUp    = Frame.CameraUp;    FrameCB._pad1 = 0.0f;
 	Buffer.ParticleFrameCB.Update(Context, &FrameCB, sizeof(FParticleFrameConstants));
 
-    FShader* Shader = Buffer.Material && Buffer.Material->GetShader() ? Buffer.Material->GetShader()
-    : FShaderManager::Get().GetOrCreate(EShaderPath::ParticleSprite);
+    FShader* Shader = Buffer.Material
+        && Buffer.Material->GetDomain() == EMaterialDomain::ParticleSprite
+        && Buffer.Material->GetShader()
+        ? Buffer.Material->GetShader()
+        : FShaderManager::Get().GetOrCreate(EShaderPath::ParticleSprite);
 	if (!Shader)
 	{
 		UE_LOG("[ParticleProxy] SubmitSpriteEmitter: ParticleSprite shader not found (%s)", EShaderPath::ParticleSprite);

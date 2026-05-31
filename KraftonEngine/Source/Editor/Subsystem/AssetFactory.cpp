@@ -11,6 +11,8 @@
 #include "Materials/Graph/MaterialGraphAsset.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Platform/Paths.h"
+#include "Physics/PhysicsAsset.h"
+#include "Physics/PhysicsAssetManager.h"
 
 #include <chrono>
 #include <cstdio>
@@ -169,6 +171,34 @@ bool FAssetFactory::CreateParticleSystem(
 	NewAsset->SetSourcePath(FPaths::ToUtf8(AssetPath.wstring()));
 
 	bool bSaved = FParticleSystemManager::Get().Save(NewAsset);
+	UObjectManager::Get().DestroyObject(NewAsset);
+
+	if (!bSaved)
+	{
+		return false;
+	}
+
+	OutCreatedPath = FPaths::ToUtf8(AssetPath.wstring());
+	return true;
+}
+
+bool FAssetFactory::CreatePhysicsAsset(const FString& DirectoryPath, const FString& AssetName, FString& OutCreatedPath)
+{
+	const std::filesystem::path Directory(FPaths::ToWide(DirectoryPath));
+	if (!std::filesystem::exists(Directory) || !std::filesystem::is_directory(Directory))
+	{
+		return false;
+	}
+
+	const std::filesystem::path AssetPath = BuildUniqueAssetPath(
+		Directory,
+		AssetName.empty() ? FString("NewPhysicsAsset") : AssetName,
+		L".uasset");
+
+	UPhysicsAsset* NewAsset = UObjectManager::Get().CreateObject<UPhysicsAsset>();
+	NewAsset->SetSourcePath(FPaths::ToUtf8(AssetPath.wstring()));
+
+	bool bSaved = FPhysicsAssetManager::Get().Save(NewAsset);
 	UObjectManager::Get().DestroyObject(NewAsset);
 
 	if (!bSaved)

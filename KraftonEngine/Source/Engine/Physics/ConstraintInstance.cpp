@@ -75,6 +75,9 @@ void FConstraintInstance::InitConstraint(
 	}
 
 	Joint->setConstraintFlag(PxConstraintFlag::eCOLLISION_ENABLED, !bDisableCollision);
+	Joint->setConstraintFlag(PxConstraintFlag::ePROJECTION, true);
+	Joint->setProjectionLinearTolerance(1.0f);
+	Joint->setProjectionAngularTolerance(DegreesToRadians(10.0f));
 
 	Joint->setMotion(PxD6Axis::eX, ToPxD6Motion(LinearXMotion));
 	Joint->setMotion(PxD6Axis::eY, ToPxD6Motion(LinearYMotion));
