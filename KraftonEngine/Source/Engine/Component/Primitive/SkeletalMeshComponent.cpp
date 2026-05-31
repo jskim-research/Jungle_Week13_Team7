@@ -208,6 +208,16 @@ USkeletalMeshComponent::~USkeletalMeshComponent()
     ClearAnimInstance();
 }
 
+void USkeletalMeshComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (bStartRagdollOnBeginPlay)
+	{
+		StartRagdoll();
+	}
+}
+
 void USkeletalMeshComponent::EndPlay()
 {
 	TermPhysicsAsset();

@@ -28,6 +28,7 @@ public:
 	USkeletalMeshComponent() = default;
 	~USkeletalMeshComponent() override;
 
+	void BeginPlay() override;
 	void EndPlay() override;
 	void PostLoad() override;
 
@@ -143,8 +144,10 @@ protected:
 	TArray<FBodyInstance*> Bodies;
 	TArray<FConstraintInstance*> Constraints;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Save, Category = "Physics")
+	bool bStartRagdollOnBeginPlay = false;
 	bool bRagdollActive = false; 
+	
 	bool bSimulatePhysicsBeforeRagdoll = false;
 
 	UPROPERTY(Transient, Category="Physics")
