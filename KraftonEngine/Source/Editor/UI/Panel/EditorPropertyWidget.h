@@ -6,6 +6,7 @@
 #include "Editor/UI/Dialog/FbxImportOptionsDialog.h"
 
 class UActorComponent;
+class USceneComponent;
 class AActor;
 
 class FEditorPropertyWidget : public FEditorWidget
@@ -48,6 +49,7 @@ private:
 	static FString OpenFbxFileDialog();
 
 	UActorComponent* SelectedComponent = nullptr;
+	USceneComponent* SelectedSceneComponent = nullptr;
 	AActor* LastSelectedActor = nullptr;
 	bool bActorSelected = true; // true: Actor details, false: Component details
 	bool bShowEditorOnlyComponents = false;

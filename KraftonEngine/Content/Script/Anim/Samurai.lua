@@ -11,8 +11,8 @@ local RUN_PATH  = "Content/Animation/Samurai/SamuraiSprint.uasset"
 local JUMP_PATH = "Content/Animation/Samurai/SamuraiJump.uasset"
 
 -- 속도 기준은 캐릭터 이동 속도에 맞춰 조정
-local WALK_THRESHOLD = 5.0
-local RUN_THRESHOLD  = 300.0
+local WALK_THRESHOLD = 0.1
+local RUN_THRESHOLD  = 8.0
 
 -- Jump 애니메이션이 제자리 점프 1회성이면 false
 -- Falling Idle 같은 공중 루프 애니메이션이면 true 권장
