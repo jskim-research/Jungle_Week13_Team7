@@ -43,6 +43,7 @@ MaterialSurfaceVSOutput VS(VS_Input_PNCTT input)
     return VS_StaticMesh(input);
 }
 
+
 MaterialSurfacePSOutput PS(MaterialSurfaceVSOutput input)
 {
     FMaterialPixelInput MaterialInput = BuildGeneratedSurfaceMaterialInput(input);

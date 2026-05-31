@@ -3,7 +3,7 @@
   "Compiled" : {
     "BlendState" : "Opaque",
     "Domain" : "Surface",
-    "GeneratorVersion" : "GeneratedMaterialPass_v2",
+    "GeneratorVersion" : "GeneratedMaterialPass_v3",
     "GraphHash" : "C73490C99B64990E",
     "GraphShaderMode" : "Generated",
     "Parameters" : {

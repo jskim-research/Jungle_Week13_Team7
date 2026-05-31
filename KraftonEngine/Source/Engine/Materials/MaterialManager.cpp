@@ -140,7 +140,7 @@ namespace
 		}
 	}
 
-    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedMaterialPass_v2";
+    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedMaterialPass_v3";
 }
 
 void FMaterialManager::ScanMaterialAssets()
@@ -241,6 +241,45 @@ UMaterial* FMaterialManager::ReloadMaterial(const FString& MatFilePath)
 void FMaterialManager::InvalidateMaterial(const FString& MatFilePath)
 {
     MaterialCache.erase(NormalizeMaterialPath(MatFilePath));
+}
+
+bool FMaterialManager::RenameMaterialAsset(const FString& OldMatFilePath, const FString& NewMatFilePath)
+{
+    const FString OldPath = NormalizeMaterialPath(OldMatFilePath);
+    const FString NewPath = NormalizeMaterialPath(NewMatFilePath);
+
+    json::JSON JsonData = ReadJsonFile(NewPath);
+    if (JsonData.IsNull())
+    {
+        return false;
+    }
+
+    JsonData[MatKeys::PathFileName] = NewPath;
+    if (!SaveMaterialJson(NewPath, JsonData))
+    {
+        return false;
+    }
+
+    UMaterial* Existing = nullptr;
+    auto It = MaterialCache.find(OldPath);
+    if (It != MaterialCache.end())
+    {
+        Existing = It->second;
+        MaterialCache.erase(It);
+    }
+
+    if (Existing)
+    {
+        MaterialCache[NewPath] = Existing;
+        ReloadMaterial(NewPath);
+    }
+    else
+    {
+        MaterialCache.erase(NewPath);
+    }
+
+    ScanMaterialAssets();
+    return true;
 }
 
 json::JSON FMaterialManager::ReadJsonFile(const FString& FilePath) const
