@@ -398,6 +398,7 @@ json::JSON FSceneSaveManager::SerializeProperties(UObject* Obj, FSceneSaveContex
 	if (!Obj) return Props;
 
 	FSceneJsonSaveArchive Ar(Props, Context);
+	Obj->PreSave();
 	Obj->SerializeProperties(Ar, PF_Save);
 	return Props;
 }
@@ -573,6 +574,14 @@ void FSceneSaveManager::LoadSceneFromJSON(const string& filepath, FWorldContext&
 		if (Pending.Object && Pending.Properties)
 		{
 			DeserializeProperties(Pending.Object, *Pending.Properties, LoadContextState);
+		}
+	}
+
+	for (auto& It : LoadContextState.ObjectById)
+	{
+		if (It.second)
+		{
+			It.second->PostLoad();
 		}
 	}
 

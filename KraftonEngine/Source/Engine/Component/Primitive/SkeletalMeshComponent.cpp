@@ -215,6 +215,11 @@ void USkeletalMeshComponent::EndPlay()
 
 }
 
+void USkeletalMeshComponent::PostLoad()
+{
+	Super::PostLoad();
+}
+
 FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
 {
     return new FSkeletalMeshSceneProxy(this);
@@ -659,6 +664,12 @@ void USkeletalMeshComponent::PostDuplicate()
     {
         ApplyPersistentAnimInstanceSettings(AnimInstance);
     }
+}
+
+void USkeletalMeshComponent::PreSave()
+{
+    Super::PreSave();
+    CapturePersistentAnimInstanceSettings();
 }
 
 void USkeletalMeshComponent::Serialize(FArchive& Ar)

@@ -29,6 +29,7 @@ public:
 	~USkeletalMeshComponent() override;
 
 	void EndPlay() override;
+	void PostLoad() override;
 
     // Render access 섹션: SceneProxy
     FPrimitiveSceneProxy* CreateSceneProxy() override;
@@ -92,6 +93,7 @@ public:
     void GetEditableProperties(TArray<FPropertyValue>& OutProps) override;
     void PostEditProperty(const char* PropertyName) override;
     void PostDuplicate() override;
+    void PreSave() override;
     void Serialize(FArchive& Ar) override;
 
 	// Physics
