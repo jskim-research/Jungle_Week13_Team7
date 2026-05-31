@@ -87,6 +87,10 @@ void UObject::Serialize(FArchive& Ar)
 	Ar << SerializedName;
 }
 
+void UObject::PreSave()
+{
+}
+
 void UObject::SerializeProperties(FArchive& Ar, uint32 RequiredFlags)
 {
 	Ar.BeginObject();

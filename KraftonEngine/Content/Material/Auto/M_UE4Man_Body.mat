@@ -4,7 +4,7 @@
     "BlendState" : "Opaque",
     "Domain" : "Surface",
     "GeneratorVersion" : "GeneratedMaterialPass_v2",
-    "GraphHash" : "586C34B451876751",
+    "GraphHash" : "E99BF54C87424FFA",
     "GraphShaderMode" : "Generated",
     "Parameters" : {
 
@@ -20,15 +20,15 @@
   "GeneratedShaderPath" : "Shaders/Generated/Materials/CCE0A28865D142F8_Surface.hlsl",
   "Graph" : {
     "Links" : [{
-        "FromPinId" : 66,
-        "LinkId" : 150,
-        "ToPinId" : 143
-      }, {
         "FromPinId" : 48,
         "LinkId" : 151,
         "ToPinId" : 148
+      }, {
+        "FromPinId" : 153,
+        "LinkId" : 154,
+        "ToPinId" : 143
       }],
-    "NextId" : 152,
+    "NextId" : 155,
     "Nodes" : [{
         "DisplayName" : "Material Output",
         "Mask" : "RGBA",
@@ -102,23 +102,23 @@
         "Type" : "ConstantFloat",
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }, {
-        "DisplayName" : "TexCoord",
+        "DisplayName" : "ConstantFloat3",
         "Mask" : "RGBA",
-        "NodeId" : 65,
+        "NodeId" : 152,
         "ParameterName" : "",
         "Pins" : [{
-            "DisplayName" : "UV",
+            "DisplayName" : "Value",
             "Kind" : "Output",
-            "OwningNodeId" : 65,
-            "PinId" : 66,
-            "Type" : "Float2"
+            "OwningNodeId" : 152,
+            "PinId" : 153,
+            "Type" : "Float3"
           }],
-        "PosX" : -2.000000,
-        "PosY" : 160.000000,
+        "PosX" : 160.000000,
+        "PosY" : 154.000000,
         "TexturePath" : "",
         "TextureSlot" : "Diffuse",
-        "Type" : "TexCoord",
-        "Value" : [0.000000, 0.000000, 0.000000, 0.000000]
+        "Type" : "ConstantFloat3",
+        "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }]
   },
   "GraphShaderMode" : "Generated",

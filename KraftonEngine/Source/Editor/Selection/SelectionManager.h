@@ -47,8 +47,9 @@ private:
 	void SetActorProxiesSelected(AActor* Actor, bool bSelected);
 
 	TArray<AActor*> SelectedActors;
-	USceneComponent* SelectedComponent = nullptr;
+	USceneComponent* SelectedSceneComponent = nullptr;
 	UGizmoComponent* Gizmo = nullptr;
 	UWorld* World = nullptr;
 	bool bGizmoEnabled = true;
+	bool bSceneComponentSelectionCleared = false;
 };

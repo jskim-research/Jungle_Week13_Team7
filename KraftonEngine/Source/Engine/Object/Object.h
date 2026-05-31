@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Profiling/Stats/MemoryStats.h"
 #include "Object/FName.h"
@@ -90,6 +90,8 @@ public:
 	virtual UObject* Duplicate(UObject* NewOuter = nullptr) const;
 	UObject* DuplicateWithArchiveContext(UObject* NewOuter, FDuplicateArchiveContext& DuplicateContext) const;
 	virtual void Serialize(FArchive& Ar);
+	// Scene 저장 등 직전에 호출된다. SerializeProperties로 저장될 값에 runtime/cache 상태를 반영할 때 사용한다.
+	virtual void PreSave();
 	void SerializeProperties(FArchive& Ar, uint32 RequiredFlags);
 	virtual void PostDuplicate() {}
 
@@ -161,6 +163,12 @@ public:
         void*            ParametersStorage  = nullptr,
         void*            ReturnValueStorage = nullptr
         );
+
+	/**
+	 * .uasset / serialized object 등 로드 완료 후 호출
+	 * 런타임에 새로 생성된 객체 (NewObject, ...) 같은 경우엔 호출하지 않는다.
+	 */
+	virtual void PostLoad() {}
 
 protected:
 	FName ObjectName;

@@ -575,6 +575,7 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 	if (!IsValid(PrimaryActor))
 	{
 		SelectedComponent = nullptr;
+		SelectedSceneComponent = nullptr;
 		LastSelectedActor = nullptr;
 		bActorSelected = true;
 		ImGui::Text("No object selected.");
@@ -586,6 +587,7 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 	if (PrimaryActor != LastSelectedActor)
 	{
 		SelectedComponent = nullptr;
+		SelectedSceneComponent = nullptr;
 		LastSelectedActor = PrimaryActor;
 		bActorSelected = true;
 		bShowDuplicateWarning = false;
@@ -609,8 +611,9 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 
 	// 뷰포트 / Scene Manager 선택과 Property 트리 하이라이트 동기화
 	if (USceneComponent* MgrSelected = Selection.GetSelectedComponent();
-		IsValid(MgrSelected) && MgrSelected->GetOwner() == PrimaryActor)
+		IsValid(MgrSelected) && MgrSelected->GetOwner() == PrimaryActor && MgrSelected != SelectedSceneComponent)
 	{
+		SelectedSceneComponent = MgrSelected;
 		USceneComponent* Root = PrimaryActor->GetRootComponent();
 		if (IsValid(MgrSelected) && MgrSelected != Root)
 		{
@@ -622,6 +625,10 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 			bActorSelected = true;
 			SelectedComponent = nullptr;
 		}
+	}
+	else if (!IsValid(Selection.GetSelectedComponent()))
+	{
+		SelectedSceneComponent = nullptr;
 	}
 
 	// ========== 고정 영역: Actor Info (clickable) ==========
@@ -639,6 +646,7 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 		{
 			bActorSelected = true;
 			SelectedComponent = nullptr;
+			SelectedSceneComponent = nullptr;
 			Selection.Select(PrimaryActor);
 		}
 		ImGui::SameLine();
@@ -663,6 +671,7 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 			// GPU Occlusion staging에 남은 dangling proxy 포인터 무효화
 			EditorEngine->InvalidateOcclusionResults();
 			SelectedComponent = nullptr;
+			SelectedSceneComponent = nullptr;
 			LastSelectedActor = nullptr;
 			ImGui::End();
 			return;
@@ -685,6 +694,7 @@ void FEditorPropertyWidget::Render(float DeltaTime)
 		{
 			bActorSelected = true;
 			SelectedComponent = nullptr;
+			SelectedSceneComponent = nullptr;
 			Selection.Select(PrimaryActor);
 		}
 		ImGui::SetWindowFontScale(1.0f);
@@ -763,6 +773,7 @@ void FEditorPropertyWidget::DeleteSelectedComponent(AActor* Actor, UActorCompone
 
 	Actor->RemoveComponent(Comp);
 	SelectedComponent = nullptr;
+	SelectedSceneComponent = nullptr;
 
 	if (EditorEngine)
 	{
@@ -837,7 +848,7 @@ bool FEditorPropertyWidget::IsComponentTreeItemSelected(const UActorComponent* C
 	}
 
 	const USceneComponent* SceneComp = static_cast<const USceneComponent*>(Comp);
-	return EditorEngine->GetSelectionManager().GetSelectedComponent() == SceneComp;
+	return SelectedSceneComponent == SceneComp || EditorEngine->GetSelectionManager().GetSelectedComponent() == SceneComp;
 }
 
 void FEditorPropertyWidget::SelectComponentInTree(UActorComponent* Comp)
@@ -857,7 +868,13 @@ void FEditorPropertyWidget::SelectComponentInTree(UActorComponent* Comp)
 
 	if (USceneComponent* SceneComp = Cast<USceneComponent>(Comp))
 	{
+		SelectedSceneComponent = SceneComp;
 		EditorEngine->GetSelectionManager().SelectComponent(SceneComp);
+	}
+	else
+	{
+		SelectedSceneComponent = nullptr;
+		EditorEngine->GetSelectionManager().SelectComponent(nullptr);
 	}
 }
 
@@ -1691,7 +1708,12 @@ void FEditorPropertyWidget::AddComponentToActor(AActor* Actor, UClass* Component
 	}
 
 	SelectedComponent = Comp;
+	SelectedSceneComponent = Cast<USceneComponent>(Comp);
 	bActorSelected = false;
+	if (EditorEngine)
+	{
+		EditorEngine->GetSelectionManager().SelectComponent(SelectedSceneComponent);
+	}
 }
 
 bool FEditorPropertyWidget::RenderSoftObjectPropertyWidget(FPropertyValue& Prop)

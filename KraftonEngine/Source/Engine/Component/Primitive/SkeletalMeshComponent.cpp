@@ -208,11 +208,26 @@ USkeletalMeshComponent::~USkeletalMeshComponent()
     ClearAnimInstance();
 }
 
+void USkeletalMeshComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (bStartRagdollOnBeginPlay)
+	{
+		StartRagdoll();
+	}
+}
+
 void USkeletalMeshComponent::EndPlay()
 {
 	TermPhysicsAsset();
 	Super::EndPlay();
 
+}
+
+void USkeletalMeshComponent::PostLoad()
+{
+	Super::PostLoad();
 }
 
 FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
@@ -659,6 +674,12 @@ void USkeletalMeshComponent::PostDuplicate()
     {
         ApplyPersistentAnimInstanceSettings(AnimInstance);
     }
+}
+
+void USkeletalMeshComponent::PreSave()
+{
+    Super::PreSave();
+    CapturePersistentAnimInstanceSettings();
 }
 
 void USkeletalMeshComponent::Serialize(FArchive& Ar)

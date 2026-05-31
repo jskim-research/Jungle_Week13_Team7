@@ -28,7 +28,9 @@ public:
 	USkeletalMeshComponent() = default;
 	~USkeletalMeshComponent() override;
 
+	void BeginPlay() override;
 	void EndPlay() override;
+	void PostLoad() override;
 
     // Render access 섹션: SceneProxy
     FPrimitiveSceneProxy* CreateSceneProxy() override;
@@ -92,6 +94,7 @@ public:
     void GetEditableProperties(TArray<FPropertyValue>& OutProps) override;
     void PostEditProperty(const char* PropertyName) override;
     void PostDuplicate() override;
+    void PreSave() override;
     void Serialize(FArchive& Ar) override;
 
 	// Physics
@@ -141,8 +144,10 @@ protected:
 	TArray<FBodyInstance*> Bodies;
 	TArray<FConstraintInstance*> Constraints;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Save, Category = "Physics")
+	bool bStartRagdollOnBeginPlay = false;
 	bool bRagdollActive = false; 
+	
 	bool bSimulatePhysicsBeforeRagdoll = false;
 
 	UPROPERTY(Transient, Category="Physics")

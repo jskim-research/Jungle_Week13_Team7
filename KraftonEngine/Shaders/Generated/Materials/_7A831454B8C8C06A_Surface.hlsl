@@ -10,10 +10,10 @@
 
 FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
 {
-    float2 n_53 = Input.UV0;
+    float3 n_50 = float3(1.000000f, 1.000000f, 1.000000f);
     float n_47 = 1.000000f;
     FMaterialResult Result;
-    Result.BaseColor = float3(n_53, 0.0f);
+    Result.BaseColor = n_50;
     Result.Normal = float3(0, 0, 1);
     Result.Roughness = 0.5f;
     Result.Metallic = 0.0f;
