@@ -1002,7 +1002,8 @@ void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 
 			if (BoneIndex < static_cast<int32>(BoneGlobalMatrices.size()))
 			{
-				const FTransform BodyTransform(BoneGlobalMatrices[BoneIndex] * GetWorldMatrix());
+				// Rotation 에서 Scale 분리 필수
+				const FTransform BodyTransform = MatrixToPoseSyncTransform(BoneGlobalMatrices[BoneIndex] * GetWorldMatrix());
 				Body->Actor->setGlobalPose(ToPxTransform(BodyTransform));
 			}
 			break;
