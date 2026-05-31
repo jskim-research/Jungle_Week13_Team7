@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Object/Reflection/ObjectFactory.h"
 #include "Component/SceneComponent.h"
@@ -270,7 +270,7 @@ protected:
 	virtual ECollisionPropertyExposure GetCollisionPropertyExposure() const
 	{
 		return ECollisionPropertyExposure::CollisionOnly;
-	}
+	}   
 
 	FVector LocalExtents = { 0.5f, 0.5f, 0.5f };
 	mutable FVector WorldAABBMinLocation;
