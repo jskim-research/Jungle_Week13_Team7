@@ -11,6 +11,8 @@
 #include "Object/GarbageCollection.h"
 
 #include <d3d11.h>
+#include <functional>
+#include <utility>
 
 class UGizmoComponent;
 class FWindowsWindow;
@@ -34,7 +36,8 @@ public:
 	void SetPreviewWorld(UWorld* InWorld) { PreviewWorld = InWorld; }
 	void SetPreviewActor(AActor* InActor) { PreviewActor = InActor; }
 	void SetPreviewMeshComponent(USkeletalMeshComponent* InComp) { PreviewMeshComponent = InComp; }
-	void SetViewportRect(float X, float Y, float Width, float Height) { ViewportScreenRect = { X, Y, Width, Height }; }
+	void SetViewportRect(float X, float Y, float Width, float Height);
+	void SetPreviewPickHandler(std::function<bool(const FRay&)> InHandler) { PreviewPickHandler = std::move(InHandler); }
 
 	bool IsRenderable() const override { return bIsRenderable; }
 	bool IsMouseOverViewport() const override;
@@ -87,6 +90,7 @@ private:
 	UGizmoComponent* Gizmo = nullptr;
 	USkeletalMeshComponent* PreviewMeshComponent = nullptr;
 	UBoneDebugComponent* BoneDebugComponent = nullptr;
+	std::function<bool(const FRay&)> PreviewPickHandler;
 
 	UWorld* PreviewWorld = nullptr;
 	AActor* PreviewActor = nullptr;

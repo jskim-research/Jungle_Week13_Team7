@@ -15,6 +15,7 @@
 #include "Settings/EditorSettings.h"
 #include "Slate/SlateApplication.h"
 
+#include <algorithm>
 #include <imgui.h>
 
 void FMeshEditorViewportClient::Initialize(ID3D11Device* Device, uint32 Width, uint32 Height)
@@ -114,6 +115,15 @@ bool FMeshEditorViewportClient::IsMouseOverViewport() const
 	ImVec2 MousePos = ImGui::GetMousePos();
 	return MousePos.x >= ViewportScreenRect.X && MousePos.x <= (ViewportScreenRect.X + ViewportScreenRect.Width) &&
 		MousePos.y >= ViewportScreenRect.Y && MousePos.y <= (ViewportScreenRect.Y + ViewportScreenRect.Height);
+}
+
+void FMeshEditorViewportClient::SetViewportRect(float X, float Y, float Width, float Height)
+{
+	ViewportScreenRect = { X, Y, Width, Height };
+	if (Width > 0.0f && Height > 0.0f)
+	{
+		ViewTransform.AspectRatio = Width / Height;
+	}
 }
 
 bool FMeshEditorViewportClient::IsGizmoHolding() const
@@ -381,11 +391,12 @@ void FMeshEditorViewportClient::TickInteraction(float DeltaTime)
 	float LocalMouseX = MousePos.x - ViewportScreenRect.X;
 	float LocalMouseY = MousePos.y - ViewportScreenRect.Y;
 
-	float VPWidth = Viewport ? static_cast<float>(Viewport->GetWidth()) : 1.0f;
-	float VPHeight = Viewport ? static_cast<float>(Viewport->GetHeight()) : 1.0f;
+	float VPWidth = (std::max)(ViewportScreenRect.Width, 1.0f);
+	float VPHeight = (std::max)(ViewportScreenRect.Height, 1.0f);
 
 	FMinimalViewInfo POV;
 	GetCameraView(POV);
+	POV.AspectRatio = VPWidth / VPHeight;
 	FRay Ray = POV.DeprojectScreenToWorld(LocalMouseX, LocalMouseY, VPWidth, VPHeight);
 	FHitResult HitResult;
 
@@ -483,5 +494,11 @@ void FMeshEditorViewportClient::HandleDragStart(const FRay& Ray)
 	if (FRayUtils::RaycastComponent(Gizmo, Ray, Hit))
 	{
 		Gizmo->SetPressedOnHandle(true);
+		return;
+	}
+
+	if (PreviewPickHandler)
+	{
+		PreviewPickHandler(Ray);
 	}
 }
