@@ -1,4 +1,4 @@
-// Generated from Content/Material/Auto/cloth.002.mat
+// Generated from Content/Material/Auto/MI_BODY_F_01.mat
 // Domain: Surface
 
 #include "Common/ConstantBuffers.hlsli"
@@ -17,14 +17,13 @@ FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
     float4 n_14 = Input.VertexColor;
     float3 n_21 = ((n_5).rgb * (n_14).rgb);
     float3 n_25 = (float4(n_21, 0.0f)).rgb;
-    float n_28 = (float4(n_21, 0.0f)).a;
     FMaterialResult Result;
     Result.BaseColor = n_25;
     Result.Normal = float3(0, 0, 1);
     Result.Roughness = 0.5f;
     Result.Metallic = 0.0f;
     Result.Emissive = float3(0, 0, 0);
-    Result.Opacity = n_28;
+    Result.Opacity = 1.0f;
     Result.OpacityMask = 1.0f;
     Result.NormalConnected = 0.0f;
     return Result;

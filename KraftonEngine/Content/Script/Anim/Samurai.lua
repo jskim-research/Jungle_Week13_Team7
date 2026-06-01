@@ -5,10 +5,10 @@
 -- 3) Anim Instance Class = ULuaAnimInstance
 -- 4) Script File = 이 lua 파일 경로
 
-local IDLE_PATH = "Content/Animation/Samurai/SamuraiIdle.uasset"
-local WALK_PATH = "Content/Animation/Samurai/SamuraiWalk.uasset"
-local RUN_PATH  = "Content/Animation/Samurai/SamuraiSprint.uasset"
-local JUMP_PATH = "Content/Animation/Samurai/SamuraiJump.uasset"
+local IDLE_PATH = "Content/Animation/Samurai_UE4/SamuraiIdle.uasset"
+local WALK_PATH = "Content/Animation/Samurai_UE4/SamuraiWalk.uasset"
+local RUN_PATH  = "Content/Animation/Samurai_UE4/SamuraiSprint.uasset"
+local JUMP_PATH = "Content/Animation/Samurai_UE4/SamuraiJump.uasset"
 
 -- 속도 기준은 캐릭터 이동 속도에 맞춰 조정
 local WALK_THRESHOLD = 0.1

@@ -1,26 +1,26 @@
 {
-  "BlendState" : "Opaque",
+  "BlendState" : "AlphaBlend",
   "Compiled" : {
-    "BlendState" : "Opaque",
+    "BlendState" : "AlphaBlend",
     "Domain" : "Surface",
     "GeneratorVersion" : "GeneratedMaterialPass_v3",
-    "GraphHash" : "852C90FC1D785923",
+    "GraphHash" : "40B493C1601B5F78",
     "GraphShaderMode" : "Generated",
     "Parameters" : {
 
     },
     "ReceiveLighting" : false,
-    "RenderPass" : "Opaque",
+    "RenderPass" : "AlphaBlend",
     "Textures" : {
       "DiffuseTexture" : {
-        "Path" : "",
+        "Path" : "Content/Texture/T_LASHES_05.PNG",
         "Slot" : "Diffuse"
       }
     }
   },
-  "DepthStencilState" : "Default",
+  "DepthStencilState" : "DepthReadOnly",
   "Domain" : "Surface",
-  "GeneratedShaderPath" : "Shaders/Generated/Materials/D626D7F1EDB6163F_Surface.hlsl",
+  "GeneratedShaderPath" : "Shaders/Generated/Materials/_0B3ED3ACAC713DFE_Surface.hlsl",
   "Graph" : {
     "Links" : [{
         "FromPinId" : 2,
@@ -43,19 +43,15 @@
         "LinkId" : 43,
         "ToPinId" : 26
       }, {
-        "FromPinId" : 24,
-        "LinkId" : 44,
-        "ToPinId" : 29
-      }, {
         "FromPinId" : 27,
         "LinkId" : 45,
         "ToPinId" : 32
       }, {
-        "FromPinId" : 30,
-        "LinkId" : 46,
+        "FromPinId" : 12,
+        "LinkId" : 47,
         "ToPinId" : 37
       }],
-    "NextId" : 47,
+    "NextId" : 48,
     "Nodes" : [{
         "DisplayName" : "Texture Object",
         "Mask" : "RGBA",
@@ -70,7 +66,7 @@
           }],
         "PosX" : -720.000000,
         "PosY" : -80.000000,
-        "TexturePath" : "",
+        "TexturePath" : "Content/Texture/T_LASHES_05.PNG",
         "TextureSlot" : "Diffuse",
         "Type" : "TextureObject",
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
@@ -255,30 +251,6 @@
         "Type" : "ComponentMask",
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }, {
-        "DisplayName" : "Component Mask",
-        "Mask" : "A",
-        "NodeId" : 28,
-        "ParameterName" : "",
-        "Pins" : [{
-            "DisplayName" : "Value",
-            "Kind" : "Input",
-            "OwningNodeId" : 28,
-            "PinId" : 29,
-            "Type" : "Float4"
-          }, {
-            "DisplayName" : "Result",
-            "Kind" : "Output",
-            "OwningNodeId" : 28,
-            "PinId" : 30,
-            "Type" : "Float"
-          }],
-        "PosX" : 0.000000,
-        "PosY" : 180.000000,
-        "TexturePath" : "",
-        "TextureSlot" : "Diffuse",
-        "Type" : "ComponentMask",
-        "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
-      }, {
         "DisplayName" : "Material Output",
         "Mask" : "RGBA",
         "NodeId" : 31,
@@ -334,21 +306,21 @@
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }]
   },
-  "GraphShaderMode" : "UberLit",
-  "MaterialGuid" : "D626D7F1EDB6163F",
+  "GraphShaderMode" : "Generated",
+  "MaterialGuid" : "0B3ED3ACAC713DFE",
   "Origin" : "FbxImport",
   "Parameters" : {
     "HasNormalMap" : 0.000000,
-    "SectionColor" : [1.000000, 1.000000, 1.000000, 1.000000],
+    "SectionColor" : [1.000000, 1.000000, 1.000000, 0.000000],
     "_pad" : [0.000000, 0.000000, 0.000000]
   },
-  "PathFileName" : "Content/Material/Auto/cloth.002.mat",
-  "RasterizerState" : "SolidBackCull",
+  "PathFileName" : "Content/Material/Auto/MI_LASHES_05.mat",
+  "RasterizerState" : "SolidNoCull",
   "ReceiveLighting" : false,
-  "RenderPass" : "Opaque",
-  "ShaderPath" : "Shaders/Generated/Materials/D626D7F1EDB6163F_Surface.hlsl",
+  "RenderPass" : "AlphaBlend",
+  "ShaderPath" : "Shaders/Generated/Materials/_0B3ED3ACAC713DFE_Surface.hlsl",
   "Textures" : {
-    "DiffuseTexture" : "Content/Data/Samba Dancing/textures/cloth.png"
+    "DiffuseTexture" : "//Sirbotchek/share/! Template/T_LASHES_05.png"
   },
   "Version" : 2
 }
