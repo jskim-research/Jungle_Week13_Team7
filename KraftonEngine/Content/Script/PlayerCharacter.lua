@@ -261,26 +261,34 @@ end
 
 function PlayerCharacter.BeginUltimate()
     print("Begin Ultimate")
+    PlayerCharacter.IsInUltimateMode = true
     MovementComp = obj:GetCharacterMovement()
 
     if MovementComp ~= nil then
-        local tmp = World.FindActorByName("PlayerCharacter")
+        local tmp = World.FindFirstActorByTag("UltimateCamera")
         if tmp ~= nil then 
-            print("Player Found")
+            CameraManager.ToggleOwnerCamera(tmp, 0)
+            -- CameraManager.FadeOut(1.5)
+            CameraManager.SetVignette(0.1, 0.7, 0.5)
+
+            print("Movement found")
+
+            Reflection.Call(MovementComp, "SetMovementInputEnabled", false)
+            Wait(1.5)
+            -- CameraManager.FadeIn(1.5)
+            print("Wait Over")
+            Reflection.Call(MovementComp, "SetMovementInputEnabled", true)        
+            CameraManager.ToggleOwnerCamera(obj, 0)
         end
-
-        print("Movement found")
-
-        Reflection.Call(MovementComp, "SetMovementInputEnabled", false)
-        Wait(1.5)
-        print("Wait Over")
-        Reflection.Call(MovementComp, "SetMovementInputEnabled", true)        
     else
         print("Movement not found")
     end
+    
+    PlayerCharacter.IsInUltimateMode = false
 end
 
 function BeginPlay()
+    PlayerCharacter.IsInUltimateMode = false
     print("[BeginPlay] " .. obj.UUID)
 end
 
@@ -294,7 +302,7 @@ end
 function Tick(dt)
     UpdateCoroutines(dt)
 
-    if Input.GetKeyDown(VK_Q) then
+    if not PlayerCharacter.IsInUltimateMode and Input.GetKeyDown(VK_Q) then
         StartCoroutine(PlayerCharacter.BeginUltimate)
     end
 end
