@@ -265,11 +265,19 @@ function PlayerCharacter.BeginUltimate()
     MovementComp = obj:GetCharacterMovement()
 
     if MovementComp ~= nil then
-        local tmp = World.FindFirstActorByTag("UltimateCamera")
-        if tmp ~= nil then 
-            CameraManager.ToggleOwnerCamera(tmp, 0)
+        local UltimateCamera = World.FindFirstActorByTag("UltimateCamera")
+        if UltimateCamera ~= nil then 
+            local ActorLocation = Reflection.Call(obj, "GetActorLocation")
+            local ActorForward = Reflection.Call(obj, "GetActorForward")
+
+            local CameraStartLocation = ActorLocation + 20 * ActorForward
+            Reflection.Call(UltimateCamera, "SetActorLocation", CameraStartLocation)
+
+            CameraManager.ToggleOwnerCamera(UltimateCamera, 0)
             -- CameraManager.FadeOut(1.5)
-            CameraManager.SetVignette(0.1, 0.7, 0.5)
+            -- CameraManager.SetVignette(0.7, 0.7, 0.5)
+
+            
 
             print("Movement found")
 

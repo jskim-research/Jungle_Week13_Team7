@@ -2073,17 +2073,21 @@ void FLuaScriptManager::RegisterMathBindings(sol::state& Lua)
 		"Lerp", &FVector::Lerp,
 		sol::meta_function::addition, sol::overload(
 		static_cast<FVector(FVector::*)(const FVector&) const>(&FVector::operator+),
-		static_cast<FVector(FVector::*)(float) const>(&FVector::operator+)
+		static_cast<FVector(FVector::*)(float) const>(&FVector::operator+),
+		[](float Scalar, const FVector& Vector) { return Vector + Scalar; }
 	),
 		sol::meta_function::subtraction, sol::overload(
 		static_cast<FVector(FVector::*)(const FVector&) const>(&FVector::operator-),
-		static_cast<FVector(FVector::*)(float) const>(&FVector::operator-)
+		static_cast<FVector(FVector::*)(float) const>(&FVector::operator-),
+		[](float Scalar, const FVector& Vector) { return FVector(Scalar - Vector.X, Scalar - Vector.Y, Scalar - Vector.Z); }
 	),
 		sol::meta_function::multiplication, sol::overload(
 		static_cast<FVector(FVector::*)(const FVector&) const>(&FVector::operator*),
-		static_cast<FVector(FVector::*)(float) const>(&FVector::operator*)
+		static_cast<FVector(FVector::*)(float) const>(&FVector::operator*),
+		[](float Scalar, const FVector& Vector) { return Vector * Scalar; }
 	),
 		sol::meta_function::division, &FVector::operator/,
+		sol::meta_function::unary_minus, static_cast<FVector(FVector::*)() const>(&FVector::operator-),
 		"Zero", []() { return FVector::ZeroVector; },
 		"One", []() { return FVector::OneVector; },
 		"Up", []() { return FVector::UpVector; },

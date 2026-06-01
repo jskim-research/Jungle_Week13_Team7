@@ -85,7 +85,7 @@ public:
 	}
 
 	// Transform — Location
-	UFUNCTION(Pure, Category="Actor|Transform")
+	UFUNCTION(Callable, Pure, Category="Actor|Transform")
 	FVector GetActorLocation() const;
 	UFUNCTION(Callable, Category="Actor|Transform")
 	void SetActorLocation(const FVector& Location);
