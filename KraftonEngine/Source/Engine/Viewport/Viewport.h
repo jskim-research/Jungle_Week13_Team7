@@ -53,6 +53,14 @@ public:
 	ID3D11RenderTargetView* GetCullingHeatmapRTV() const { return CullingHeatmapRTV; }
 	ID3D11ShaderResourceView* GetCullingHeatmapSRV() const { return CullingHeatmapSRV; }
 
+	// DOF temp RTs
+	ID3D11Texture2D* GetDOFCoCTexture() const { return DOFCoCTexture; }
+	ID3D11RenderTargetView* GetDOFCoCRTV() const { return DOFCoCRTV; }
+	ID3D11ShaderResourceView* GetDOFCoCSRV() const { return DOFCoCSRV; }
+	ID3D11Texture2D* GetDOFBlurTexture() const { return DOFBlurTexture; }
+	ID3D11RenderTargetView* GetDOFBlurRTV() const { return DOFBlurRTV; }
+	ID3D11ShaderResourceView* GetDOFBlurSRV() const { return DOFBlurSRV; }
+
 	const D3D11_VIEWPORT& GetViewportRect() const { return ViewportRect; }
 
 private:
@@ -91,6 +99,16 @@ private:
 	ID3D11Texture2D* CullingHeatmapTexture = nullptr;
 	ID3D11RenderTargetView* CullingHeatmapRTV = nullptr;
 	ID3D11ShaderResourceView* CullingHeatmapSRV = nullptr;
+
+	// DOF CoC RT — Setup pass output
+	ID3D11Texture2D* DOFCoCTexture = nullptr;
+	ID3D11RenderTargetView* DOFCoCRTV = nullptr;
+	ID3D11ShaderResourceView* DOFCoCSRV = nullptr;
+
+	// DOF Blur RT — Gather pass output
+	ID3D11Texture2D* DOFBlurTexture = nullptr;
+	ID3D11RenderTargetView* DOFBlurRTV = nullptr;
+	ID3D11ShaderResourceView* DOFBlurSRV = nullptr;
 
 	D3D11_VIEWPORT ViewportRect = {};
 

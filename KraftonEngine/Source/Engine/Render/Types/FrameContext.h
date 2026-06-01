@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Core/Types/CoreTypes.h"
 #include "Math/Matrix.h"
@@ -64,6 +64,12 @@ struct FFrameContext
 	ID3D11RenderTargetView*   CullingHeatmapRTV     = nullptr;
 	ID3D11ShaderResourceView* CullingHeatmapSRV     = nullptr;
 
+	// DOF temp RTs
+	ID3D11RenderTargetView*   DOFCoCRTV             = nullptr;
+	ID3D11ShaderResourceView* DOFCoCSRV             = nullptr;
+	ID3D11RenderTargetView*   DOFBlurRTV            = nullptr;
+	ID3D11ShaderResourceView* DOFBlurSRV            = nullptr;
+
 	// Cursor position relative to viewport (for debug visualization)
 	uint32 CursorViewportX = UINT32_MAX;
 	uint32 CursorViewportY = UINT32_MAX;
@@ -86,6 +92,10 @@ struct FFrameContext
 	FCameraFadeState CameraFade;
 	FCameraVignetteState CameraVignette;
 	FCameraLetterboxState CameraLetterbox;
+	bool bDepthOfFieldEnabled = false;
+	float DepthOfFieldFocalLength = 50.0f;
+	float DepthOfFieldAperture = 2.8f;
+	float DepthOfFieldFocusDistance = 1000.0f;
 
 	// Derived helpers
 	bool IsFixedOrtho() const
@@ -128,5 +138,9 @@ struct FFrameContext
 		NormalSRV               = nullptr;
 		CullingHeatmapRTV       = nullptr;
 		CullingHeatmapSRV       = nullptr;
+		DOFCoCRTV               = nullptr;
+		DOFCoCSRV               = nullptr;
+		DOFBlurRTV              = nullptr;
+		DOFBlurSRV              = nullptr;
 	}
 };

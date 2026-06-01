@@ -1,4 +1,4 @@
-#include "EditorRenderPipeline.h"
+﻿#include "EditorRenderPipeline.h"
 #include "Editor/EditorEngine.h"
 #include "Editor/Viewport/Level/LevelEditorViewportClient.h"
 #include "Editor/Viewport/EditorPreviewViewportClient.h"
@@ -268,10 +268,17 @@ void FEditorRenderPipeline::BuildFrame(FLevelEditorViewportClient* VC, const FMi
 			Frame.CameraLetterbox.Thickness = LetterboxSettings.Thickness;
 			Frame.CameraLetterbox.Color = LetterboxSettings.Color;
 		}
+
+		const FCineDepthOfFieldSettings& DepthOfFieldSettings = CineCamera->GetDepthOfFieldSettings();
+		Frame.bDepthOfFieldEnabled = DepthOfFieldSettings.bEnabled;
+		Frame.DepthOfFieldFocalLength = DepthOfFieldSettings.FocalLength;
+		Frame.DepthOfFieldAperture = DepthOfFieldSettings.Aperture;
+		Frame.DepthOfFieldFocusDistance = DepthOfFieldSettings.FocusDistance;
 	}
 	else
 	{
 		Frame.CameraLetterbox.bEnabled = false;
+		Frame.bDepthOfFieldEnabled = false;
 	}
 
 	FMinimalViewInfo RenderPOV = POV;
