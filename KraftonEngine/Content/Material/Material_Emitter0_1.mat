@@ -1,12 +1,16 @@
 {
   "BlendState" : "AlphaBlend",
   "Compiled" : {
-    "GeneratorVersion" : "ParticleMeshLighting_v3",
+    "BlendState" : "AlphaBlend",
+    "Domain" : "ParticleSprite",
+    "GeneratorVersion" : "GeneratedMaterialPass_v3",
     "GraphHash" : "B39F960DD3478C65",
+    "GraphShaderMode" : "Generated",
     "Parameters" : {
 
     },
     "ReceiveLighting" : false,
+    "RenderPass" : "AlphaBlend",
     "Textures" : {
 
     }
@@ -111,6 +115,7 @@
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }]
   },
+  "GraphShaderMode" : "Generated",
   "MaterialGuid" : "7E40EEFEEA0FC6BA0000009F176F7898",
   "PathFileName" : "Content/Material/Material_Emitter0_1.mat",
   "RasterizerState" : "SolidNoCull",

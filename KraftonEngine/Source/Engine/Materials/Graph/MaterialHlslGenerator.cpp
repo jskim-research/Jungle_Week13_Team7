@@ -846,7 +846,7 @@ namespace
 		return SS.str();
 	}
 
-	FString BuildCommonHeader(EMaterialDomain Domain, bool bReceiveLighting = false)
+	FString BuildCommonHeader(EMaterialDomain Domain, bool bReceiveLighting = false, bool bUseFog = false)
 	{
 		std::stringstream SS;
 		SS << "#include \"Common/ConstantBuffers.hlsli\"\n";
@@ -858,6 +858,11 @@ namespace
 		// static/skeletal VS, normal mapping, lighting, and MRT output.
 		if (Domain == EMaterialDomain::Surface)
 		{
+			if (bUseFog)
+			{
+				SS << "#define USE_FOG 1\n";
+				SS << "#include \"Common/Fog.hlsli\"\n";
+			}
 			SS << "#include \"Common/ForwardLighting.hlsli\"\n";
 			SS << "#include \"Common/GeneratedSurfacePass.hlsli\"\n\n";
 			return SS.str();
@@ -1050,9 +1055,10 @@ float4 PS(PS_Input_MaterialMeshParticle input) : SV_TARGET
 		return SS.str();
 	}
 
-	FString BuildSurfaceMain()
+	FString BuildSurfaceMain(bool bTranslucentPass = false)
 	{
-		return R"(
+		std::stringstream SS;
+		SS << R"(
 MaterialSurfaceVSOutput VS_StaticMesh(VS_Input_PNCTT input)
 {
     return BuildGeneratedSurfaceStaticMesh(input);
@@ -1069,6 +1075,26 @@ MaterialSurfaceVSOutput VS(VS_Input_PNCTT input)
     return VS_StaticMesh(input);
 }
 
+)";
+
+		if (bTranslucentPass)
+		{
+			SS << R"(
+float4 PS(MaterialSurfaceVSOutput input) : SV_TARGET
+{
+    FMaterialPixelInput MaterialInput = BuildGeneratedSurfaceMaterialInput(input);
+    FMaterialResult Result = EvaluateMaterial(MaterialInput);
+
+    const float3 N = ApplyGeneratedSurfaceNormal(input, Result);
+    float4 FinalColor = float4(ComputeGeneratedSurfaceLighting(input.worldPos, input.position, N, Result), Result.Opacity);
+    clip(FinalColor.a - 0.01f);
+    return ApplyFogTranslucent(FinalColor, input.worldPos, CameraWorldPos);
+}
+)";
+		}
+		else
+		{
+			SS << R"(
 MaterialSurfacePSOutput PS(MaterialSurfaceVSOutput input)
 {
     FMaterialPixelInput MaterialInput = BuildGeneratedSurfaceMaterialInput(input);
@@ -1076,6 +1102,9 @@ MaterialSurfacePSOutput PS(MaterialSurfaceVSOutput input)
     return ShadeGeneratedSurface(input, Result);
 }
 )";
+		}
+
+		return SS.str();
 	}
 
 	FString BuildLegacySurfaceMain()
@@ -1177,7 +1206,7 @@ bool FMaterialHlslGenerator::Generate(const FMaterialGraph& Graph, const FMateri
 	std::stringstream SS;
 	SS << "// Generated from " << Options.MaterialPath << "\n";
 	SS << "// Domain: " << ToString(Options.Domain) << "\n\n";
-	SS << BuildCommonHeader(Options.Domain, Options.bReceiveLighting);
+	SS << BuildCommonHeader(Options.Domain, Options.bReceiveLighting, Options.RenderPass == ERenderPass::AlphaBlend);
 	SS << Context.BuildTextureDeclarations();
 	SS << Context.BuildCBuffer();
 	SS << EvaluateMaterial;
@@ -1194,7 +1223,7 @@ bool FMaterialHlslGenerator::Generate(const FMaterialGraph& Graph, const FMateri
 		SS << BuildPostProcessMain();
 		break;
 	case EMaterialDomain::Surface:
-		SS << BuildSurfaceMain();
+		SS << BuildSurfaceMain(Options.RenderPass == ERenderPass::AlphaBlend);
 		break;
 	case EMaterialDomain::Decal:
 	default:

@@ -1,12 +1,16 @@
 {
   "BlendState" : "AlphaBlend",
   "Compiled" : {
-    "GeneratorVersion" : "ParticleMeshLighting_v4",
+    "BlendState" : "AlphaBlend",
+    "Domain" : "ParticleSprite",
+    "GeneratorVersion" : "GeneratedMaterialPass_v3",
     "GraphHash" : "A1872DB66E836FF2",
+    "GraphShaderMode" : "Generated",
     "Parameters" : {
 
     },
     "ReceiveLighting" : false,
+    "RenderPass" : "AlphaBlend",
     "Textures" : {
       "Custom0Texture" : {
         "Path" : "Content/Particle/T_Fire_F.PNG",
@@ -912,6 +916,7 @@
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }]
   },
+  "GraphShaderMode" : "Generated",
   "MaterialGuid" : "DDDFE619B008A8BB0000B824223D4600",
   "PathFileName" : "Content/Material/Material_Emitter0.mat",
   "RasterizerState" : "SolidNoCull",

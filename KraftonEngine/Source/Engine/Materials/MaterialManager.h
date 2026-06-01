@@ -74,6 +74,7 @@ public:
 	UMaterial* GetOrCreateMaterial(const FString& MatFilePath);
 	UMaterial* ReloadMaterial(const FString& MatFilePath);
 	void InvalidateMaterial(const FString& MatFilePath);
+	bool RenameMaterialAsset(const FString& OldMatFilePath, const FString& NewMatFilePath);
 	bool SaveMaterialAsset(UMaterial* Material);
 	bool SaveMaterialJson(const FString& MatFilePath, const json::JSON& JsonData);
 	bool CompileMaterialGraph(const FString& MatFilePath, json::JSON& InOutJson, FString* OutError);

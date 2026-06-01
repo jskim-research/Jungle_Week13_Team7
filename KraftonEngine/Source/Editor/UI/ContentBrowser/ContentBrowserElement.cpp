@@ -289,12 +289,29 @@ bool ContentBrowserElement::RenameTo(const FString& NewStem, FString* OutError)
 		return false;
 	}
 
+	const FString Extension = FPaths::ToUtf8(ContentItem.Path.extension());
+	FString LowerExtension = Extension;
+	std::transform(LowerExtension.begin(), LowerExtension.end(), LowerExtension.begin(), ::tolower);
+	const bool bMaterialAsset = !ContentItem.bIsDirectory && LowerExtension == ".mat";
+	const FString OldMaterialPath = bMaterialAsset
+		? FPaths::ToUtf8(ContentItem.Path.lexically_relative(FPaths::RootDir()).generic_wstring())
+		: FString();
+	const FString NewMaterialPath = bMaterialAsset
+		? FPaths::ToUtf8(NewPath.lexically_relative(FPaths::RootDir()).generic_wstring())
+		: FString();
+
 	std::error_code Ec;
 	std::filesystem::rename(ContentItem.Path, NewPath, Ec);
 	if (Ec)
 	{
 		SetError(Ec.message().c_str());
 		return false;
+	}
+
+	if (bMaterialAsset && !FMaterialManager::Get().RenameMaterialAsset(OldMaterialPath, NewMaterialPath))
+	{
+		UE_LOG("Warning: Failed to update renamed material metadata: %s -> %s",
+			OldMaterialPath.c_str(), NewMaterialPath.c_str());
 	}
 
 	ContentItem.Path = NewPath;
