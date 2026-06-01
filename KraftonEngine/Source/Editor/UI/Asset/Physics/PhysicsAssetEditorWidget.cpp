@@ -396,6 +396,154 @@ namespace
 		return FVector4(0.12f, 0.68f, 1.0f, 0.24f);
 	}
 
+	bool AcceptRayHit(float T, float& InOutBestT)
+	{
+		if (std::isfinite(T) && T >= 0.0f && T < InOutBestT)
+		{
+			InOutBestT = T;
+			return true;
+		}
+		return false;
+	}
+
+	bool IntersectRaySphere(const FRay& Ray, const FVector& Center, float Radius, float& OutT)
+	{
+		if (Radius <= 0.0f)
+		{
+			return false;
+		}
+
+		const FVector Offset = Ray.Origin - Center;
+		const float B = Offset.Dot(Ray.Direction);
+		const float C = Offset.Dot(Offset) - Radius * Radius;
+		if (C > 0.0f && B > 0.0f)
+		{
+			return false;
+		}
+
+		const float Discriminant = B * B - C;
+		if (Discriminant < 0.0f)
+		{
+			return false;
+		}
+
+		OutT = -B - std::sqrt(Discriminant);
+		if (OutT < 0.0f)
+		{
+			OutT = 0.0f;
+		}
+		return true;
+	}
+
+	bool IntersectRayBoxLocal(const FVector& Origin, const FVector& Direction, const FVector& HalfExtent, float& OutT)
+	{
+		float TMin = 0.0f;
+		float TMax = 3.402823466e+38F;
+
+		for (int32 Axis = 0; Axis < 3; ++Axis)
+		{
+			const float O = Origin.Data[Axis];
+			const float D = Direction.Data[Axis];
+			const float E = HalfExtent.Data[Axis];
+
+			if (std::abs(D) < 1.0e-6f)
+			{
+				if (O < -E || O > E)
+				{
+					return false;
+				}
+				continue;
+			}
+
+			float T1 = (-E - O) / D;
+			float T2 = ( E - O) / D;
+			if (T1 > T2)
+			{
+				std::swap(T1, T2);
+			}
+
+			TMin = (std::max)(TMin, T1);
+			TMax = (std::min)(TMax, T2);
+			if (TMin > TMax)
+			{
+				return false;
+			}
+		}
+
+		OutT = TMin;
+		return true;
+	}
+
+	bool IntersectRayBox(const FRay& Ray, const FVector& Center, const FVector& HalfExtent, const FQuat& Rotation, float& OutT)
+	{
+		if (HalfExtent.X <= 0.0f || HalfExtent.Y <= 0.0f || HalfExtent.Z <= 0.0f)
+		{
+			return false;
+		}
+
+		const FQuat InverseRotation = Rotation.Inverse();
+		const FVector LocalOrigin = InverseRotation.RotateVector(Ray.Origin - Center);
+		const FVector LocalDirection = InverseRotation.RotateVector(Ray.Direction);
+		return IntersectRayBoxLocal(LocalOrigin, LocalDirection, HalfExtent, OutT);
+	}
+
+	bool IntersectRayCapsuleX(const FRay& Ray, const FVector& Center, float Radius, float Length, const FQuat& Rotation, float& OutT)
+	{
+		if (Radius <= 0.0f)
+		{
+			return false;
+		}
+
+		const FQuat InverseRotation = Rotation.Inverse();
+		const FVector LocalOrigin = InverseRotation.RotateVector(Ray.Origin - Center);
+		const FVector LocalDirection = InverseRotation.RotateVector(Ray.Direction);
+		const float HalfLength = (std::max)(0.0f, Length * 0.5f);
+		const float RadiusSquared = Radius * Radius;
+
+		float BestT = 3.402823466e+38F;
+
+		const float A = LocalDirection.Y * LocalDirection.Y + LocalDirection.Z * LocalDirection.Z;
+		const float B = 2.0f * (LocalOrigin.Y * LocalDirection.Y + LocalOrigin.Z * LocalDirection.Z);
+		const float C = LocalOrigin.Y * LocalOrigin.Y + LocalOrigin.Z * LocalOrigin.Z - RadiusSquared;
+		const float Discriminant = B * B - 4.0f * A * C;
+		if (A > 1.0e-6f && Discriminant >= 0.0f)
+		{
+			const float SqrtDiscriminant = std::sqrt(Discriminant);
+			const float InvDenom = 0.5f / A;
+			const float T0 = (-B - SqrtDiscriminant) * InvDenom;
+			const float X0 = LocalOrigin.X + LocalDirection.X * T0;
+			if (X0 >= -HalfLength && X0 <= HalfLength)
+			{
+				AcceptRayHit(T0, BestT);
+			}
+
+			const float T1 = (-B + SqrtDiscriminant) * InvDenom;
+			const float X1 = LocalOrigin.X + LocalDirection.X * T1;
+			if (X1 >= -HalfLength && X1 <= HalfLength)
+			{
+				AcceptRayHit(T1, BestT);
+			}
+		}
+
+		float SphereT = 0.0f;
+		if (IntersectRaySphere({ LocalOrigin, LocalDirection }, FVector(-HalfLength, 0.0f, 0.0f), Radius, SphereT))
+		{
+			AcceptRayHit(SphereT, BestT);
+		}
+		if (IntersectRaySphere({ LocalOrigin, LocalDirection }, FVector(HalfLength, 0.0f, 0.0f), Radius, SphereT))
+		{
+			AcceptRayHit(SphereT, BestT);
+		}
+
+		if (BestT == 3.402823466e+38F)
+		{
+			return false;
+		}
+
+		OutT = BestT;
+		return true;
+	}
+
 	uint32 AddSolidVertex(FMeshData& MeshData, const FVector& Position, const FVector4& Color)
 	{
 		const uint32 Index = static_cast<uint32>(MeshData.Vertices.size());
@@ -1282,6 +1430,10 @@ void FPhysicsAssetEditorWidget::CreatePreviewWorld()
 	ViewportClient.SetPreviewWorld(WorldContext.World);
 	ViewportClient.SetPreviewActor(Actor);
 	ViewportClient.SetPreviewMeshComponent(MeshComp);
+	ViewportClient.SetPreviewPickHandler([this](const FRay& Ray)
+	{
+		return HandleViewportPick(Ray);
+	});
 	ViewportClient.CreatePreviewGizmo();
 	ViewportClient.CreateBoneDebugComponent();
 
@@ -1298,6 +1450,7 @@ void FPhysicsAssetEditorWidget::CreatePreviewWorld()
 
 void FPhysicsAssetEditorWidget::DestroyPreviewWorld()
 {
+	ViewportClient.SetPreviewPickHandler(nullptr);
 	SolidPreviewComponent = nullptr;
 
 	if (UWorld* PreviewWorld = ViewportClient.GetPreviewWorld())
@@ -1335,6 +1488,18 @@ void FPhysicsAssetEditorWidget::DestroyConstraintGraphEditor()
 		ed::DestroyEditor(ConstraintGraphContext);
 		ConstraintGraphContext = nullptr;
 	}
+}
+
+void FPhysicsAssetEditorWidget::ClearConstraintGraphSelection()
+{
+	if (!ConstraintGraphContext)
+	{
+		return;
+	}
+
+	ed::SetCurrentEditor(ConstraintGraphContext);
+	ed::ClearSelection();
+	ed::SetCurrentEditor(nullptr);
 }
 
 void FPhysicsAssetEditorWidget::Render(float DeltaTime)
@@ -1806,7 +1971,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 					const FName ConstraintName = MakeUniqueConstraintName(ParentBody->GetBoneName(), ChildBody->GetBoneName());
 					if (EditingPhysicsAsset->AddConstraintSetup(ConstraintName, ParentBody->GetBoneName(), ChildBody->GetBoneName()))
 					{
-						SelectConstraint(EditingPhysicsAsset->FindConstraintIndex(ConstraintName));
+						SelectConstraint(EditingPhysicsAsset->FindConstraintIndex(ConstraintName), false);
 						MarkDirty();
 						bConstraintGraphLayoutDirty = true;
 					}
@@ -1907,12 +2072,12 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 		if (DecodeBodyNode(NodeId, BodyIndex)
 			&& (SelectionType != EPhysicsAssetEditorSelectionType::Body || BodyIndex != SelectedBodyIndex))
 		{
-			SelectBody(BodyIndex);
+			SelectBody(BodyIndex, false);
 		}
 		else if (DecodeConstraintNode(NodeId, ConstraintIndex)
 			&& (SelectionType != EPhysicsAssetEditorSelectionType::Constraint || ConstraintIndex != SelectedConstraintIndex))
 		{
-			SelectConstraint(ConstraintIndex);
+			SelectConstraint(ConstraintIndex, false);
 		}
 	}
 	else
@@ -1924,7 +2089,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 			if (DecodeConstraintLink(PhysicsLinkIdToU32(SelectedLinks[0]), ConstraintIndex)
 				&& (SelectionType != EPhysicsAssetEditorSelectionType::Constraint || ConstraintIndex != SelectedConstraintIndex))
 			{
-				SelectConstraint(ConstraintIndex);
+				SelectConstraint(ConstraintIndex, false);
 			}
 		}
 	}
@@ -1958,8 +2123,7 @@ void FPhysicsAssetEditorWidget::RenderBoneTree(const FSkeletalMesh* MeshAsset, i
 	}
 
 	ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
-	if (SelectedBoneIndex == BoneIndex
-		&& (SelectionType == EPhysicsAssetEditorSelectionType::Bone || SelectionType == EPhysicsAssetEditorSelectionType::Body))
+	if (SelectedBoneIndex == BoneIndex && SelectionType == EPhysicsAssetEditorSelectionType::Bone)
 	{
 		Flags |= ImGuiTreeNodeFlags_Selected;
 	}
@@ -1984,14 +2148,7 @@ void FPhysicsAssetEditorWidget::RenderBoneTree(const FSkeletalMesh* MeshAsset, i
 	}
 	if (ImGui::IsItemClicked())
 	{
-		if (bHasBody)
-		{
-			SelectBody(BodyIndex);
-		}
-		else
-		{
-			SelectBone(BoneIndex);
-		}
+		SelectBone(BoneIndex);
 	}
 
 	if (ImGui::BeginPopupContextItem())
@@ -2039,17 +2196,18 @@ void FPhysicsAssetEditorWidget::RenderViewportPanel()
 
 void FPhysicsAssetEditorWidget::RenderViewportPanel(ImVec2 Size)
 {
-	ImVec2 ViewportPos = ImGui::GetCursorScreenPos();
-	ViewportClient.SetViewportRect(ViewportPos.x, ViewportPos.y, Size.x, Size.y);
-
 	FViewport* VP = ViewportClient.GetViewport();
 	if (!VP || Size.x <= 0.0f || Size.y <= 0.0f)
 	{
+		ImVec2 DummyMin = ImGui::GetCursorScreenPos();
 		ImGui::Dummy(Size);
+		ViewportClient.SetViewportRect(DummyMin.x, DummyMin.y, Size.x, Size.y);
 		return;
 	}
 
-	VP->RequestResize(static_cast<uint32>(Size.x), static_cast<uint32>(Size.y));
+	const uint32 TargetWidth = static_cast<uint32>((std::max)(1.0f, std::round(Size.x)));
+	const uint32 TargetHeight = static_cast<uint32>((std::max)(1.0f, std::round(Size.y)));
+	VP->RequestResize(TargetWidth, TargetHeight);
 
 	if (VP->GetSRV())
 	{
@@ -2060,20 +2218,24 @@ void FPhysicsAssetEditorWidget::RenderViewportPanel(ImVec2 Size)
 		ImGui::Dummy(Size);
 	}
 
+	const ImVec2 ImageMin = ImGui::GetItemRectMin();
+	const ImVec2 ImageMax = ImGui::GetItemRectMax();
+	const ImVec2 ImageSize(ImageMax.x - ImageMin.x, ImageMax.y - ImageMin.y);
+	ViewportClient.SetViewportRect(ImageMin.x, ImageMin.y, ImageSize.x, ImageSize.y);
 	FSlateApplication::Get().SetViewportImGuiHovered(&ViewportClient, ImGui::IsItemHovered());
 
 	constexpr float ToolbarHeight = 28.0f;
 	ImDrawList* DrawList = ImGui::GetWindowDrawList();
-	DrawList->AddRectFilled(ViewportPos, ImVec2(ViewportPos.x + Size.x, ViewportPos.y + ToolbarHeight), IM_COL32(40, 40, 40, 255));
+	DrawList->AddRectFilled(ImageMin, ImVec2(ImageMin.x + ImageSize.x, ImageMin.y + ToolbarHeight), IM_COL32(40, 40, 40, 255));
 
 	FViewportToolbarContext Context;
 	Context.Renderer = &GEngine->GetRenderer();
 	Context.Gizmo = ViewportClient.GetGizmo();
 	Context.Settings = &FEditorSettings::Get().MeshEditorViewportSettings;
 	Context.RenderOptions = &ViewportClient.GetRenderOptions();
-	Context.ToolbarLeft = ViewportPos.x;
-	Context.ToolbarTop = ViewportPos.y;
-	Context.ToolbarWidth = Size.x;
+	Context.ToolbarLeft = ImageMin.x;
+	Context.ToolbarTop = ImageMin.y;
+	Context.ToolbarWidth = ImageSize.x;
 	Context.bReservePlayStopSpace = false;
 	Context.bShowAddActor = false;
 	Context.OnCoordSystemToggled = [&]()
@@ -2402,23 +2564,32 @@ void FPhysicsAssetEditorWidget::RenderConstraintDetails()
 	}
 }
 
-void FPhysicsAssetEditorWidget::SelectBone(int32 BoneIndex)
+void FPhysicsAssetEditorWidget::SelectBone(int32 BoneIndex, bool bClearGraphSelection)
 {
 	SelectionType = EPhysicsAssetEditorSelectionType::Bone;
 	SelectedBoneIndex = BoneIndex;
+	SelectedBodyIndex = -1;
 	SelectedConstraintIndex = -1;
 	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	SelectedPrimitiveIndex = -1;
+	if (bClearGraphSelection)
+	{
+		ClearConstraintGraphSelection();
+	}
 	SyncPreviewSelection();
 }
 
-void FPhysicsAssetEditorWidget::SelectBody(int32 BodyIndex)
+void FPhysicsAssetEditorWidget::SelectBody(int32 BodyIndex, bool bClearGraphSelection)
 {
 	SelectionType = EPhysicsAssetEditorSelectionType::Body;
 	SelectedBodyIndex = BodyIndex;
 	SelectedConstraintIndex = -1;
 	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	SelectedPrimitiveIndex = -1;
+	if (bClearGraphSelection)
+	{
+		ClearConstraintGraphSelection();
+	}
 
 	if (EditingMesh && EditingPhysicsAsset)
 	{
@@ -2431,12 +2602,16 @@ void FPhysicsAssetEditorWidget::SelectBody(int32 BodyIndex)
 	SyncPreviewSelection();
 }
 
-void FPhysicsAssetEditorWidget::SelectConstraint(int32 ConstraintIndex)
+void FPhysicsAssetEditorWidget::SelectConstraint(int32 ConstraintIndex, bool bClearGraphSelection)
 {
 	SelectionType = EPhysicsAssetEditorSelectionType::Constraint;
 	SelectedConstraintIndex = ConstraintIndex;
 	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	SelectedPrimitiveIndex = -1;
+	if (bClearGraphSelection)
+	{
+		ClearConstraintGraphSelection();
+	}
 	SyncPreviewSelection();
 }
 
@@ -2667,6 +2842,98 @@ FVector FPhysicsAssetEditorWidget::BodyLocalToWorld(const USkeletalBodySetup* Bo
 FVector FPhysicsAssetEditorWidget::WorldDeltaToBodyLocal(const USkeletalBodySetup* BodySetup, const FVector& WorldDelta) const
 {
 	return GetBodyWorldRotation(BodySetup).Inverse().RotateVector(WorldDelta);
+}
+
+bool FPhysicsAssetEditorWidget::HandleViewportPick(const FRay& Ray)
+{
+	int32 BodyIndex = -1;
+	EPhysicsAssetPrimitiveType PrimitiveType = EPhysicsAssetPrimitiveType::None;
+	int32 PrimitiveIndex = -1;
+	if (!PickBodyPrimitive(Ray, BodyIndex, PrimitiveType, PrimitiveIndex))
+	{
+		return false;
+	}
+
+	SelectBody(BodyIndex);
+	SelectPrimitive(PrimitiveType, PrimitiveIndex);
+	return true;
+}
+
+bool FPhysicsAssetEditorWidget::PickBodyPrimitive(
+	const FRay& Ray,
+	int32& OutBodyIndex,
+	EPhysicsAssetPrimitiveType& OutPrimitiveType,
+	int32& OutPrimitiveIndex) const
+{
+	OutBodyIndex = -1;
+	OutPrimitiveType = EPhysicsAssetPrimitiveType::None;
+	OutPrimitiveIndex = -1;
+
+	if (!EditingPhysicsAsset || !bShowBodies)
+	{
+		return false;
+	}
+
+	float BestT = 3.402823466e+38F;
+
+	for (int32 BodyIndex = 0; BodyIndex < EditingPhysicsAsset->GetBodySetupCount(); ++BodyIndex)
+	{
+		const USkeletalBodySetup* BodySetup = EditingPhysicsAsset->GetBodySetup(BodyIndex);
+		if (!BodySetup)
+		{
+			continue;
+		}
+
+		const FQuat BodyRotation = GetBodyWorldRotation(BodySetup);
+		const FKAggregateGeom& AggGeom = BodySetup->GetAggGeom();
+
+		for (int32 Index = 0; Index < static_cast<int32>(AggGeom.BoxElems.size()); ++Index)
+		{
+			const FKBoxElem& Box = AggGeom.BoxElems[Index];
+			const FVector Center = BodyLocalToWorld(BodySetup, Box.Center);
+			const FVector HalfExtent = FVector(Box.X, Box.Y, Box.Z) * 0.5f;
+			const FQuat Rotation = (BodyRotation * Box.Rotation.ToQuaternion()).GetNormalized();
+
+			float T = 0.0f;
+			if (IntersectRayBox(Ray, Center, HalfExtent, Rotation, T) && AcceptRayHit(T, BestT))
+			{
+				OutBodyIndex = BodyIndex;
+				OutPrimitiveType = EPhysicsAssetPrimitiveType::Box;
+				OutPrimitiveIndex = Index;
+			}
+		}
+
+		for (int32 Index = 0; Index < static_cast<int32>(AggGeom.SphereElems.size()); ++Index)
+		{
+			const FKSphereElem& Sphere = AggGeom.SphereElems[Index];
+			const FVector Center = BodyLocalToWorld(BodySetup, Sphere.Center);
+
+			float T = 0.0f;
+			if (IntersectRaySphere(Ray, Center, Sphere.Radius, T) && AcceptRayHit(T, BestT))
+			{
+				OutBodyIndex = BodyIndex;
+				OutPrimitiveType = EPhysicsAssetPrimitiveType::Sphere;
+				OutPrimitiveIndex = Index;
+			}
+		}
+
+		for (int32 Index = 0; Index < static_cast<int32>(AggGeom.SphylElems.size()); ++Index)
+		{
+			const FKSphylElem& Capsule = AggGeom.SphylElems[Index];
+			const FVector Center = BodyLocalToWorld(BodySetup, Capsule.Center);
+			const FQuat Rotation = (BodyRotation * Capsule.Rotation.ToQuaternion()).GetNormalized();
+
+			float T = 0.0f;
+			if (IntersectRayCapsuleX(Ray, Center, Capsule.Radius, Capsule.Length, Rotation, T) && AcceptRayHit(T, BestT))
+			{
+				OutBodyIndex = BodyIndex;
+				OutPrimitiveType = EPhysicsAssetPrimitiveType::Capsule;
+				OutPrimitiveIndex = Index;
+			}
+		}
+	}
+
+	return OutBodyIndex >= 0;
 }
 
 void FPhysicsAssetEditorWidget::SyncPreviewSelection()

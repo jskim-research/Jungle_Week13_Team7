@@ -68,9 +68,9 @@ private:
 	void RenderPreviewToolbar();
 	bool SaveAsset();
 
-	void SelectBone(int32 BoneIndex);
-	void SelectBody(int32 BodyIndex);
-	void SelectConstraint(int32 ConstraintIndex);
+	void SelectBone(int32 BoneIndex, bool bClearGraphSelection = true);
+	void SelectBody(int32 BodyIndex, bool bClearGraphSelection = true);
+	void SelectConstraint(int32 ConstraintIndex, bool bClearGraphSelection = true);
 	void SelectPrimitive(EPhysicsAssetPrimitiveType PrimitiveType, int32 PrimitiveIndex);
 	void SelectFirstPrimitiveForBody(USkeletalBodySetup* BodySetup);
 
@@ -91,6 +91,9 @@ private:
 	void DestroyPreviewWorld();
 	void InitializeConstraintGraphEditor();
 	void DestroyConstraintGraphEditor();
+	void ClearConstraintGraphSelection();
+	bool HandleViewportPick(const FRay& Ray);
+	bool PickBodyPrimitive(const FRay& Ray, int32& OutBodyIndex, EPhysicsAssetPrimitiveType& OutPrimitiveType, int32& OutPrimitiveIndex) const;
 	void SyncPreviewSelection();
 	void SyncPrimitiveGizmo();
 	void UpdateSolidPreview();
