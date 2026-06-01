@@ -758,7 +758,7 @@ public:
 			DefaultMaterial = UMaterial::CreateTransient(
 				ERenderPass::AlphaBlend,
 				EBlendState::AlphaBlend,
-				EDepthStencilState::DepthReadOnly,
+				EDepthStencilState::NoDepth,
 				ERasterizerState::SolidNoCull,
 				FShaderManager::Get().GetOrCreate(EShaderPath::Primitive));
 
