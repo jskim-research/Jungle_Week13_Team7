@@ -264,12 +264,17 @@ function PlayerCharacter.BeginUltimate()
     MovementComp = obj:GetCharacterMovement()
 
     if MovementComp ~= nil then
+        local tmp = World.FindActorByName("PlayerCharacter")
+        if tmp ~= nil then 
+            print("Player Found")
+        end
+
         print("Movement found")
+
         Reflection.Call(MovementComp, "SetMovementInputEnabled", false)
         Wait(1.5)
         print("Wait Over")
-        Reflection.Call(MovementComp, "SetMovementInputEnabled", true)
-        
+        Reflection.Call(MovementComp, "SetMovementInputEnabled", true)        
     else
         print("Movement not found")
     end

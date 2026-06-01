@@ -57,6 +57,23 @@ void FEditorSceneWidget::RenderActorOutliner()
 
 	ImGui::BeginChild("ActorList", ImVec2(0, 0), ImGuiChildFlags_Borders);
 
+	if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)
+		&& !ImGui::GetIO().WantTextInput
+		&& ImGui::IsKeyPressed(ImGuiKey_F2, false))
+	{
+		if (AActor* PrimaryActor = Selection.GetPrimarySelection())
+		{
+			FString CurrentName = PrimaryActor->GetFName().ToString();
+			if (CurrentName.empty())
+			{
+				CurrentName = PrimaryActor->GetClass()->GetName();
+			}
+			strncpy_s(RenameBuffer, sizeof(RenameBuffer), CurrentName.c_str(), _TRUNCATE);
+			bShowDuplicateWarning = false;
+			ImGui::OpenPopup("Rename Actor");
+		}
+	}
+
 	ImGuiListClipper Clipper;
 	Clipper.Begin(static_cast<int>(ValidActorIndices.size()));
 	while (Clipper.Step())
@@ -124,5 +141,93 @@ void FEditorSceneWidget::RenderActorOutliner()
 		}
 	}
 
+	if (ImGui::BeginPopupModal("Rename Actor", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		AActor* PrimaryActor = Selection.GetPrimarySelection();
+		if (!PrimaryActor)
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		else
+		{
+			ImGui::TextUnformatted("Rename");
+			ImGui::Separator();
+			if (ImGui::IsWindowAppearing())
+			{
+				ImGui::SetKeyboardFocusHere();
+			}
+
+			ImGui::SetNextItemWidth(320.0f);
+			const bool bSubmit = ImGui::InputText("##ActorName", RenameBuffer, sizeof(RenameBuffer),
+				ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+
+			if (bShowDuplicateWarning)
+			{
+				ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "이미 사용 중인 이름입니다.");
+			}
+
+			if (bSubmit)
+			{
+				if (RenameActor(PrimaryActor))
+				{
+					ImGui::CloseCurrentPopup();
+				}
+			}
+
+			if (ImGui::Button("OK"))
+			{
+				if (RenameActor(PrimaryActor))
+				{
+					ImGui::CloseCurrentPopup();
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel"))
+			{
+				bShowDuplicateWarning = false;
+				RenameBuffer[0] = '\0';
+				ImGui::CloseCurrentPopup();
+			}
+		}
+
+		ImGui::EndPopup();
+	}
+
 	ImGui::EndChild();
+}
+
+bool FEditorSceneWidget::RenameActor(AActor* Actor)
+{
+	if (!Actor)
+	{
+		return true;
+	}
+
+	FString NewName(RenameBuffer);
+	FString CurrentName = Actor->GetFName().ToString();
+	if (NewName == CurrentName)
+	{
+		RenameBuffer[0] = '\0';
+		bShowDuplicateWarning = false;
+		return true;
+	}
+
+	bShowDuplicateWarning = false;
+	UWorld* World = EditorEngine ? EditorEngine->GetWorld() : nullptr;
+	if (World)
+	{
+		for (AActor* OtherActor : World->GetActors())
+		{
+			if (OtherActor == Actor) continue;
+			if (OtherActor && OtherActor->GetFName().ToString() == NewName)
+			{
+				bShowDuplicateWarning = true;
+				return false;
+			}
+		}
+	}
+
+	Actor->SetFName(FName(NewName));
+	RenameBuffer[0] = '\0';
+	return true;
 }
