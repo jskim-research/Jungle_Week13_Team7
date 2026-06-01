@@ -33,6 +33,13 @@ enum class EPhysicsAssetPrimitiveType : uint8
 	Capsule
 };
 
+enum class EPhysicsAssetHierarchyMode : uint8
+{
+	BonesAndBodies,
+	BonesOnly,
+	BodiesOnly
+};
+
 class FPhysicsAssetEditorWidget : public FAssetEditorWidget
 {
 	friend class FPhysicsAssetPrimitiveGizmoTarget;
@@ -63,6 +70,8 @@ private:
 	void RenderViewportPanel(ImVec2 Size);
 	void RenderDetailsPanel();
 	void RenderBoneTree(const FSkeletalMesh* MeshAsset, int32 BoneIndex);
+	bool RenderBodyRow(int32 BodyIndex, bool bTreeNode, bool bHasChildren);
+	void RenderBodyHierarchy(const FSkeletalMesh* MeshAsset, int32 BoneIndex);
 	void RenderBodyDetails();
 	void RenderConstraintDetails();
 	void RenderPreviewToolbar();
@@ -77,10 +86,12 @@ private:
 	void AddBodyForSelectedBone();
 	void RemoveSelectedBody();
 	void AddConstraintToParentBody();
+	void AddConstraintBetweenBodies(int32 ParentBodyIndex, int32 ChildBodyIndex);
 	void RemoveSelectedConstraint();
 
 	int32 FindBoneIndexByName(const FSkeletalMesh* MeshAsset, FName BoneName) const;
 	int32 FindParentBodyIndexForBone(const FSkeletalMesh* MeshAsset, int32 BoneIndex) const;
+	bool HasBodyInSubtree(const FSkeletalMesh* MeshAsset, int32 BoneIndex) const;
 	FName MakeUniqueConstraintName(FName ParentBoneName, FName ChildBoneName) const;
 	FVector GetBodyWorldLocation(const USkeletalBodySetup* BodySetup) const;
 	FQuat GetBodyWorldRotation(const USkeletalBodySetup* BodySetup) const;
@@ -125,6 +136,7 @@ private:
 	bool bShowBodies = true;
 	bool bShowSolidBodies = true;
 	bool bShowConstraints = true;
+	EPhysicsAssetHierarchyMode HierarchyMode = EPhysicsAssetHierarchyMode::BonesAndBodies;
 	bool bConstraintGraphLayoutDirty = true;
 	uint64 ConstraintGraphTopologyHash = 0;
 	float TreePanelWidth = 300.0f;
