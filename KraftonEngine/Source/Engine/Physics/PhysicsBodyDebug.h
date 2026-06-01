@@ -46,6 +46,7 @@ struct FPhysicsBodyDebugInfo
 
 	bool bHasBody = false;
 	bool bSimulatePhysics = false;
+	bool bIsStatic = false;
 	bool bIsDynamic = false;
 	bool bIsKinematic = false;
 

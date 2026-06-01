@@ -178,6 +178,10 @@ void FEditorRenderPipeline::RenderViewport(FLevelEditorViewportClient* VC, FRend
 			if (APlayerCameraManager* CamManager = PC->GetPlayerCameraManager())
 			{
 				CamManager->GetCameraCachePOV(POV);
+				if (VP->GetWidth() > 0 && VP->GetHeight() > 0)
+				{
+					POV.AspectRatio = static_cast<float>(VP->GetWidth()) / static_cast<float>(VP->GetHeight());
+				}
 			}
 		}
 	}

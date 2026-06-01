@@ -51,6 +51,7 @@ void UStaticMeshComponent::SetStaticMesh(UStaticMesh* InMesh)
 	CacheLocalBounds();
 	MarkRenderStateDirty();
 	MarkWorldBoundsDirty();
+	NotifyPhysicsBodyDirty();
 }
 
 void UStaticMeshComponent::AddReferencedObjects(FReferenceCollector& Collector)
@@ -273,7 +274,7 @@ void UStaticMeshComponent::PostEditProperty(const char* PropertyName)
 	{
 		if (StaticMeshPath.empty() || StaticMeshPath == "None")
 		{
-			StaticMesh = nullptr;
+			SetStaticMesh(nullptr);
 		}
 		else
 		{

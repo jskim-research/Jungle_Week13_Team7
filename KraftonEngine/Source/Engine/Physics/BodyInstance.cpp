@@ -402,6 +402,11 @@ void FBodyInstance::GatherDebugInfo(FPhysicsBodyDebugInfo& OutInfo) const
 	OutInfo.WorldPosition = ToFVector(GlobalPose.p);
 	OutInfo.WorldRotation = ToFQuat(GlobalPose.q);
 
+	if (Actor->is<PxRigidStatic>())
+	{
+		OutInfo.bIsStatic = true;
+	}
+
 	if (PxRigidDynamic* Dynamic = Actor->is<PxRigidDynamic>())
 	{
 		OutInfo.bIsDynamic = true;
