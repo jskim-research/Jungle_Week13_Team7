@@ -1,4 +1,5 @@
 #include "Component/Camera/CameraComponent.h"
+#include "Component/Camera/CineCameraComponent.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "GameFramework/AActor.h"
 #include "GameFramework/World.h"
@@ -78,4 +79,12 @@ void UCameraComponent::GetCameraView(float /*DeltaTime*/, FMinimalViewInfo& OutP
 	OutPOV.NearClip    = CameraState.NearZ;
 	OutPOV.FarClip     = CameraState.FarZ;
 	OutPOV.bIsOrtho    = CameraState.bIsOrthogonal;
+
+	const UCineCameraComponent* CineCamera = Cast<UCineCameraComponent>(const_cast<UCameraComponent*>(this));
+	if (CineCamera)
+	{
+		const FCineDepthOfFieldSettings& DepthOfField = CineCamera->GetDepthOfFieldSettings();
+		const float SensorHeight = 24.0f;
+		OutPOV.FOV = 2.0f * atanf((SensorHeight * 0.5f) / DepthOfField.FocalLength);
+	}
 }

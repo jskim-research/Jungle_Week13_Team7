@@ -94,6 +94,7 @@ private:
 	FConstantBuffer CameraFadeCB;
 	FConstantBuffer CameraVignetteCB;
 	FConstantBuffer CameraLetterboxCB;
+	FConstantBuffer DOFCB;
 	FConstantBuffer BoneHeatMapCB;
 
 	// D3D 디바이스 캐시 (Create 시 설정, 변하지 않음)
