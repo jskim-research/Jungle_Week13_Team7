@@ -283,12 +283,12 @@ protected:
 	//  멤버만 변경 → BeginPlay에서 한 번 정확한 값으로 등록됨.)
 	bool bComponentHasBegunPlay = false;
 	UPROPERTY(Edit, Save, Category="Rendering", DisplayName="Visible")
-	bool bIsVisible = true;
+	bool bIsVisible = true; 
 	UPROPERTY(Edit, Save, Category="Rendering", DisplayName="Cast Shadow")
 	bool bCastShadow = true;
 	UPROPERTY(Edit, Save, Category="Rendering", DisplayName="Two Sided Shadow")
 	bool bCastShadowAsTwoSided = false;
-	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Simulate Physics")
+	UPROPERTY(Edit, Save, Category="Physics", DisplayName="Simulate Physics")
 	bool bSimulatePhysics = false;
 	UPROPERTY(Edit, Save, Category="Collision", DisplayName="Generate Overlap Events")
 	bool bGenerateOverlapEvents = false;
