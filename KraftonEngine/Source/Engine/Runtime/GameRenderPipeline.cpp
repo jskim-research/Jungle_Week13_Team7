@@ -1,4 +1,4 @@
-#include "Engine/Runtime/GameRenderPipeline.h"
+﻿#include "Engine/Runtime/GameRenderPipeline.h"
 
 #include "Engine/Runtime/GameEngine.h"
 #include "GameFramework/GameMode/PlayerController.h"
@@ -130,10 +130,17 @@ void FGameRenderPipeline::BuildFrame(FViewport* VP, const FMinimalViewInfo& POV,
 			Frame.CameraLetterbox.Thickness = LetterboxSettings.Thickness;
 			Frame.CameraLetterbox.Color = LetterboxSettings.Color;
 		}
+
+		const FCineDepthOfFieldSettings& DepthOfFieldSettings = CineCamera->GetDepthOfFieldSettings();
+		Frame.bDepthOfFieldEnabled = DepthOfFieldSettings.bEnabled;
+		Frame.DepthOfFieldFocalLength = DepthOfFieldSettings.FocalLength;
+		Frame.DepthOfFieldAperture = DepthOfFieldSettings.Aperture;
+		Frame.DepthOfFieldFocusDistance = DepthOfFieldSettings.FocusDistance;
 	}
 	else
 	{
 		Frame.CameraLetterbox.bEnabled = false;
+		Frame.bDepthOfFieldEnabled = false;
 	}
 
 	FMinimalViewInfo RenderPOV = POV;

@@ -1,4 +1,4 @@
-#include "RenderResources.h"
+﻿#include "RenderResources.h"
 #include "Render/Device/D3DDevice.h"
 #include "Materials/MaterialManager.h"
 #include "Render/Types/ForwardLightData.h"
@@ -1000,12 +1000,16 @@ void FSystemResources::UnbindSystemTextures(FD3DDevice& Device)
 {
 	ID3D11DeviceContext* Ctx = Device.GetDeviceContext();
 	ID3D11ShaderResourceView* nullSRVs[5] = {};
+	ID3D11ShaderResourceView* nullDOFSRVs[2] = {};
 
 	// t16~t20: Scene Depth/Color/Normal/Stencil/Heatmap
 	Ctx->PSSetShaderResources(ESystemTexSlot::SceneDepth, 5, nullSRVs);
 
 	// t21~t25: Shadow (CSM/SpotAtlas/PointCube/SpotData/PointData)
 	Ctx->PSSetShaderResources(ESystemTexSlot::ShadowMapCSM, 5, nullSRVs);
+
+	// t26~t27: Depth of Field (CoC/Blur)
+	Ctx->PSSetShaderResources(ESystemTexSlot::DOFCoC, 2, nullDOFSRVs);
 }
 
 // ============================================================

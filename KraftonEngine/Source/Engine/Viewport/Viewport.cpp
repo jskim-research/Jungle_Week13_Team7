@@ -78,6 +78,16 @@ void FViewport::BeginRender(ID3D11DeviceContext* Ctx, const float ClearColor[4])
 		const float HeatmapClear[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		Ctx->ClearRenderTargetView(CullingHeatmapRTV, HeatmapClear);
 	}
+	if (DOFCoCRTV)
+	{
+		const float CocClear[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		Ctx->ClearRenderTargetView(DOFCoCRTV, CocClear);
+	}
+	if (DOFBlurRTV)
+	{
+		const float BlurClear[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		Ctx->ClearRenderTargetView(DOFBlurRTV, BlurClear);
+	}
 	Ctx->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 0.0f, 0);
 	Ctx->OMSetRenderTargets(1, &RTV, DSV);
 	Ctx->RSSetViewports(1, &VPRect);
@@ -234,6 +244,33 @@ bool FViewport::CreateResources()
 	if (FAILED(hr)) return false;
 	CullingHeatmapSRV->SetPrivateData(WKPDID_D3DDebugObjectName, static_cast<UINT>(strlen("ViewportCullingHeatmapSRV")), "ViewportCullingHeatmapSRV");
 
+	// ── DOF CoC RT (R16_FLOAT) ──
+	D3D11_TEXTURE2D_DESC DOFCoCDesc = {};
+	DOFCoCDesc.Width = Width;
+	DOFCoCDesc.Height = Height;
+	DOFCoCDesc.MipLevels = 1;
+	DOFCoCDesc.ArraySize = 1;
+	DOFCoCDesc.Format = DXGI_FORMAT_R16_FLOAT;
+	DOFCoCDesc.SampleDesc.Count = 1;
+	DOFCoCDesc.Usage = D3D11_USAGE_DEFAULT;
+	DOFCoCDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+	hr = Device->CreateTexture2D(&DOFCoCDesc, nullptr, &DOFCoCTexture);
+	if (FAILED(hr)) return false;
+	hr = Device->CreateRenderTargetView(DOFCoCTexture, nullptr, &DOFCoCRTV);
+	if (FAILED(hr)) return false;
+	hr = Device->CreateShaderResourceView(DOFCoCTexture, nullptr, &DOFCoCSRV);
+	if (FAILED(hr)) return false;
+
+	// ── DOF Blur RT (R8G8B8A8_UNORM) ──
+	D3D11_TEXTURE2D_DESC DOFBlurDesc = TexDesc;
+	hr = Device->CreateTexture2D(&DOFBlurDesc, nullptr, &DOFBlurTexture);
+	if (FAILED(hr)) return false;
+	hr = Device->CreateRenderTargetView(DOFBlurTexture, nullptr, &DOFBlurRTV);
+	if (FAILED(hr)) return false;
+	hr = Device->CreateShaderResourceView(DOFBlurTexture, nullptr, &DOFBlurSRV);
+	if (FAILED(hr)) return false;
+
 	// ── 뷰포트 렉트 ──
 	ViewportRect.TopLeftX = 0.0f;
 	ViewportRect.TopLeftY = 0.0f;
@@ -247,6 +284,12 @@ bool FViewport::CreateResources()
 
 void FViewport::ReleaseResources()
 {
+	if (DOFBlurSRV) { DOFBlurSRV->Release(); DOFBlurSRV = nullptr; }
+	if (DOFBlurRTV) { DOFBlurRTV->Release(); DOFBlurRTV = nullptr; }
+	if (DOFBlurTexture) { DOFBlurTexture->Release(); DOFBlurTexture = nullptr; }
+	if (DOFCoCSRV) { DOFCoCSRV->Release(); DOFCoCSRV = nullptr; }
+	if (DOFCoCRTV) { DOFCoCRTV->Release(); DOFCoCRTV = nullptr; }
+	if (DOFCoCTexture) { DOFCoCTexture->Release(); DOFCoCTexture = nullptr; }
 	if (CullingHeatmapSRV) { CullingHeatmapSRV->Release(); CullingHeatmapSRV = nullptr; }
 	if (CullingHeatmapRTV) { CullingHeatmapRTV->Release(); CullingHeatmapRTV = nullptr; }
 	if (CullingHeatmapTexture) { CullingHeatmapTexture->Release(); CullingHeatmapTexture = nullptr; }

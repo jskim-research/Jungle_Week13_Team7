@@ -41,6 +41,7 @@ void FDrawCommandBuilder::Create(ID3D11Device* InDevice, ID3D11DeviceContext* In
 	SceneDepthCB.Create(InDevice, sizeof(FSceneDepthPConstants), "SceneDepthCB");
 	FXAACB.Create(InDevice, sizeof(FFXAAConstants), "FXAACB");
 	GammaCorrectionCB.Create(InDevice, sizeof(FGammaCorrectionConstants), "GammaCorrectionCB");
+	DOFCB.Create(InDevice, sizeof(FDOFConstants), "DOFCB");
 
 	CameraFadeCB.Create(InDevice, sizeof(FCameraFadeConstants), "CameraFadeCB");
 	CameraVignetteCB.Create(InDevice, sizeof(FCameraVignetteConstants), "CameraVignetteCB");
@@ -69,7 +70,8 @@ void FDrawCommandBuilder::Release()
 	SceneDepthCB.Release();
 	FXAACB.Release();
 	GammaCorrectionCB.Release();
-	
+	DOFCB.Release();
+
 	CameraFadeCB.Release();
 	CameraVignetteCB.Release();
 	CameraLetterboxCB.Release();
@@ -714,6 +716,49 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 			Cmd.InitFullscreenTriangle(FXAAShader, ERenderPass::FXAA,
 				PassRenderStateTable->ToDrawCommandState(ERenderPass::FXAA, ViewMode));
 			Cmd.Bindings.PerShaderCB[0] = &FXAACB;
+			Cmd.BuildSortKey(0);
+		}
+	}
+
+	if (Frame.bDepthOfFieldEnabled)
+	{
+		FDOFConstants DOFData = {};
+		DOFData.FocalLength = Frame.DepthOfFieldFocalLength;
+		DOFData.Aperture = Frame.DepthOfFieldAperture;
+		DOFData.FocusDistance = Frame.DepthOfFieldFocusDistance;
+		DOFData.NearClip = Frame.NearClip;
+		DOFData.FarClip = Frame.FarClip;
+		DOFData.ViewportWidth = Frame.ViewportWidth;
+		DOFData.ViewportHeight = Frame.ViewportHeight;
+		DOFCB.Update(Ctx, &DOFData, sizeof(FDOFConstants));
+
+		FShader* DOFSetupShader = FShaderManager::Get().GetOrCreate(EShaderPath::DOFSetup);
+		if (DOFSetupShader)
+		{
+			FDrawCommand& Cmd = DrawCommandList.AddCommand();
+			Cmd.InitFullscreenTriangle(DOFSetupShader, ERenderPass::DOFSetup,
+				PassRenderStateTable->ToDrawCommandState(ERenderPass::DOFSetup, ViewMode));
+			Cmd.Bindings.PerShaderCB[0] = &DOFCB;
+			Cmd.BuildSortKey(0);
+		}
+
+		FShader* DOFGatherShader = FShaderManager::Get().GetOrCreate(EShaderPath::DOFGather);
+		if (DOFGatherShader)
+		{
+			FDrawCommand& Cmd = DrawCommandList.AddCommand();
+			Cmd.InitFullscreenTriangle(DOFGatherShader, ERenderPass::DOFGather,
+				PassRenderStateTable->ToDrawCommandState(ERenderPass::DOFGather, ViewMode));
+			Cmd.Bindings.PerShaderCB[0] = &DOFCB;
+			Cmd.BuildSortKey(0);
+		}
+
+		FShader* DOFRecombineShader = FShaderManager::Get().GetOrCreate(EShaderPath::DOFRecombine);
+		if (DOFRecombineShader)
+		{
+			FDrawCommand& Cmd = DrawCommandList.AddCommand();
+			Cmd.InitFullscreenTriangle(DOFRecombineShader, ERenderPass::DOFRecombine,
+				PassRenderStateTable->ToDrawCommandState(ERenderPass::DOFRecombine, ViewMode));
+			Cmd.Bindings.PerShaderCB[0] = &DOFCB;
 			Cmd.BuildSortKey(0);
 		}
 	}
