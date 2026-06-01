@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "MovementComponent.h"
 #include "Core/Types/CollisionTypes.h"   // FHitResult
@@ -50,6 +50,24 @@ public:
 	// ACharacter::Tick 이 control yaw 를 capsule 에 덮어쓰기 전에 query 해서 충돌 회피
 	// (root motion 회전이 활성 중인 frame 은 control yaw 가 덮으면 회전이 토글되어 끊김).
 	bool HasYawDrivenByRootMotion() const { return bAppliedRootMotionYawThisFrame; }
+
+	UFUNCTION()
+	void SetMovementInputEnabled(bool bEnabled)
+	{
+		bMovementInputEnabled = bEnabled;
+		if (!bMovementInputEnabled)
+		{
+			AccumulatedInput = FVector::ZeroVector;
+		}
+	}
+
+	UFUNCTION(Callable, Exec, Category="CharacterMovement|Input")
+	void StopMovementImmediately();
+
+	bool IsMovementInputEnabled() const
+	{
+		return bMovementInputEnabled;
+	}
 
 	const FVector& GetVelocity() const { return Velocity; }
 	UFUNCTION(Pure, Category="CharacterMovement")
@@ -127,6 +145,7 @@ protected:
 	// 직전 TickComponent 에서 root motion yaw 가 실제 적용됐는지 (외부 query 용 — Character 의 yaw 가드).
 	// 매 Tick 시작에 reset 후 yaw 적용 시 true.
 	bool          bAppliedRootMotionYawThisFrame = false;
+	bool bMovementInputEnabled = true;
 
 	// 평면 속도 기준 yaw 를 RotationYawRate * dt 로 lerp. TickComponent 끝에서 적용.
 	void  PhysOrientToMovement(float DeltaTime);

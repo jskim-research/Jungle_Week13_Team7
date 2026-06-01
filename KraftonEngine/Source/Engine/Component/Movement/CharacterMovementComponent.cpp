@@ -1,4 +1,4 @@
-#include "CharacterMovementComponent.h"
+﻿#include "CharacterMovementComponent.h"
 
 #include "Animation/AnimInstance.h"
 #include "Component/Shape/CapsuleComponent.h"
@@ -30,6 +30,7 @@ UCharacterMovementComponent::UCharacterMovementComponent()
 
 void UCharacterMovementComponent::AddInputVector(const FVector& WorldDirection, float ScaleValue)
 {
+	if (!bMovementInputEnabled) return;
 	AccumulatedInput = AccumulatedInput + WorldDirection * ScaleValue;
 }
 
@@ -37,6 +38,14 @@ void UCharacterMovementComponent::ConsumeInputVector(FVector& Out)
 {
 	Out = AccumulatedInput;
 	AccumulatedInput = FVector(0.0f, 0.0f, 0.0f);
+}
+
+void UCharacterMovementComponent::StopMovementImmediately()
+{
+	AccumulatedInput = FVector::ZeroVector;
+	Velocity = FVector::ZeroVector;
+	PendingRootMotion = FTransform();
+	bHasPendingRootMotion = false;
 }
 
 void UCharacterMovementComponent::AddRootMotionDelta(const FTransform& LocalDelta)
@@ -98,6 +107,15 @@ void UCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	FVector Input;
 	ConsumeInputVector(Input);
 	Input.Z = 0.0f;   // XY 평면만 — Z 는 mode 가 결정.
+
+	if (!bMovementInputEnabled)
+	{
+		Input = FVector::ZeroVector;
+		Velocity.X = 0.0f;
+		Velocity.Y = 0.0f;
+		PendingRootMotion = FTransform();
+		bHasPendingRootMotion = false;
+	}
 
 	// 1) Input 처리 — XY velocity 갱신 (양 mode 공통).
 	ApplyInputToVelocity(Input, DeltaTime);

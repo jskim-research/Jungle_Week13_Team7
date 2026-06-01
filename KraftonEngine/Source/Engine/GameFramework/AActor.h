@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Object/Object.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Object/Ptr/ObjectPtr.h"
@@ -106,9 +106,9 @@ public:
 	void SetActorScale(const FVector& NewScale);
 
 	// Direction
-	UFUNCTION(Pure, Category="Actor|Transform")
+	UFUNCTION(Callable, Pure, Category="Actor|Transform")
 	FVector GetActorForward() const;
-	UFUNCTION(Pure, Category="Actor|Transform")
+	UFUNCTION(Callable, Pure, Category="Actor|Transform")
 	FVector GetActorRight() const;
 
 	UWorld* GetWorld() const;

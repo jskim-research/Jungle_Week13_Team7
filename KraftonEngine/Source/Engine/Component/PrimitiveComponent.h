@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Object/Reflection/ObjectFactory.h"
 #include "Component/SceneComponent.h"
@@ -10,6 +10,7 @@
 #include "Physics/BodyInstance.h"
 #include "Render/Types/VertexTypes.h"
 #include "Render/Proxy/DirtyFlag.h"
+#include "Core/Logging/Log.h"
 
 #include "Source/Engine/Component/PrimitiveComponent.generated.h"
 class FPrimitiveSceneProxy;

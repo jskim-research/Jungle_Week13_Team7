@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "GameFramework/Pawn/Pawn.h"
 #include "Component/Shape/CapsuleComponent.h"
@@ -50,9 +50,9 @@ public:
 	UFUNCTION(Pure, Category="Character|Components")
 	UCharacterMovementComponent* GetCharacterMovement() const { return CharacterMovement; }
 
-	// 자동 WASD 매핑/binding — SetupInputComponent 가 InputComponent 에 등록.
-	// 게임에선 보통 false 로 끄고 자식이 자기 매핑/binding 추가. 데모 편의용 기본 true.
-	bool bAutoInputWASD = true;
+	// 자동 WASD 매핑/binding — 게임별 입력은 Lua/자식 로직이 소유하고,
+	// Character 는 AddMovementInput 같은 범용 이동 API 만 제공한다.
+	bool bAutoInputWASD = false;
 
 	// 자동 mouse look — Tick 안에서 mouse delta X/Y * MouseSensitivity 로 APawn::ControlRotation 누적.
 	// capsule 자체 회전은 안 함 — SpringArm 의 bUsePawnControlRotation 가 ControlRotation 사용해
