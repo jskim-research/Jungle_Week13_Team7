@@ -155,7 +155,13 @@ static PxDefaultAllocator GPhysXAllocator;
 // ============================================================
 static PxFoundation* GSharedFoundation = nullptr;
 static PxPhysics* GSharedPhysics = nullptr;
+static PxPvd* GSharedPvd = nullptr;
+static PxPvdTransport* GSharedPvdTransport = nullptr;
 static int32 GSharedRefCount = 0;
+
+static constexpr const char* GPvdHost = "127.0.0.1";
+static constexpr int32 GPvdPort = 5425;
+static constexpr uint32 GPvdTimeoutMs = 10;
 
 static bool AcquireSharedPhysX(PxFoundation*& OutFoundation, PxPhysics*& OutPhysics)
 {
@@ -171,10 +177,50 @@ static bool AcquireSharedPhysX(PxFoundation*& OutFoundation, PxPhysics*& OutPhys
 			return false;
 		}
 
-		GSharedPhysics = PxCreatePhysics(PX_PHYSICS_VERSION, *GSharedFoundation, PxTolerancesScale());
+		GSharedPvd = PxCreatePvd(*GSharedFoundation);
+		if (GSharedPvd)
+		{
+			GSharedPvdTransport = PxDefaultPvdSocketTransportCreate(GPvdHost, GPvdPort, GPvdTimeoutMs);
+			if (GSharedPvdTransport)
+			{
+				const PxPvdInstrumentationFlags PvdFlags = PxPvdInstrumentationFlag::eALL;
+				if (GSharedPvd->connect(*GSharedPvdTransport, PvdFlags))
+				{
+					UE_LOG("[PhysX] Connected to PVD (%s:%d)", GPvdHost, GPvdPort);
+				}
+				else
+				{
+					UE_LOG("[PhysX] PVD connection unavailable (%s:%d)", GPvdHost, GPvdPort);
+				}
+			}
+			else
+			{
+				UE_LOG("[PhysX] Failed to create PVD transport");
+			}
+		}
+		else
+		{
+			UE_LOG("[PhysX] Failed to create PVD instance");
+		}
+
+		GSharedPhysics = PxCreatePhysics(PX_PHYSICS_VERSION, *GSharedFoundation, PxTolerancesScale(), true, GSharedPvd);
 		if (!GSharedPhysics)
 		{
 			UE_LOG("[PhysX] Failed to create shared physics");
+			if (GSharedPvd && GSharedPvd->isConnected())
+			{
+				GSharedPvd->disconnect();
+			}
+			if (GSharedPvdTransport)
+			{
+				GSharedPvdTransport->release();
+				GSharedPvdTransport = nullptr;
+			}
+			if (GSharedPvd)
+			{
+				GSharedPvd->release();
+				GSharedPvd = nullptr;
+			}
 			GSharedFoundation->release();
 			GSharedFoundation = nullptr;
 			return false;
@@ -199,6 +245,9 @@ static void ReleaseSharedPhysX()
 	if (GSharedRefCount == 0)
 	{
 		if (GSharedPhysics) { GSharedPhysics->release(); GSharedPhysics = nullptr; }
+		if (GSharedPvd && GSharedPvd->isConnected()) { GSharedPvd->disconnect(); }
+		if (GSharedPvdTransport) { GSharedPvdTransport->release(); GSharedPvdTransport = nullptr; }
+		if (GSharedPvd) { GSharedPvd->release(); GSharedPvd = nullptr; }
 		if (GSharedFoundation) { GSharedFoundation->release(); GSharedFoundation = nullptr; }
 	}
 }
@@ -548,6 +597,13 @@ void FPhysXPhysicsScene::Initialize(UWorld* InWorld)
 		UE_LOG("[PhysX] Failed to create Scene");
 		Shutdown();
 		return;
+	}
+
+	if (PxPvdSceneClient* PvdClient = Scene->getScenePvdClient())
+	{
+		PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONTACTS, true);
+		PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONSTRAINTS, true);
+		PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_SCENEQUERIES, true);
 	}
 
 	// Default material (static friction, dynamic friction, restitution)
