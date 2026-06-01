@@ -228,6 +228,10 @@ void UStaticMesh::SerializeBodySetupCollision(FArchive& Ar)
 	{
 		CreateBodySetup();
 	}
+	else if (Ar.IsSaving())
+	{
+		CreateBodySetup();
+	}
 
 	if (BodySetup)
 	{

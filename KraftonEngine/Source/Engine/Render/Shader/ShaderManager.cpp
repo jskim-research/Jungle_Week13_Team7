@@ -1,4 +1,4 @@
-#include "ShaderManager.h"
+﻿#include "ShaderManager.h"
 #include "Platform/Paths.h"
 #include "Core/Logging/Log.h"
 #include "Core/Logging/Notification.h"
@@ -133,6 +133,9 @@ void FShaderManager::Initialize(ID3D11Device* InDevice)
 	GetOrCreate(EShaderPath::Billboard, StartupError);
 	GetOrCreate(EShaderPath::HeightFog, StartupError);
 	GetOrCreate(EShaderPath::GammaCorrection, StartupError);
+	GetOrCreate(EShaderPath::DOFSetup, StartupError);
+	GetOrCreate(EShaderPath::DOFGather, StartupError);
+	GetOrCreate(EShaderPath::DOFRecombine, StartupError);
 	GetOrCreateShadowDepthPermutation(EShadowDepthDefines::EVertexFactory::StaticMesh, StartupError);
 	GetOrCreateShadowDepthPermutation(EShadowDepthDefines::EVertexFactory::SkeletalMesh, StartupError);
 	GetOrCreate(EShaderPath::ShadowMapVis, StartupError);

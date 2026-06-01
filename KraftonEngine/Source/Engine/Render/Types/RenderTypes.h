@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 //	Windows API Include
 #define NOMINMAX
@@ -44,6 +44,9 @@ enum class ERenderPass : uint32
 	SelectionMask,	// 선택 스텐실 마스크
 	EditorLines,	// 디버그 라인 + 그리드 (LINELIST)
 	PostProcess,	// 아웃라인 풀스크린, SceneDepth
+	DOFSetup,		// Depth of Field setup — CoC 생성
+	DOFGather,		// Depth of Field gather — blur 생성
+	DOFRecombine,	// Depth of Field recombine — 원본과 blur 합성
 	FXAA,			// FXAA 안티앨리어싱 (SceneColor 복사 후 실행)
 	GizmoOuter,		// 기즈모 외곽 (깊이 테스트 O)
 	GizmoInner,		// 기즈모 내부 (깊이 무시)
@@ -67,6 +70,9 @@ inline const char* GetRenderPassName(ERenderPass Pass)
 		"RenderPass::SelectionMask",
 		"RenderPass::EditorLines",
 		"RenderPass::PostProcess",
+		"RenderPass::DOFSetup",
+		"RenderPass::DOFGather",
+		"RenderPass::DOFRecombine",
 		"RenderPass::FXAA",
 		"RenderPass::GizmoOuter",
 		"RenderPass::GizmoInner",
@@ -93,6 +99,9 @@ namespace RenderStateStrings
 		{ "SelectionMask", (int)ERenderPass::SelectionMask },
 		{ "EditorLines",   (int)ERenderPass::EditorLines },
 		{ "PostProcess",   (int)ERenderPass::PostProcess },
+		{ "DOFSetup",      (int)ERenderPass::DOFSetup },
+		{ "DOFGather",     (int)ERenderPass::DOFGather },
+		{ "DOFRecombine",  (int)ERenderPass::DOFRecombine },
 		{ "FXAA",          (int)ERenderPass::FXAA },
 		{ "GizmoOuter",    (int)ERenderPass::GizmoOuter },
 		{ "GizmoInner",    (int)ERenderPass::GizmoInner },

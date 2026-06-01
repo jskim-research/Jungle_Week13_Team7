@@ -71,6 +71,8 @@ namespace ESystemTexSlot
 	constexpr uint32 ShadowMapPointLightTextureArray = 23;  // t23: Point Light
 	constexpr uint32 SpotShadowDatas    = 24;  // t24: StructuredBuffer<FSpotShadowDataGPU>
 	constexpr uint32 PointShadowDatas   = 25;  // t25: StructuredBuffer<FPointShadowDataGPU>
+	constexpr uint32 DOFCoC            = 26;  // t26: DOF CoC texture
+	constexpr uint32 DOFBlur           = 27;  // t27: DOF blur texture
 
 	// 하위 호환용 별칭
 	constexpr uint32 ShadowMap = ShadowMapCSM;
@@ -270,6 +272,17 @@ struct FGammaCorrectionConstants
 	float _pad[3];
 };
 
+struct FDOFConstants
+{
+	float FocalLength;
+	float Aperture;
+	float FocusDistance;
+	float NearClip;
+	float FarClip;
+	float ViewportWidth;
+	float ViewportHeight;
+	float _pad;
+};
 
 // Camera Fade CB (b3) - HLSL CameraFadeCB와 1:1 대응
 struct FCameraFadeConstants
