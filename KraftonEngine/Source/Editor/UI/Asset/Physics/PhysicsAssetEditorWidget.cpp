@@ -8,6 +8,7 @@
 #include "Physics/BodySetup/AggregateGeom.h"
 #include "Physics/PhysicsAsset.h"
 #include "Physics/PhysicsAssetManager.h"
+#include "Physics/PhysicsAssetUtils.h"
 #include "Physics/PhysicsConstraintTemplate.h"
 #include "Platform/Paths.h"
 #include "Runtime/Engine.h"
@@ -157,6 +158,136 @@ namespace
 				if (ImGui::Selectable(ToMotionLabel(Value), bSelected))
 				{
 					Motion = Value;
+					bChanged = true;
+				}
+				if (bSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		return bChanged;
+	}
+
+
+	const char* ToAutoWeightingLabel(EPhysicsAssetAutoGenerateVertexWeightingType Type)
+	{
+		switch (Type)
+		{
+		case EPhysicsAssetAutoGenerateVertexWeightingType::DominantWeight:
+			return "Dominant Weight";
+		case EPhysicsAssetAutoGenerateVertexWeightingType::AnyWeight:
+			return "Any Weight";
+		default:
+			return "Unknown";
+		}
+	}
+
+	const char* ToAutoPrimitiveLabel(EPhysicsAssetAutoGeneratePrimitiveType Type)
+	{
+		switch (Type)
+		{
+		case EPhysicsAssetAutoGeneratePrimitiveType::Capsule:
+			return "Capsule";
+		case EPhysicsAssetAutoGeneratePrimitiveType::Box:
+			return "Box";
+		case EPhysicsAssetAutoGeneratePrimitiveType::Sphere:
+			return "Sphere";
+		case EPhysicsAssetAutoGeneratePrimitiveType::Auto:
+			return "Auto";
+		default:
+			return "Unknown";
+		}
+	}
+
+	const char* ToAutoOrientLabel(EPhysicsAssetAutoGenerateOrientMethod Method)
+	{
+		switch (Method)
+		{
+		case EPhysicsAssetAutoGenerateOrientMethod::BoneAxis:
+			return "Bone Axis";
+		case EPhysicsAssetAutoGenerateOrientMethod::PCA:
+			return "PCA";
+		case EPhysicsAssetAutoGenerateOrientMethod::Hybrid:
+			return "Hybrid";
+		default:
+			return "Unknown";
+		}
+	}
+
+	bool AutoWeightingCombo(const char* Label, EPhysicsAssetAutoGenerateVertexWeightingType& Type)
+	{
+		bool bChanged = false;
+		if (ImGui::BeginCombo(Label, ToAutoWeightingLabel(Type)))
+		{
+			const EPhysicsAssetAutoGenerateVertexWeightingType Values[] = {
+				EPhysicsAssetAutoGenerateVertexWeightingType::DominantWeight,
+				EPhysicsAssetAutoGenerateVertexWeightingType::AnyWeight
+			};
+			for (EPhysicsAssetAutoGenerateVertexWeightingType Value : Values)
+			{
+				const bool bSelected = Type == Value;
+				if (ImGui::Selectable(ToAutoWeightingLabel(Value), bSelected))
+				{
+					Type = Value;
+					bChanged = true;
+				}
+				if (bSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		return bChanged;
+	}
+
+	bool AutoPrimitiveCombo(const char* Label, EPhysicsAssetAutoGeneratePrimitiveType& Type)
+	{
+		bool bChanged = false;
+		if (ImGui::BeginCombo(Label, ToAutoPrimitiveLabel(Type)))
+		{
+			const EPhysicsAssetAutoGeneratePrimitiveType Values[] = {
+				EPhysicsAssetAutoGeneratePrimitiveType::Auto,
+				EPhysicsAssetAutoGeneratePrimitiveType::Capsule,
+				EPhysicsAssetAutoGeneratePrimitiveType::Box,
+				EPhysicsAssetAutoGeneratePrimitiveType::Sphere
+			};
+			for (EPhysicsAssetAutoGeneratePrimitiveType Value : Values)
+			{
+				const bool bSelected = Type == Value;
+				if (ImGui::Selectable(ToAutoPrimitiveLabel(Value), bSelected))
+				{
+					Type = Value;
+					bChanged = true;
+				}
+				if (bSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		return bChanged;
+	}
+
+	bool AutoOrientCombo(const char* Label, EPhysicsAssetAutoGenerateOrientMethod& Method)
+	{
+		bool bChanged = false;
+		if (ImGui::BeginCombo(Label, ToAutoOrientLabel(Method)))
+		{
+			const EPhysicsAssetAutoGenerateOrientMethod Values[] = {
+				EPhysicsAssetAutoGenerateOrientMethod::Hybrid,
+				EPhysicsAssetAutoGenerateOrientMethod::BoneAxis,
+				EPhysicsAssetAutoGenerateOrientMethod::PCA
+			};
+			for (EPhysicsAssetAutoGenerateOrientMethod Value : Values)
+			{
+				const bool bSelected = Method == Value;
+				if (ImGui::Selectable(ToAutoOrientLabel(Value), bSelected))
+				{
+					Method = Value;
 					bChanged = true;
 				}
 				if (bSelected)
@@ -1688,6 +1819,7 @@ void FPhysicsAssetEditorWidget::RenderTreePanel()
 		{
 			AddBodyForSelectedBone();
 		}
+		RenderAutoGeneratePanel();
 		ImGui::Separator();
 
 		if (ImGui::BeginChild("PhysicsAssetHierarchyTree", ImVec2(0.0f, 330.0f), true))
@@ -1725,6 +1857,40 @@ void FPhysicsAssetEditorWidget::RenderTreePanel()
 	else
 	{
 		ImGui::TextDisabled("Select a body to inspect constraints.");
+	}
+}
+
+
+void FPhysicsAssetEditorWidget::RenderAutoGeneratePanel()
+{
+	ImGui::Dummy(ImVec2(0.0f, 4.0f));
+	if (!ImGui::CollapsingHeader("Auto Generate", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		return;
+	}
+
+	AutoWeightingCombo("Vertex Weighting", AutoGenerateOptions.VertexWeightingType);
+	AutoPrimitiveCombo("Primitive", AutoGenerateOptions.PrimitiveType);
+	AutoOrientCombo("Orient", AutoGenerateOptions.OrientMethod);
+	ImGui::DragFloat("Min Bone Size", &AutoGenerateOptions.MinBoneSize, 0.1f, 0.0f, 100000.0f);
+	ImGui::DragFloat("Min Weight", &AutoGenerateOptions.MinWeight, 0.01f, 0.0f, 1.0f);
+	ImGui::DragInt("Min Vertex Count", &AutoGenerateOptions.MinVertexCount, 1.0f, 1, 100000);
+	ImGui::Checkbox("Create Constraints", &AutoGenerateOptions.bCreateConstraints);
+	ImGui::Checkbox("Disable Adjacent Collision", &AutoGenerateOptions.bDisableAdjacentCollision);
+	ImGui::Checkbox("Clear Existing", &AutoGenerateOptions.bClearExistingBodies);
+
+	if (ImGui::Button("Generate Bodies", ImVec2(-1.0f, 0.0f)))
+	{
+		AutoGenerateBodiesAndConstraints();
+	}
+
+	if (bHasLastAutoGenerateResult)
+	{
+		ImGui::TextDisabled(
+			"Generated: %d bodies, %d constraints, skipped %d bones",
+			LastAutoGenerateResult.BodiesCreated,
+			LastAutoGenerateResult.ConstraintsCreated,
+			LastAutoGenerateResult.BodiesSkipped);
 	}
 }
 
@@ -2734,6 +2900,59 @@ void FPhysicsAssetEditorWidget::SelectFirstPrimitiveForBody(USkeletalBodySetup* 
 	{
 		SelectPrimitive(EPhysicsAssetPrimitiveType::Capsule, 0);
 	}
+}
+
+
+void FPhysicsAssetEditorWidget::AutoGenerateBodiesAndConstraints()
+{
+	if (!EditingMesh || !EditingPhysicsAsset)
+	{
+		return;
+	}
+
+	LastAutoGenerateResult = FPhysicsAssetAutoGenerateResult();
+	bHasLastAutoGenerateResult = true;
+
+	const bool bGeneratedAny = FPhysicsAssetUtils::AutoGenerateBodiesAndConstraints(
+		EditingPhysicsAsset,
+		EditingMesh,
+		AutoGenerateOptions,
+		&LastAutoGenerateResult);
+	MarkDirty();
+
+	if (!bGeneratedAny)
+	{
+		SelectionType = EPhysicsAssetEditorSelectionType::None;
+		SelectedBoneIndex = -1;
+		SelectedBodyIndex = -1;
+		SelectedConstraintIndex = -1;
+		SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
+		SelectedPrimitiveIndex = -1;
+		bConstraintGraphLayoutDirty = true;
+		SyncPreviewSelection();
+		UpdateSolidPreview();
+		return;
+	}
+
+	EditingPhysicsAsset->UpdateBodySetupIndexMap();
+	SelectedBoneIndex = -1;
+	SelectedConstraintIndex = -1;
+	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
+	SelectedPrimitiveIndex = -1;
+
+	if (EditingPhysicsAsset->GetBodySetupCount() > 0)
+	{
+		SelectBody(0);
+	}
+	else
+	{
+		SelectionType = EPhysicsAssetEditorSelectionType::None;
+		SelectedBodyIndex = -1;
+	}
+
+	bConstraintGraphLayoutDirty = true;
+	SyncPreviewSelection();
+	UpdateSolidPreview();
 }
 
 void FPhysicsAssetEditorWidget::AddBodyForSelectedBone()
