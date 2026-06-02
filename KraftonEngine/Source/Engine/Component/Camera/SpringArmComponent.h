@@ -23,7 +23,7 @@ class USpringArmComponent : public USceneComponent
 {
 public:
 	GENERATED_BODY()
-	USpringArmComponent() = default;
+	USpringArmComponent();
 	~USpringArmComponent() override = default;
 
 	void BeginPlay() override;
