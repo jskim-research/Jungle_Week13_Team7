@@ -163,6 +163,14 @@ static constexpr const char* GPvdHost = "127.0.0.1";
 static constexpr int32 GPvdPort = 5425;
 static constexpr uint32 GPvdTimeoutMs = 10;
 
+static void FlushSharedPvdTransport()
+{
+	if (GSharedPvdTransport && GSharedPvdTransport->isConnected())
+	{
+		GSharedPvdTransport->flush();
+	}
+}
+
 static bool AcquireSharedPhysX(PxFoundation*& OutFoundation, PxPhysics*& OutPhysics)
 {
 	OutFoundation = nullptr;
@@ -183,7 +191,7 @@ static bool AcquireSharedPhysX(PxFoundation*& OutFoundation, PxPhysics*& OutPhys
 			GSharedPvdTransport = PxDefaultPvdSocketTransportCreate(GPvdHost, GPvdPort, GPvdTimeoutMs);
 			if (GSharedPvdTransport)
 			{
-				const PxPvdInstrumentationFlags PvdFlags = PxPvdInstrumentationFlag::eALL;
+				const PxPvdInstrumentationFlags PvdFlags = PxPvdInstrumentationFlag::eDEBUG;
 				if (GSharedPvd->connect(*GSharedPvdTransport, PvdFlags))
 				{
 					UE_LOG("[PhysX] Connected to PVD (%s:%d)", GPvdHost, GPvdPort);
@@ -245,6 +253,7 @@ static void ReleaseSharedPhysX()
 	if (GSharedRefCount == 0)
 	{
 		if (GSharedPhysics) { GSharedPhysics->release(); GSharedPhysics = nullptr; }
+		FlushSharedPvdTransport();
 		if (GSharedPvd && GSharedPvd->isConnected()) { GSharedPvd->disconnect(); }
 		if (GSharedPvdTransport) { GSharedPvdTransport->release(); GSharedPvdTransport = nullptr; }
 		if (GSharedPvd) { GSharedPvd->release(); GSharedPvd = nullptr; }
@@ -481,6 +490,14 @@ static PxTransform GetPxTransform(UPrimitiveComponent* Comp)
 	return PxTransform(ToPxVec3(Pos), ToPxQuat(Rot));
 }
 
+static bool IsPoseDifferent(const PxTransform& A, const PxTransform& B, float PosThresholdSq, float RotDotThreshold)
+{
+	PxVec3 Delta = A.p - B.p;
+	const float DistSq = Delta.x * Delta.x + Delta.y * Delta.y + Delta.z * Delta.z;
+	const float QDot = std::abs(A.q.x * B.q.x + A.q.y * B.q.y + A.q.z * B.q.z + A.q.w * B.q.w);
+	return DistSq > PosThresholdSq || QDot < RotDotThreshold;
+}
+
 // ============================================================
 // Collision Filtering
 // ============================================================
@@ -599,11 +616,15 @@ void FPhysXPhysicsScene::Initialize(UWorld* InWorld)
 		return;
 	}
 
-	if (PxPvdSceneClient* PvdClient = Scene->getScenePvdClient())
+	const bool bTransmitPvdScene = World && (World->GetWorldType() == EWorldType::Game || World->GetWorldType() == EWorldType::PIE);
+	if (bTransmitPvdScene)
 	{
-		PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONTACTS, true);
-		PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONSTRAINTS, true);
-		PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_SCENEQUERIES, true);
+		if (PxPvdSceneClient* PvdClient = Scene->getScenePvdClient())
+		{
+			PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONTACTS, true);
+			PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONSTRAINTS, true);
+			PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_SCENEQUERIES, true);
+		}
 	}
 
 	// Default material (static friction, dynamic friction, restitution)
@@ -633,7 +654,14 @@ void FPhysXPhysicsScene::Shutdown()
 
 	if (Scene)
 	{
+		if (PxPvdSceneClient* PvdClient = Scene->getScenePvdClient())
+		{
+			PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONTACTS, false);
+			PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONSTRAINTS, false);
+			PvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_SCENEQUERIES, false);
+		}
 		Scene->setSimulationEventCallback(nullptr);
+		FlushSharedPvdTransport();
 	}
 
 	ReleaseBodyInstances();
@@ -642,6 +670,7 @@ void FPhysXPhysicsScene::Shutdown()
 	{
 		Scene->release();
 		Scene = nullptr;
+		FlushSharedPvdTransport();
 	}
 
 	if (DefaultMaterial)
@@ -810,6 +839,8 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 	// ── Pre-simulate: Engine → PhysX Transform 동기화 (per-component) ──
 	constexpr float TeleportPosThresholdSq = 1.0f;
 	constexpr float TeleportRotThreshold = 0.99f;
+	constexpr float StaticSyncPosThresholdSq = 0.0001f;
+	constexpr float StaticSyncRotThreshold = 0.99999f;
 
 	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
 	{
@@ -830,18 +861,15 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 		{
 			if (Dynamic->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)
 			{
-				Dynamic->setKinematicTarget(NewPose);
+				if (IsPoseDifferent(NewPose, Dynamic->getGlobalPose(), StaticSyncPosThresholdSq, StaticSyncRotThreshold))
+				{
+					Dynamic->setKinematicTarget(NewPose);
+				}
 			}
 			else
 			{
 				PxTransform PxPose = Dynamic->getGlobalPose();
-				PxVec3 dp = NewPose.p - PxPose.p;
-				const float DistSq = dp.x * dp.x + dp.y * dp.y + dp.z * dp.z;
-				const float QDot = std::abs(
-					NewPose.q.x * PxPose.q.x + NewPose.q.y * PxPose.q.y +
-					NewPose.q.z * PxPose.q.z + NewPose.q.w * PxPose.q.w);
-
-				if (DistSq > TeleportPosThresholdSq || QDot < TeleportRotThreshold)
+				if (IsPoseDifferent(NewPose, PxPose, TeleportPosThresholdSq, TeleportRotThreshold))
 				{
 					Dynamic->setGlobalPose(NewPose);
 				}
@@ -849,7 +877,10 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 		}
 		else if (BodyInstance->Actor->is<PxRigidStatic>())
 		{
-			BodyInstance->Actor->setGlobalPose(NewPose);
+			if (IsPoseDifferent(NewPose, BodyInstance->Actor->getGlobalPose(), StaticSyncPosThresholdSq, StaticSyncRotThreshold))
+			{
+				BodyInstance->Actor->setGlobalPose(NewPose);
+			}
 		}
 	}
 
