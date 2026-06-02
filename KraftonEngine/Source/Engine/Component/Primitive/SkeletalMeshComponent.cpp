@@ -549,6 +549,7 @@ void USkeletalMeshComponent::TickComponent(float DeltaTime, ELevelTick TickType,
         return;
     }
 
+	//SyncBodiesFromAnimationPose();
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 

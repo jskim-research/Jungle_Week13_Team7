@@ -2,6 +2,8 @@
 
 #include "Physics/CollisionWireUtils.h"
 #include "Physics/BodySetup/BodySetup.h"
+#include "Physics/BodyInstance.h"
+#include "Physics/PhysicsBodyDebug.h"
 #include "Physics/PhysX/PhysXShapeUtils.h"
 
 #include "Component/PrimitiveComponent.h"
@@ -50,6 +52,41 @@ namespace
 	{
 		OutWorldLocation = ParentLocation + ParentRotation.RotateVector(LocalLocation);
 		OutWorldRotation = (ParentRotation * LocalRotation).GetNormalized();
+	}
+
+	FQuat ExtractRotationIgnoringScale(const FMatrix& Matrix)
+	{
+		constexpr float MatrixDecomposeTolerance = 1.0e-6f;
+
+		const FVector Scale = Matrix.GetScale();
+		FMatrix RotationMatrix = Matrix;
+		RotationMatrix.M[3][0] = 0.0f;
+		RotationMatrix.M[3][1] = 0.0f;
+		RotationMatrix.M[3][2] = 0.0f;
+		RotationMatrix.M[3][3] = 1.0f;
+
+		if (std::fabs(Scale.X) > MatrixDecomposeTolerance)
+		{
+			RotationMatrix.M[0][0] /= Scale.X;
+			RotationMatrix.M[0][1] /= Scale.X;
+			RotationMatrix.M[0][2] /= Scale.X;
+		}
+
+		if (std::fabs(Scale.Y) > MatrixDecomposeTolerance)
+		{
+			RotationMatrix.M[1][0] /= Scale.Y;
+			RotationMatrix.M[1][1] /= Scale.Y;
+			RotationMatrix.M[1][2] /= Scale.Y;
+		}
+
+		if (std::fabs(Scale.Z) > MatrixDecomposeTolerance)
+		{
+			RotationMatrix.M[2][0] /= Scale.Z;
+			RotationMatrix.M[2][1] /= Scale.Z;
+			RotationMatrix.M[2][2] /= Scale.Z;
+		}
+
+		return RotationMatrix.ToQuat().GetNormalized();
 	}
 
 	FVector4 GetCollisionWireColor(const UPrimitiveComponent* Component)
@@ -103,7 +140,7 @@ namespace
 		const FVector AbsWorldScale(AbsScale(ComponentScale.X), AbsScale(ComponentScale.Y), AbsScale(ComponentScale.Z));
 		const float UniformScale = MaxAbsScale(ComponentScale);
 		const FVector ComponentLocation = ComponentWorldMatrix.GetLocation();
-		const FQuat ComponentRotation = ComponentWorldMatrix.ToQuat();
+		const FQuat ComponentRotation = ExtractRotationIgnoringScale(ComponentWorldMatrix);
 
 		const physx::PxQuat PxCorrection = PhysXShapeUtils::GetCapsuleAxisCorrectionQuat();
 		const FQuat CapsuleAxisCorrectionF(PxCorrection.x, PxCorrection.y, PxCorrection.z, PxCorrection.w);
@@ -158,6 +195,72 @@ namespace
 		}
 	}
 
+	bool AppendBodyInstanceDebugLines(const FBodyInstance* BodyInstance, TArray<FWireLine>& OutLines)
+	{
+		if (!BodyInstance || !BodyInstance->IsValidBodyInstance())
+		{
+			return false;
+		}
+
+		FPhysicsBodyDebugInfo BodyInfo;
+		BodyInstance->GatherDebugInfo(BodyInfo);
+		if (!BodyInfo.bHasBody || BodyInfo.Shapes.empty())
+		{
+			return false;
+		}
+
+		bool bDrewAny = false;
+		for (const FPhysicsShapeDebugInfo& Shape : BodyInfo.Shapes)
+		{
+			FVector ShapeWorldLocation = FVector::ZeroVector;
+			FQuat ShapeWorldRotation = FQuat::Identity;
+			ComposeWorldPose(
+				BodyInfo.WorldPosition,
+				BodyInfo.WorldRotation,
+				Shape.LocalPosition,
+				Shape.LocalRotation,
+				ShapeWorldLocation,
+				ShapeWorldRotation);
+
+			switch (Shape.ShapeType)
+			{
+			case EPhysicsDebugShapeType::Box:
+				CollisionWireUtils::BuildBoxLines(OutLines, ShapeWorldLocation, Shape.BoxHalfExtents, ShapeWorldRotation);
+				bDrewAny = true;
+				break;
+			case EPhysicsDebugShapeType::Sphere:
+				CollisionWireUtils::BuildSphereLines(OutLines, ShapeWorldLocation, Shape.SphereRadius);
+				bDrewAny = true;
+				break;
+			case EPhysicsDebugShapeType::Capsule:
+				CollisionWireUtils::BuildCapsuleLinesX(
+					OutLines,
+					ShapeWorldLocation,
+					Shape.CapsuleRadius,
+					Shape.CapsuleHalfHeight + Shape.CapsuleRadius,
+					ShapeWorldRotation);
+				bDrewAny = true;
+				break;
+			default:
+				break;
+			}
+		}
+
+		return bDrewAny;
+	}
+
+	bool ShouldUseRuntimePhysicsBodyDebug(const USkeletalMeshComponent* SkelComp)
+	{
+		const UWorld* World = SkelComp ? SkelComp->GetWorld() : nullptr;
+		if (!World)
+		{
+			return false;
+		}
+
+		const EWorldType WorldType = World->GetWorldType();
+		return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
+	}
+
 	void AppendComponentShapeLines(TArray<FWireLine>& OutLines, const UPrimitiveComponent* Component, const FMatrix& ComponentWorldMatrix)
 	{
 		const FVector ComponentLocation = ComponentWorldMatrix.GetLocation();
@@ -200,7 +303,7 @@ namespace
 		return -1;
 	}
 
-	// UE Show Collision: Physics Asset simple collision at bone poses (no PhysX shape readback).
+	// Runtime worlds prefer physics bodies; editor worlds use asset data at the current component/bone pose.
 	bool AppendSkeletalPhysicsAssetLines(USkeletalMeshComponent* SkelComp, TArray<FWireLine>& OutLines)
 	{
 		UPhysicsAsset* PhysicsAsset = SkelComp->GetPhysicsAsset();
@@ -216,6 +319,7 @@ namespace
 
 		const FMatrix ComponentWorldMatrix = SkelComp->GetWorldMatrix();
 		const FVector ComponentScale = SkelComp->GetWorldScale();
+		const bool bUseRuntimeBodyDebug = ShouldUseRuntimePhysicsBodyDebug(SkelComp);
 		bool bDrewAny = false;
 
 		for (int32 BodyIndex = 0; BodyIndex < PhysicsAsset->GetBodySetupCount(); ++BodyIndex)
@@ -223,6 +327,12 @@ namespace
 			const USkeletalBodySetup* BodySetup = PhysicsAsset->GetBodySetup(BodyIndex);
 			if (!BodySetup || !BodySetup->HasSimpleCollision())
 			{
+				continue;
+			}
+
+			if (bUseRuntimeBodyDebug && AppendBodyInstanceDebugLines(SkelComp->GetBodyInstance(BodyIndex), OutLines))
+			{
+				bDrewAny = true;
 				continue;
 			}
 
