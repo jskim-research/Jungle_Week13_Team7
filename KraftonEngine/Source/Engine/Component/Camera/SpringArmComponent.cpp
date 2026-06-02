@@ -19,6 +19,11 @@ void USpringArmComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	bHasPreviousState = false;
+
+	if (ArmPivotRotation.IsNearlyZero())
+	{
+		ArmPivotRotation = GetRelativeRotation();
+	}
 }
 
 void USpringArmComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction& ThisTickFunction)
@@ -104,8 +109,12 @@ void USpringArmComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 
 	// (4) ArmEnd 계산 — SpringArm 의 World 위치 (자식 카메라가 여기 부착됨).
 	//     LaggedAttach 에서 Local -X 방향으로 TargetArmLength 만큼 + SocketOffset.
-	const FVector ArmDirWorld = LaggedAttachRot.RotateVector(FVector(-TargetArmLength, 0.0f, 0.0f));
-	const FVector SocketWorld = LaggedAttachRot.RotateVector(SocketOffset);
+	//     ArmPivotRotation(에디터 오프셋)으로 arm 방향을 돌린다. GetRelativeRotation() 은
+	//     아래 SetRelativeRotation 이 매 Tick 덮어쓰므로 사용하면 안 된다.
+	const FQuat ArmPivotLocalRot = ArmPivotRotation.ToQuaternion().GetNormalized();
+	const FQuat ArmWorldRot = (LaggedAttachRot * ArmPivotLocalRot).GetNormalized();
+	const FVector ArmDirWorld = ArmWorldRot.RotateVector(FVector(-TargetArmLength, 0.0f, 0.0f));
+	const FVector SocketWorld = ArmWorldRot.RotateVector(SocketOffset);
 	FVector ArmEndWorld = LaggedAttachLoc + ArmDirWorld + SocketWorld;
 
 	// (4b) Collision test — bDoCollisionTest 가 켜져 있으면 LaggedAttach → ArmEnd 방향으로
@@ -140,7 +149,7 @@ void USpringArmComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 	//       회전만 따라감 — control rotation 이 무시되는 버그.
 	const FQuat ParentInvRot = ParentActualRot.Inverse();
 	const FVector RelLoc = ParentInvRot.RotateVector(ArmEndWorld - ParentWorldLoc);
-	const FQuat RelRot = (ParentInvRot * LaggedAttachRot).GetNormalized();
+	const FQuat RelRot = (ParentInvRot * ArmWorldRot).GetNormalized();
 
 	SetRelativeLocation(RelLoc);
 	SetRelativeRotation(RelRot);

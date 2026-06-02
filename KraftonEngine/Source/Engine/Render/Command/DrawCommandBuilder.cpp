@@ -556,10 +556,22 @@ void FDrawCommandBuilder::PrepareDynamicGeometry(const FFrameContext& Frame, con
 	{
 		if (!Text.Text.empty())
 		{
+			float ScreenX = Text.Position.X;
+			float ScreenY = Text.Position.Y;
+			if (Text.Anchor == FScene::EOverlayTextAnchor::RightCenter)
+			{
+				ScreenX = Frame.ViewportWidth + Text.Position.X;
+				ScreenY = Frame.ViewportHeight * 0.5f + Text.Position.Y;
+			}
+			else
+			{
+				ScreenX = Text.Position.X < 0.0f ? Frame.ViewportWidth + Text.Position.X : Text.Position.X;
+				ScreenY = Text.Position.Y < 0.0f ? Frame.ViewportHeight + Text.Position.Y : Text.Position.Y;
+			}
 			FontGeometry.AddScreenText(
 				Text.Text,
-				Text.Position.X,
-				Text.Position.Y,
+				ScreenX,
+				ScreenY,
 				Frame.ViewportWidth,
 				Frame.ViewportHeight,
 				Text.Scale

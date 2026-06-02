@@ -10,8 +10,46 @@
 class UWorld;
 class AActor;
 class UPrimitiveComponent;
+class UFourWheeledVehicleMovementComponent;
 struct FHitResult;
 struct FCollisionShape;
+
+struct FFourWheeledVehicleRuntimeParams
+{
+	UPrimitiveComponent* ChassisComponent = nullptr;
+	float ThrottleInput = 0.0f;
+	float BrakeInput = 0.0f;
+	float SteerInput = 0.0f;
+	bool bUseManualGears = true;
+	bool bGearShiftUpPressed = false;
+	bool bGearShiftDownPressed = false;
+	bool bGearNeutralPressed = false;
+	float WheelRadius = 0.36f;
+	float WheelWidth = 0.30f;
+	float ChassisMass = 800.0f;
+	float MaxSteerAngleDeg = 28.0f;
+	float EnginePeakTorque = 900.0f;
+	float BrakeTorque = 1500.0f;
+	FVector CenterOfMassOffset = FVector(0.0f, 0.0f, -0.35f);
+	FVector WheelCenterOffsets[4] = {
+		FVector(-0.80f, -1.45f, -0.35f),
+		FVector(0.80f, -1.45f, -0.35f),
+		FVector(-0.80f, 1.45f, -0.35f),
+		FVector(0.80f, 1.45f, -0.35f)
+	};
+};
+
+struct FFourWheeledVehicleRuntimeState
+{
+	bool bValid = false;
+	float ForwardSpeed = 0.0f;
+	float EngineRPM = 0.0f;
+	float EngineRPMRatio = 0.0f;
+	int32 CurrentGear = 0;
+	FString GearDisplay = "N";
+	float WheelRotationDeg[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float WheelSteerDeg[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+};
 
 // 물리 백엔드 선택
 enum class EPhysicsBackend : uint8
@@ -45,6 +83,12 @@ public:
 
 	// --- 시뮬레이션 ---
 	virtual void Tick(float DeltaTime) = 0;
+
+	// --- Vehicles ---
+	virtual void RegisterVehicle(UFourWheeledVehicleMovementComponent* VehicleComp, const FFourWheeledVehicleRuntimeParams& Params) {}
+	virtual void UnregisterVehicle(UFourWheeledVehicleMovementComponent* VehicleComp) {}
+	virtual void UpdateVehicle(UFourWheeledVehicleMovementComponent* VehicleComp, const FFourWheeledVehicleRuntimeParams& Params) {}
+	virtual bool GetVehicleState(const UFourWheeledVehicleMovementComponent* VehicleComp, FFourWheeledVehicleRuntimeState& OutState) const { return false; }
 
 	// --- 힘/토크 ---
 	virtual void AddForce(UPrimitiveComponent* Comp, const FVector& Force) = 0;
