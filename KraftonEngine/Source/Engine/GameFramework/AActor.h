@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Object/Object.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Object/Ptr/ObjectPtr.h"
@@ -38,6 +38,7 @@ public:
 	UObject* Duplicate(UObject* NewOuter = nullptr) const override;
 
 	void PreGetEditableProperties() override;
+
 	void PostEditProperty(const char* PropertyName) override;
 
 	// 컴포넌트 생성 + Owner 설정 + 등록 + 렌더 상태 생성
@@ -85,7 +86,7 @@ public:
 	}
 
 	// Transform — Location
-	UFUNCTION(Pure, Category="Actor|Transform")
+	UFUNCTION(Callable, Pure, Category="Actor|Transform")
 	FVector GetActorLocation() const;
 	UFUNCTION(Callable, Category="Actor|Transform")
 	void SetActorLocation(const FVector& Location);
@@ -106,9 +107,9 @@ public:
 	void SetActorScale(const FVector& NewScale);
 
 	// Direction
-	UFUNCTION(Pure, Category="Actor|Transform")
+	UFUNCTION(Callable, Pure, Category="Actor|Transform")
 	FVector GetActorForward() const;
-	UFUNCTION(Pure, Category="Actor|Transform")
+	UFUNCTION(Callable, Pure, Category="Actor|Transform")
 	FVector GetActorRight() const;
 
 	UWorld* GetWorld() const;

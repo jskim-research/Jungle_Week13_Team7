@@ -132,7 +132,7 @@ void FGameRenderPipeline::BuildFrame(FViewport* VP, const FMinimalViewInfo& POV,
 		}
 
 		const FCineDepthOfFieldSettings& DepthOfFieldSettings = CineCamera->GetDepthOfFieldSettings();
-		Frame.bDepthOfFieldEnabled = DepthOfFieldSettings.bEnabled;
+		Frame.bDepthOfFieldEnabled = Frame.RenderOptions.ShowFlags.bDepthOfField;
 		Frame.DepthOfFieldFocalLength = DepthOfFieldSettings.FocalLength;
 		Frame.DepthOfFieldAperture = DepthOfFieldSettings.Aperture;
 		Frame.DepthOfFieldFocusDistance = DepthOfFieldSettings.FocusDistance;

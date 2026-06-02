@@ -3,6 +3,7 @@
 #include "Editor/UI/Asset/AssetEditorWidget.h"
 #include "Editor/Viewport/Asset/MeshEditorViewportClient.h"
 #include "Object/FName.h"
+#include "Physics/PhysicsAssetUtils.h"
 
 #include <memory>
 
@@ -63,6 +64,7 @@ public:
 private:
 	void ResolveEditingObjects(UObject* Object);
 	void RenderTreePanel();
+	void RenderAutoGeneratePanel();
 	void RenderBodyTree();
 	void RenderBodyTreeRow(int32 BodyIndex);
 	void RenderConstraintGraph();
@@ -83,6 +85,7 @@ private:
 	void SelectPrimitive(EPhysicsAssetPrimitiveType PrimitiveType, int32 PrimitiveIndex);
 	void SelectFirstPrimitiveForBody(USkeletalBodySetup* BodySetup);
 
+	void AutoGenerateBodiesAndConstraints();
 	void AddBodyForSelectedBone();
 	void RemoveSelectedBody();
 	void AddConstraintToParentBody();
@@ -137,6 +140,9 @@ private:
 	bool bShowSolidBodies = true;
 	bool bShowConstraints = true;
 	EPhysicsAssetHierarchyMode HierarchyMode = EPhysicsAssetHierarchyMode::BonesAndBodies;
+	FPhysicsAssetAutoGenerateOptions AutoGenerateOptions;
+	FPhysicsAssetAutoGenerateResult LastAutoGenerateResult;
+	bool bHasLastAutoGenerateResult = false;
 	bool bConstraintGraphLayoutDirty = true;
 	uint64 ConstraintGraphTopologyHash = 0;
 	float TreePanelWidth = 300.0f;

@@ -1,4 +1,4 @@
-#include "LuaAnimInstance.h"
+﻿#include "LuaAnimInstance.h"
 
 #include "Animation/AnimationManager.h"
 #include "Animation/Sequence/AnimSequence.h"
@@ -52,6 +52,15 @@ void ULuaAnimInstance::NativeInitializeAnimation()
 
 	// per-instance env — globals 상속 (math, print, Anim 모듈 등은 globals 아래 또는 여기서 install).
 	Env = sol::environment(Lua, sol::create, Lua.globals());
+
+	if (OwningComponent && OwningComponent->GetOwner())
+	{
+		Env["obj"] = OwningComponent->GetOwner();
+	}
+	else
+	{
+		Env["obj"] = sol::nil;
+	}
 
 	// self table — lua 변수 저장소.
 	LuaSelf = Lua.create_table();
@@ -324,6 +333,26 @@ void ULuaAnimInstance::InstallBindings()
 			if (!Owner) return false;
 			UCharacterMovementComponent* Move = Owner->GetComponentByClass<UCharacterMovementComponent>();
 			return Move ? Move->IsFalling() : false;
+		});
+
+	Anim.set_function("get_root_motion_mode",
+		[this]() -> std::string
+		{
+			const uint32 Index = static_cast<uint32>(GetRootMotionMode());
+			return Index < GRootMotionModeCount ? GRootMotionModeNames[Index] : "";
+		});
+
+	Anim.set_function("set_root_motion_mode",
+		[this](std::string Mode)
+		{
+			for (uint32 Index = 0; Index < GRootMotionModeCount; ++Index)
+			{
+				if (Mode == GRootMotionModeNames[Index])
+				{
+					SetRootMotionMode(static_cast<ERootMotionMode>(Index));
+					return;
+				}
+			}
 		});
 
 	// Slot 인자는 sol::object — None/missing 이면 FName::None (→ 내부에서 DefaultMontageSlot resolve).

@@ -31,7 +31,6 @@ CONFIGURATIONS = [
     ("Release", "x64"),
     ("Game", "Win32"),
     ("Game", "x64"),
-    ("ObjViewDebug", "x64"),
     ("Demo", "x64"),
 ]
 
@@ -43,10 +42,6 @@ CONFIG_PROPS = {
     "Game": {
         "release_like": True,
         "extra_defines": ["WITH_EDITOR=0", "WITH_STANDALONE=1", "STATS=0"],
-    },
-    "ObjViewDebug": {
-        "release_like": True,
-        "extra_defines": ["IS_OBJ_VIEWER=1"],
     },
     "Demo": {
         "release_like": True,
@@ -88,12 +83,12 @@ INCLUDE_PATHS = [
     "ThirdParty\\imgui-node-editor",
     "ThirdParty\\RmlUi\\Include",
     "Source\\Editor",
-    "Source\\ObjViewer",
     "Source\\Game",
     "ThirdParty\\lua\\include",
     "ThirdParty\\sol2\\include",
     "ThirdParty\\fmod\\include",
     "ThirdParty\\fbx\\include",
+    "ThirdParty\\NvCloth\\include",
     # PhysX(NuGet) — vcpkg.targets 가 조건부 Import 라 첫 clone 직후 IntelliSense 파싱 시점엔
     # Exists()=false 로 include 경로가 안 잡힘. 직접 박아 restore 타이밍과 무관하게 잡히게 함.
     "packages\\NVIDIA.PhysX.4.1.2\\installed\\x64-windows\\include",
@@ -115,7 +110,7 @@ FMOD_RELEASE_DLL = "fmod.dll"
 
 # PhysX (NuGet, 4.1.2) — vcpkg auto applocal-deps가 일부 환경에서 동작하지 않아
 # PostBuildEvent 에서 명시적으로 *.dll 을 OutDir 로 복사한다.
-# Debug 구성은 debug\\bin, 그 외(Release/Game/ObjViewDebug/Demo)는 release bin 사용.
+# Debug 구성은 debug\\bin, 그 외(Release/Game/Demo)는 release bin 사용.
 # (Include 경로는 INCLUDE_PATHS 에 직접 추가됨 — 위 주석 참고.)
 PHYSX_DEBUG_BIN   = "packages\\NVIDIA.PhysX.4.1.2\\installed\\x64-windows\\debug\\bin"
 PHYSX_RELEASE_BIN = "packages\\NVIDIA.PhysX.4.1.2\\installed\\x64-windows\\bin"
@@ -176,6 +171,8 @@ def scan_files(project_dir: Path) -> dict[str, list[str]]:
                 ext = full.suffix.lower()
 
                 if ext in SOURCE_EXTS:
+                    if rel_str.startswith("ThirdParty\\NvCloth\\"):
+                        continue
                     result["ClCompile"].append(rel_str)
                 elif ext in HEADER_EXTS:
                     result["ClInclude"].append(rel_str)
@@ -197,6 +194,8 @@ def scan_files(project_dir: Path) -> dict[str, list[str]]:
                 ext = full.suffix.lower()
 
                 if ext in SHADER_EXTS:
+                    if rel_str.startswith("Shaders\\Generated\\Materials\\"):
+                        continue
                     result["FxCompile"].append(rel_str)
 
     # Add root-level files
@@ -309,6 +308,10 @@ def generate_vcxproj(files: dict[str, list[str]]):
     ET.SubElement(proj, "Import", Project="$(VCTargetsPath)\\Microsoft.Cpp.props")
     ET.SubElement(proj, "ImportGroup", Label="ExtensionSettings")
     ET.SubElement(proj, "ImportGroup", Label="Shared")
+    ig = ET.SubElement(proj, "ImportGroup", Label="ProjectPropertySheets")
+    ET.SubElement(ig, "Import",
+                  Project="Settings\\PhysX.props",
+                  Condition="Exists('Settings\\PhysX.props')")
 
     # PropertySheets
     for cfg, plat in CONFIGURATIONS:

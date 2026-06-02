@@ -1,4 +1,4 @@
-#include "LuaScriptManager.h"
+﻿#include "LuaScriptManager.h"
 
 #include "Core/Logging/Log.h"
 #include "Core/Logging/Notification.h"
@@ -7,6 +7,7 @@
 #include "Component/Script/LuaScriptComponent.h"
 #include "Component/Input/InputComponent.h"
 #include "Animation/Instance/LuaAnimInstance.h"
+#include "Component/Movement/CharacterMovementComponent.h"
 #include "Component/Movement/FloatingPawnMovementComponent.h"
 #include "Component/Camera/CameraComponent.h"
 #include "Component/PrimitiveComponent.h"
@@ -2072,17 +2073,21 @@ void FLuaScriptManager::RegisterMathBindings(sol::state& Lua)
 		"Lerp", &FVector::Lerp,
 		sol::meta_function::addition, sol::overload(
 		static_cast<FVector(FVector::*)(const FVector&) const>(&FVector::operator+),
-		static_cast<FVector(FVector::*)(float) const>(&FVector::operator+)
+		static_cast<FVector(FVector::*)(float) const>(&FVector::operator+),
+		[](float Scalar, const FVector& Vector) { return Vector + Scalar; }
 	),
 		sol::meta_function::subtraction, sol::overload(
 		static_cast<FVector(FVector::*)(const FVector&) const>(&FVector::operator-),
-		static_cast<FVector(FVector::*)(float) const>(&FVector::operator-)
+		static_cast<FVector(FVector::*)(float) const>(&FVector::operator-),
+		[](float Scalar, const FVector& Vector) { return FVector(Scalar - Vector.X, Scalar - Vector.Y, Scalar - Vector.Z); }
 	),
 		sol::meta_function::multiplication, sol::overload(
 		static_cast<FVector(FVector::*)(const FVector&) const>(&FVector::operator*),
-		static_cast<FVector(FVector::*)(float) const>(&FVector::operator*)
+		static_cast<FVector(FVector::*)(float) const>(&FVector::operator*),
+		[](float Scalar, const FVector& Vector) { return Vector * Scalar; }
 	),
 		sol::meta_function::division, &FVector::operator/,
+		sol::meta_function::unary_minus, static_cast<FVector(FVector::*)() const>(&FVector::operator-),
 		"Zero", []() { return FVector::ZeroVector; },
 		"One", []() { return FVector::OneVector; },
 		"Up", []() { return FVector::UpVector; },
@@ -2094,6 +2099,18 @@ void FLuaScriptManager::RegisterMathBindings(sol::state& Lua)
 		"XAxis", []() { return FVector::XAxisVector; },
 		"YAxis", []() { return FVector::YAxisVector; },
 		"ZAxis", []() { return FVector::ZAxisVector; });
+
+
+	Lua.set_function("Vector",
+		[](float X, float Y, float Z)
+		{
+			return FVector(X, Y, Z);
+		});
+
+	Lua["math"]["atan2"] = [](double Y, double X)
+		{
+			return std::atan2(Y, X);
+		};
 }
 
 void FLuaScriptManager::RegisterReflectionBindings(sol::state& Lua)
@@ -2376,6 +2393,12 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		"SetMoveInput", &UFloatingPawnMovementComponent::SetMoveInput,
 		"SetLookInput", &UFloatingPawnMovementComponent::SetLookInput);
 
+	Lua.new_usertype<UCharacterMovementComponent>("CharacterMovementComponent",
+		sol::base_classes,
+		sol::bases<UActorComponent, UObject>(),
+		"SetMovementInputEnabled", &UCharacterMovementComponent::SetMovementInputEnabled,
+		"StopMovementImmediately", &UCharacterMovementComponent::StopMovementImmediately);
+
 	Lua.new_usertype<USceneComponent>("SceneComponent",
 		sol::base_classes,
 		sol::bases<UActorComponent, UObject>(),
@@ -2559,6 +2582,11 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		"GetFloatingPawnMovement", [](AActor& Actor)
 	{
 		return Actor.GetComponentByClass<UFloatingPawnMovementComponent>();
+	},
+
+		"GetCharacterMovement", [](AActor& Actor)
+	{
+		return Actor.GetComponentByClass<UCharacterMovementComponent>();
 	},
 
 		"GetCamera", [](AActor& Actor)

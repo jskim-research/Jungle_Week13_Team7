@@ -10,6 +10,7 @@
 #include "Physics/BodyInstance.h"
 #include "Render/Types/VertexTypes.h"
 #include "Render/Proxy/DirtyFlag.h"
+#include "Core/Logging/Log.h"
 
 #include "Source/Engine/Component/PrimitiveComponent.generated.h"
 class FPrimitiveSceneProxy;
@@ -178,7 +179,7 @@ public:
 
 	UFUNCTION(Callable, Exec, Category="Physics")
 	void SetSimulatePhysics(bool bInSimulate);
-	UFUNCTION(Pure, Category="Physics")
+	UFUNCTION(Callable, Pure, Category="Physics")
 	bool GetSimulatePhysics() const { return bSimulatePhysics; }
 
 	// --- Physics Force/Velocity API ---
