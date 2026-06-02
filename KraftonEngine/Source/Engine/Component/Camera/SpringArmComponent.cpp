@@ -1,4 +1,4 @@
-#include "Component/Camera/SpringArmComponent.h"
+﻿#include "Component/Camera/SpringArmComponent.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Serialization/Archive.h"
 #include "GameFramework/AActor.h"
@@ -8,6 +8,12 @@
 #include "Math/Rotator.h"
 #include <algorithm>
 #include <cmath>
+
+USpringArmComponent::USpringArmComponent()
+{
+	PrimaryComponentTick.SetTickGroup(TG_PostUpdateWork);
+	PrimaryComponentTick.SetEndTickGroup(TG_PostUpdateWork);
+}
 
 void USpringArmComponent::BeginPlay()
 {

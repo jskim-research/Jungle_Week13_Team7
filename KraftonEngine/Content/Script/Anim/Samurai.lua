@@ -15,6 +15,7 @@ local ATTACK4_PATH = "Content/Animation/Samurai_UE4/SamuraiAttack4.uasset"
 local ATTACK5_PATH = "Content/Animation/Samurai_UE4/SamuraiAttack5.uasset"
 
 local DASH_SLASH_PATH = "Content/Animation/Samurai_UE4/SamuraiAttackHeavy1_Start.uasset"
+local ULTIMATE_ATTACK_PATH = "Content/Animation/Samurai_UE4/SamuraiAttackUltimate.uasset"
 
 local WALK_THRESHOLD = 0.1
 local RUN_THRESHOLD  = 8.0
@@ -25,6 +26,9 @@ local ATTACK_BLEND_OUT = 0.15
 
 local DASH_SLASH_BLEND_IN  = 0.05
 local DASH_SLASH_BLEND_OUT = 0.12
+
+local ULTIMATE_ATTACK_BLEND_IN  = 0.05
+local ULTIMATE_ATTACK_BLEND_OUT = 0.12
 
 local VK_SHIFT = 0x10
 
@@ -141,6 +145,22 @@ function init(self)
             return false
         end,
         DASH_SLASH_BLEND_IN
+    )
+
+    Anim.sm_add_state(top, "UltimateAttack", Anim.create_sequence_player(ULTIMATE_ATTACK_PATH, 1.0, false))
+
+    Anim.sm_add_transition(top, "AnyState", "UltimateAttack",
+        function()
+            return PlayerCharacter.IsInUltimateMode == true
+        end,
+        ULTIMATE_ATTACK_BLEND_IN
+    )
+
+    Anim.sm_add_transition(top, "UltimateAttack", "Locomotion",
+        function()
+            return PlayerCharacter.IsInUltimateMode ~= true
+        end,
+        ULTIMATE_ATTACK_BLEND_OUT
     )
 
     Anim.sm_add_transition(top, "DashSlash", "Locomotion",
