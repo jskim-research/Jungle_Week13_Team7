@@ -88,6 +88,7 @@ INCLUDE_PATHS = [
     "ThirdParty\\sol2\\include",
     "ThirdParty\\fmod\\include",
     "ThirdParty\\fbx\\include",
+    "ThirdParty\\NvCloth\\include",
     # PhysX(NuGet) — vcpkg.targets 가 조건부 Import 라 첫 clone 직후 IntelliSense 파싱 시점엔
     # Exists()=false 로 include 경로가 안 잡힘. 직접 박아 restore 타이밍과 무관하게 잡히게 함.
     "packages\\NVIDIA.PhysX.4.1.2\\installed\\x64-windows\\include",
