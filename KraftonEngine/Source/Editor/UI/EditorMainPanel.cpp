@@ -46,6 +46,7 @@ struct FDebugPlaceActorOption
 };
 
 const FDebugPlaceActorOption GDebugPlaceActorOptions[] = {
+	{ "Empty Actor", FLevelViewportLayout::EViewportPlaceActorType::EmptyActor },
 	{ "Cube", FLevelViewportLayout::EViewportPlaceActorType::Cube },
 	{ "Sphere", FLevelViewportLayout::EViewportPlaceActorType::Sphere },
 	{ "Cylinder", FLevelViewportLayout::EViewportPlaceActorType::Cylinder },

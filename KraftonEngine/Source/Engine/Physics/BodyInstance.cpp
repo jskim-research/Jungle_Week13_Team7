@@ -185,10 +185,14 @@ void FBodyInstance::InitBody(
 		PxRigidBodyExt::setMassAndUpdateInertia(*DynamicActor, MassKg);
 		DynamicActor->setCMassLocalPose(PxTransform(ToPxVec3(OwnerComponent->GetCenterOfMass())));
 		DynamicActor->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !OwnerComponent->GetEnableGravity());
-		DynamicActor->wakeUp();
 	}
 
 	InitParams.Scene->addActor(*Actor);
+
+	if (PxRigidDynamic* DynamicActor = Actor->is<PxRigidDynamic>())
+	{
+		DynamicActor->wakeUp();
+	}
 }
 
 void FBodyInstance::TermBody(const FBodyInstanceInitParams& InitParams)
