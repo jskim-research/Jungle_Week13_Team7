@@ -2,15 +2,80 @@
 #include "Materials/MaterialManager.h"
 #include "Materials/Material.h"
 #include "Platform/Paths.h"
+#include "stb_image.h"
 
 #include <filesystem>
 #include <fstream>
 #include <system_error>
+#include <vector>
 
 namespace
 {
 	// 실제 파일을 찾아 프로젝트 Content/Texture/Auto/<FBX이름>/ 아래로 복사하고
 	// 프로젝트 상대경로를 돌려준다. 못 찾으면 기존 동작(경로 정리)만 수행한다.
+	bool ReadFileBytes(const FString& FilePath, std::vector<uint8>& OutBytes)
+	{
+		OutBytes.clear();
+
+		std::ifstream File(FPaths::ToWide(FilePath), std::ios::binary | std::ios::ate);
+		if (!File.is_open())
+		{
+			return false;
+		}
+
+		const std::streamsize FileSize = File.tellg();
+		if (FileSize <= 0)
+		{
+			return false;
+		}
+
+		File.seekg(0, std::ios::beg);
+		OutBytes.resize(static_cast<size_t>(FileSize));
+		return !!File.read(reinterpret_cast<char*>(OutBytes.data()), FileSize);
+	}
+
+	bool TextureHasTransparentAlpha(const FString& TexturePath)
+	{
+		std::vector<uint8> FileBytes;
+		if (!ReadFileBytes(TexturePath, FileBytes))
+		{
+			return false;
+		}
+
+		int Width = 0;
+		int Height = 0;
+		int OrigChannels = 0;
+		stbi_uc* Pixels = stbi_load_from_memory(
+			FileBytes.data(),
+			static_cast<int>(FileBytes.size()),
+			&Width,
+			&Height,
+			&OrigChannels,
+			4);
+		if (!Pixels || Width <= 0 || Height <= 0)
+		{
+			if (Pixels)
+			{
+				stbi_image_free(Pixels);
+			}
+			return false;
+		}
+
+		const int PixelCount = Width * Height;
+		bool bHasTransparentAlpha = false;
+		for (int PixelIndex = 0; PixelIndex < PixelCount; ++PixelIndex)
+		{
+			if (Pixels[PixelIndex * 4 + 3] < 255)
+			{
+				bHasTransparentAlpha = true;
+				break;
+			}
+		}
+
+		stbi_image_free(Pixels);
+		return bHasTransparentAlpha;
+	}
+
 	FString ImportTextureToProject(const FString& RawTexturePath, const FString& FbxSourcePath)
 	{
 		if (RawTexturePath.empty())
@@ -113,6 +178,7 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 				if (Texture)
 				{
 					MaterialInfo.DiffuseTexturePath = ImportTextureToProject(Texture->GetFileName(), Context.SourcePath);
+					MaterialInfo.bDiffuseTextureHasAlpha = TextureHasTransparentAlpha(MaterialInfo.DiffuseTexturePath);
 				}
 			}
 		}
@@ -257,7 +323,7 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 	JsonData["Origin"] = "FbxImport";
 	JsonData["ShaderPath"] = "Shaders/Geometry/UberLit.hlsl";
 
-	const bool bTransparent = MaterialInfo.Opacity < 1.0f;
+	const bool bTransparent = MaterialInfo.Opacity < 1.0f || MaterialInfo.bDiffuseTextureHasAlpha;
 	if (bTransparent)
 	{
 		JsonData["RenderPass"] = "AlphaBlend";

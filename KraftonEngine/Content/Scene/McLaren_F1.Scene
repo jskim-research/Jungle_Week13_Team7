@@ -1,0 +1,67 @@
+{
+  "Actors" : [{
+      "ClassName" : "AStaticMeshActor",
+      "Name" : "AStaticMeshActor_17",
+      "NonSceneComponents" : [],
+      "ObjectId" : 2,
+      "Properties" : {
+        "PendingActorLocation" : [0.000000, 0.000000, -1.000000],
+        "PendingActorRotation" : [-0.000000, 0.000000, 0.000000],
+        "PendingActorScale" : [100.000000, 100.000000, 1.000000],
+        "PendingActorVisible" : true,
+        "PendingTagsString" : "",
+        "bNeedsTick" : true
+      },
+      "RootComponent" : {
+        "Children" : [],
+        "ClassName" : "UStaticMeshComponent",
+        "ObjectId" : 3,
+        "Properties" : {
+          "CachedEditRotator" : [0.000000, 0.000000, 0.000000],
+          "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
+          "CollisionEnabled" : [0, 0, 0, 0, 0, 0, 0, 0],
+          "Mass" : 1.000000,
+          "MaterialSlots" : ["Content/Material/Auto/BasicShapeMaterial.mat"],
+          "ObjectType" : [0, 0, 0, 0, 0, 0, 0, 0],
+          "RelativeTransform.Location" : [0.000000, 0.000000, -1.000000],
+          "RelativeTransform.Scale" : [100.000000, 100.000000, 1.000000],
+          "ResponseContainer" : {
+            "Responses[0]" : [2, 0, 0, 0, 0, 0, 0, 0],
+            "Responses[1]" : [2, 0, 0, 0, 0, 0, 0, 0],
+            "Responses[2]" : [2, 0, 0, 0, 0, 0, 0, 0],
+            "Responses[3]" : [2, 0, 0, 0, 0, 0, 0, 0],
+            "Responses[4]" : [2, 0, 0, 0, 0, 0, 0, 0]
+          },
+          "StaticMeshPath" : "Content/Data/BasicShape/Cube_StaticMesh.uasset",
+          "bAutoActivate" : true,
+          "bCastShadow" : true,
+          "bCastShadowAsTwoSided" : false,
+          "bEditorOnly" : false,
+          "bEnableGravity" : true,
+          "bGenerateOverlapEvents" : false,
+          "bHiddenInComponentTree" : false,
+          "bIsActive" : true,
+          "bIsVisible" : true,
+          "bSimulatePhysics" : false,
+          "bTickEnable" : true
+        }
+      }
+    }],
+  "ClassName" : "UWorld",
+  "ContextHandle" : "NewScene",
+  "ContextName" : "New Scene",
+  "Name" : "McLaren_F1",
+  "ObjectId" : 1,
+  "PerspectiveCamera" : {
+    "FOV" : 1.047198,
+    "FarClip" : 1000.000000,
+    "Location" : [16.360365, -11.681653, 12.807601],
+    "NearClip" : 0.100000,
+    "Rotation" : [0.000000, 24.915047, 142.500214]
+  },
+  "Version" : 2,
+  "WorldSettings" : {
+    "GameMode" : ""
+  },
+  "WorldType" : "Editor"
+}
