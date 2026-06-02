@@ -1000,6 +1000,56 @@ namespace
 		return WheelOmega * GearRatio;
 	}
 
+	float ComputeGearShiftRevRatio(const PxVehicleDrive4W* Vehicle, uint32_t GearIndex, float DisplayEngineOmega)
+	{
+		if (!Vehicle)
+		{
+			return 0.0f;
+		}
+
+		const float MaxOmega = std::max(Vehicle->mDriveSimData.getEngineData().mMaxOmega, 1.0f);
+		const float EngineOmega = std::max(
+			std::max(Vehicle->mDriveDynData.getEngineRotationSpeed(), DisplayEngineOmega),
+			ComputeWheelDrivenEngineOmega(Vehicle, GearIndex));
+		return FMath::Clamp(EngineOmega / MaxOmega, 0.0f, 2.0f);
+	}
+
+	bool CanShiftUp(const PxVehicleDrive4W* Vehicle, float DisplayEngineOmega)
+	{
+		if (!Vehicle)
+		{
+			return false;
+		}
+
+		const uint32_t CurrentGear = Vehicle->mDriveDynData.getCurrentGear();
+		const uint32_t TargetGear = Vehicle->mDriveDynData.getTargetGear();
+		const uint32_t EffectiveGear = TargetGear > PxVehicleGearsData::eNEUTRAL ? TargetGear : CurrentGear;
+		if (EffectiveGear >= PxVehicleGearsData::eEIGHTH)
+		{
+			return false;
+		}
+		if (EffectiveGear == PxVehicleGearsData::eNEUTRAL)
+		{
+			return true;
+		}
+
+		constexpr float MinUpshiftRevRatio = 0.72f;
+		return ComputeGearShiftRevRatio(Vehicle, EffectiveGear, DisplayEngineOmega) >= MinUpshiftRevRatio;
+	}
+
+	bool CanShiftDown(const PxVehicleDrive4W* Vehicle)
+	{
+		if (!Vehicle)
+		{
+			return false;
+		}
+
+		const uint32_t CurrentGear = Vehicle->mDriveDynData.getCurrentGear();
+		const uint32_t TargetGear = Vehicle->mDriveDynData.getTargetGear();
+		const uint32_t EffectiveGear = TargetGear > PxVehicleGearsData::eNEUTRAL ? TargetGear : CurrentGear;
+		return EffectiveGear > PxVehicleGearsData::eFIRST;
+	}
+
 	void UpdateVehicleEngineState(PxVehicleDrive4W* Vehicle, FFourWheeledVehicleRuntimeState& State, float& DisplayEngineOmega, float ThrottleInput, float DeltaTime)
 	{
 		if (!Vehicle)
@@ -1197,18 +1247,18 @@ void FPhysXPhysicsScene::UpdateVehicle(UFourWheeledVehicleMovementComponent* Veh
 	if (Params.bUseManualGears)
 	{
 		Instance->Vehicle->mDriveDynData.setUseAutoGears(false);
+		Instance->Vehicle->mDriveDynData.setGearUp(false);
+		Instance->Vehicle->mDriveDynData.setGearDown(false);
 		if (Params.bGearNeutralPressed)
 		{
-			Instance->Vehicle->mDriveDynData.setGearUp(false);
-			Instance->Vehicle->mDriveDynData.setGearDown(false);
 			Instance->Vehicle->mDriveDynData.setCurrentGear(PxVehicleGearsData::eNEUTRAL);
 			Instance->Vehicle->mDriveDynData.setTargetGear(PxVehicleGearsData::eNEUTRAL);
 		}
-		else if (Params.bGearShiftUpPressed)
+		else if (Params.bGearShiftUpPressed && CanShiftUp(Instance->Vehicle, Instance->DisplayEngineOmega))
 		{
 			Instance->Vehicle->mDriveDynData.setGearUp(true);
 		}
-		if (Params.bGearShiftDownPressed)
+		if (Params.bGearShiftDownPressed && CanShiftDown(Instance->Vehicle))
 		{
 			Instance->Vehicle->mDriveDynData.setGearDown(true);
 		}
