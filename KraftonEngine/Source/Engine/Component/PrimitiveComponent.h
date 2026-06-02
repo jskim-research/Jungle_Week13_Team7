@@ -179,7 +179,7 @@ public:
 
 	UFUNCTION(Callable, Exec, Category="Physics")
 	void SetSimulatePhysics(bool bInSimulate);
-	UFUNCTION(Pure, Category="Physics")
+	UFUNCTION(Callable, Pure, Category="Physics")
 	bool GetSimulatePhysics() const { return bSimulatePhysics; }
 
 	// --- Physics Force/Velocity API ---
