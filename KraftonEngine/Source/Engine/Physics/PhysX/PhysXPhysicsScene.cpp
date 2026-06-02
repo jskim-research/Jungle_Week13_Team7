@@ -1028,7 +1028,7 @@ namespace
 		{
 			return false;
 		}
-		if (EffectiveGear == PxVehicleGearsData::eNEUTRAL)
+		if (EffectiveGear < PxVehicleGearsData::eFIRST)
 		{
 			return true;
 		}
@@ -1047,7 +1047,7 @@ namespace
 		const uint32_t CurrentGear = Vehicle->mDriveDynData.getCurrentGear();
 		const uint32_t TargetGear = Vehicle->mDriveDynData.getTargetGear();
 		const uint32_t EffectiveGear = TargetGear > PxVehicleGearsData::eNEUTRAL ? TargetGear : CurrentGear;
-		return EffectiveGear > PxVehicleGearsData::eFIRST;
+		return EffectiveGear > PxVehicleGearsData::eREVERSE;
 	}
 
 	void UpdateVehicleEngineState(PxVehicleDrive4W* Vehicle, FFourWheeledVehicleRuntimeState& State, float& DisplayEngineOmega, float ThrottleInput, float DeltaTime)
