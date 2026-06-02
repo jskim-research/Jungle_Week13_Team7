@@ -245,7 +245,7 @@ public:
 		UPrimitiveComponent* HitComponent,
 		AActor* OtherActor,
 		UPrimitiveComponent* OtherComp);
-
+ 
 	// 멀티캐스트 델리게이트 — 외부 바인딩용
 	FComponentBeginOverlapSignature OnComponentBeginOverlap;
 	FComponentEndOverlapSignature OnComponentEndOverlap;

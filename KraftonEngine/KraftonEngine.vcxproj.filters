@@ -181,6 +181,9 @@
     <Filter Include="Source\Engine\Component\Movement">
       <UniqueIdentifier>{9d062af4-b676-61f1-319e-efb1ba670c12}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Engine\Component\Vehicle">
+      <UniqueIdentifier>{3c6d90da-8ae6-4f9e-9b0d-8b3c771968a8}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Engine\Component\Primitive">
       <UniqueIdentifier>{57bc4de3-ad9b-789f-c9a3-f7282f3fe720}</UniqueIdentifier>
     </Filter>
@@ -1096,6 +1099,9 @@
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\Movement\RotatingMovementComponent.cpp">
       <Filter>Source\Engine\Component\Movement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Component\Vehicle\F1CarVisualControlComponent.cpp">
+      <Filter>Source\Engine\Component\Vehicle</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\Primitive\BillboardComponent.cpp">
       <Filter>Source\Engine\Component\Primitive</Filter>
@@ -2326,6 +2332,9 @@
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Movement\RotatingMovementComponent.h">
       <Filter>Source\Engine\Component\Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\Vehicle\F1CarVisualControlComponent.h">
+      <Filter>Source\Engine\Component\Vehicle</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Primitive\BillboardComponent.h">
       <Filter>Source\Engine\Component\Primitive</Filter>
