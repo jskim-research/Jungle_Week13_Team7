@@ -62,6 +62,7 @@ struct FShowFlags
 	bool bShowShadowFrustum = false;
 	bool bCollision = false; // Simple collision wireframe (BodySetup / Shape, PhysX readback not required)
 	bool bParticle = true;
+	bool bDepthOfField = false;
 };
 
 // 뷰포트 카메라 프리셋 (Perspective / 6방향 Orthographic)

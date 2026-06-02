@@ -37,6 +37,7 @@ namespace Key
 	constexpr const char* bVisualize25DCulling = "bVisualize25DCulling";
 	constexpr const char* bShowShadowFrustum = "bShowShadowFrustum";
 	constexpr const char* bCollision = "bCollision";
+	constexpr const char* bDepthOfField = "bDepthOfField";
 	constexpr const char* GridSpacing = "GridSpacing";
 	constexpr const char* GridHalfLineCount = "GridHalfLineCount";
 	constexpr const char* CameraMoveSensitivity = "CameraMoveSensitivity";
@@ -165,6 +166,7 @@ json::JSON SaveRenderOptions(const FViewportRenderOptions& Opts)
 	Obj[Key::bVisualize25DCulling] = Opts.ShowFlags.bVisualize25DCulling;
 	Obj[Key::bShowShadowFrustum] = Opts.ShowFlags.bShowShadowFrustum;
 	Obj[Key::bCollision] = Opts.ShowFlags.bCollision;
+	Obj[Key::bDepthOfField] = Opts.ShowFlags.bDepthOfField;
 	Obj[Key::GridSpacing] = Opts.GridSpacing;
 	Obj[Key::GridHalfLineCount] = Opts.GridHalfLineCount;
 	Obj[Key::CameraMoveSensitivity] = Opts.CameraMoveSensitivity;
@@ -219,6 +221,8 @@ void LoadRenderOptions(json::JSON Obj, FViewportRenderOptions& Opts)
 		Opts.ShowFlags.bShowShadowFrustum = Obj[Key::bShowShadowFrustum].ToBool();
 	if (Obj.hasKey(Key::bCollision))
 		Opts.ShowFlags.bCollision = Obj[Key::bCollision].ToBool();
+	if (Obj.hasKey(Key::bDepthOfField))
+		Opts.ShowFlags.bDepthOfField = Obj[Key::bDepthOfField].ToBool();
 	if (Obj.hasKey(Key::GridSpacing))
 		Opts.GridSpacing = static_cast<float>(Obj[Key::GridSpacing].ToFloat());
 	if (Obj.hasKey(Key::GridHalfLineCount))
