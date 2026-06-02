@@ -137,6 +137,7 @@ private:
     void LoadAnimationFromPath();
     void CapturePersistentAnimInstanceSettings();
     void ApplyPersistentAnimInstanceSettings(UAnimInstance* Instance);
+    bool ShouldInstantiatePhysicsAsset() const;
 	void CreateBodiesFromPhysicsAsset();
 	void CreateConstraintInstancesFromPhysicsAsset();
 	void UpdateConstraintFrames();

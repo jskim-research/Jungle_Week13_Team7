@@ -138,7 +138,7 @@ function init(self)
 
     Anim.sm_add_transition(top, "AnyState", "DashSlash",
         function()
-            if self.DashSlashPressed and not self.DashSlashActive and not Anim.is_owner_falling() then
+            if self.DashSlashPressed and not self.DashSlashActive and not Anim.is_owner_falling() and not PlayerCharacter.IsUltimateRunning then
                 BeginDashSlash(self)
                 return true
             end

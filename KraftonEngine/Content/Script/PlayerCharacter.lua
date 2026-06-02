@@ -385,7 +385,7 @@ function PlayerCharacter.BeginUltimate()
     local originalLocation = actorLocation
     local originalRotation = actorRotation
 
-    local PrimComp = Reflection.Call(obj, "GetPrimitiveComponent")
+    local PrimComp = owner:GetPrimitiveComponent()
     local PrevSimulatePhysics = false
 
     if PrimComp ~= nil then

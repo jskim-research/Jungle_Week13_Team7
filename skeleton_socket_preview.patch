@@ -1,0 +1,1215 @@
+diff --git a/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp b/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp
+index c3b3d0f..c0087ee 100644
+--- a/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp
++++ b/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp
+@@ -22,6 +22,7 @@
+ #include "Animation/Instance/AnimSingleNodeInstance.h"
+ #include "Animation/AnimationManager.h"
+ #include "Animation/Skeleton/Skeleton.h"
++#include "Animation/Skeleton/SkeletonManager.h"
+ #include "Animation/Sequence/AnimDataModel.h"
+ #include "Asset/AssetRegistry.h"
+ #include "Editor/EditorEngine.h"
+@@ -33,6 +34,8 @@
+ #include "Editor/UI/Util/EditorTextureManager.h"
+ #include "Platform/Paths.h"
+ #include "Object/Object.h"
++#include "Component/Primitive/StaticMeshComponent.h"
++#include "Mesh/MeshManager.h"
+ 
+ #include <imgui.h>
+ #include <algorithm>
+@@ -100,6 +103,37 @@ namespace
+ 		return Asset->Bones.empty() ? -1 : 0;
+ 	}
+ 
++
++	FString MakeUniqueSocketName(USkeleton* Skeleton, const FString& BoneName)
++	{
++		FString BaseName = BoneName.empty() ? FString("socket") : BoneName + "_socket";
++		FString Candidate = BaseName;
++		int32 Suffix = 1;
++		while (Skeleton && Skeleton->HasSocket(FName(Candidate)))
++		{
++			Candidate = BaseName + "_" + std::to_string(Suffix++);
++		}
++		return Candidate;
++	}
++
++	bool SocketBelongsToBone(const FSkeletonSocket& Socket, const FBone& Bone)
++	{
++		if (!Socket.BoneName.empty())
++		{
++			return Socket.BoneName == Bone.Name;
++		}
++		return false;
++	}
++
++	void CopyToInputBuffer(char* Buffer, size_t BufferSize, const FString& Value)
++	{
++		if (!Buffer || BufferSize == 0)
++		{
++			return;
++		}
++		std::snprintf(Buffer, BufferSize, "%s", Value.c_str());
++	}
++
+ 	void SyncTranslationRetargetModeToSkeleton(USkeletalMesh* Mesh, int32 BoneIndex, const FBone& Bone)
+ 	{
+ 		if (!Mesh)
+@@ -316,9 +350,11 @@ void FMeshEditorWidget::Open(UObject* Object)
+ 	WorldContext.World->SetEditorPOVProvider(&ViewportClient);
+ 
+ 	SelectedBoneIndex = -1;
++	SelectedSocketName = FName::None;
+ 	if (USkeletalMesh* Mesh = Cast<USkeletalMesh>(EditedObject))
+ 	{
+ 		SelectedBoneIndex = FindFirstRootBoneIndex(Mesh->GetSkeletalMeshAsset());
++		ViewportClient.RefreshSocketPreviewMeshes(Mesh);
+ 	}
+ 	ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), SelectedBoneIndex);
+ 
+@@ -337,6 +373,8 @@ void FMeshEditorWidget::Close()
+ 
+ 	if (UWorld* PreviewWorld = ViewportClient.GetPreviewWorld())
+ 	{
++		ViewportClient.ClearSocketPreviewMeshes();
++
+ 		FScene& PreviewScene = PreviewWorld->GetScene();
+ 		GEngine->GetRenderer().GetResources().ReleaseShadowResourcesForScene(&PreviewScene);
+ 
+@@ -673,7 +711,7 @@ void FMeshEditorWidget::RenderSkeletonLayout()
+ 			{
+ 				if (Asset->Bones[i].ParentIndex == -1)
+ 				{
+-					RenderBoneTree(Asset, i);
++					RenderBoneTree(SkeletalMesh, Asset, i);
+ 				}
+ 			}
+ 		}
+@@ -711,12 +749,37 @@ void FMeshEditorWidget::RenderSkeletonLayout()
+ 
+ 	ImGui::SameLine();
+ 
+-	// Right: bone details
++	// Right: bone/socket details
+ 	ImGui::BeginChild("BoneDetails", ImVec2(DetailsWidth, 0), true);
+-	ImGui::Text("Bone Details");
++	ImGui::Text("Skeleton Details");
+ 	ImGui::Separator();
+ 
+-	if (SkeletalMesh && SelectedBoneIndex != -1)
++	USkeleton* Skeleton = SkeletalMesh ? SkeletalMesh->GetSkeleton() : nullptr;
++	if (Skeleton)
++	{
++		const char* SaveLabel = IsDirty() ? "Save Skeleton *" : "Save Skeleton";
++		if (ImGui::Button(SaveLabel))
++		{
++			const FString& SkeletonPath = Skeleton->GetAssetPathFileName();
++			if (!SkeletonPath.empty() && SkeletonPath != "None")
++			{
++				if (FSkeletonManager::Get().SaveSkeleton(Skeleton, SkeletonPath, "None"))
++				{
++					ClearDirty();
++				}
++			}
++		}
++		ImGui::SameLine();
++		ImGui::TextDisabled("Sockets: %zu", Skeleton->GetSockets().size());
++		ImGui::Separator();
++	}
++
++	FSkeletonSocket* SelectedSocket = Skeleton ? FindSelectedSocket(Skeleton) : nullptr;
++	if (SkeletalMesh && Skeleton && SelectedSocket)
++	{
++		RenderSelectedSocketDetails(SkeletalMesh, Skeleton, *SelectedSocket);
++	}
++	else if (SkeletalMesh && SelectedBoneIndex != -1)
+ 	{
+ 		FSkeletalMesh* Asset = SkeletalMesh->GetSkeletalMeshAsset();
+ 		FBone& Bone = Asset->Bones[SelectedBoneIndex];
+@@ -1568,30 +1631,218 @@ void FMeshEditorWidget::RenderMeshStatsOverlay(ImDrawList* DrawList, const ImVec
+ }
+ 
+ // ─────────────────────────────────────────────────────────────────────────────
+-// Bone tree (Skeleton tab)
++// Bone tree / Skeleton socket helpers (Skeleton tab)
+ // ─────────────────────────────────────────────────────────────────────────────
+ 
+-void FMeshEditorWidget::RenderBoneTree(const FSkeletalMesh* Asset, int32 Index)
++FSkeletonSocket* FMeshEditorWidget::FindSelectedSocket(USkeleton* Skeleton, int32* OutIndex)
+ {
+-	const FBone& Bone = Asset->Bones[Index];
++	if (OutIndex)
++	{
++		*OutIndex = -1;
++	}
++	if (!Skeleton || SelectedSocketName == FName::None)
++	{
++		return nullptr;
++	}
+ 
+-	ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
++	TArray<FSkeletonSocket>& Sockets = Skeleton->GetMutableSockets();
++	for (int32 Index = 0; Index < static_cast<int32>(Sockets.size()); ++Index)
++	{
++		if (Sockets[Index].Name == SelectedSocketName)
++		{
++			if (OutIndex)
++			{
++				*OutIndex = Index;
++			}
++			return &Sockets[Index];
++		}
++	}
+ 
+-	if (Index == SelectedBoneIndex)
++	SelectedSocketName = FName::None;
++	return nullptr;
++}
++
++void FMeshEditorWidget::MarkSocketPreviewDirty(const FName& SocketName)
++{
++	if (UStaticMeshComponent* Preview = ViewportClient.FindSocketPreviewMesh(SocketName))
+ 	{
+-		Flags |= ImGuiTreeNodeFlags_Selected;
++		Preview->MarkTransformDirty();
++	}
++	if (USkeletalMeshComponent* PreviewMeshComponent = ViewportClient.GetPreviewMeshComponent())
++	{
++		for (USceneComponent* Child : PreviewMeshComponent->GetChildren())
++		{
++			if (IsValid(Child) && Child->GetAttachSocketName() == SocketName)
++			{
++				Child->MarkTransformDirty();
++			}
++		}
++	}
++}
++
++void FMeshEditorWidget::RenderSelectedSocketDetails(USkeletalMesh* Mesh, USkeleton* Skeleton, FSkeletonSocket& Socket)
++{
++	if (!Mesh || !Skeleton)
++	{
++		return;
++	}
++
++	ImGui::Text("Socket");
++	ImGui::Separator();
++
++	char NameBuffer[128] = {};
++	CopyToInputBuffer(NameBuffer, sizeof(NameBuffer), Socket.Name.ToString());
++	if (ImGui::InputText("Name", NameBuffer, sizeof(NameBuffer), ImGuiInputTextFlags_EnterReturnsTrue))
++	{
++		FName NewName(NameBuffer);
++		if (NewName != FName::None && NewName != Socket.Name && !Skeleton->HasSocket(NewName))
++		{
++			const FName OldName = Socket.Name;
++			const FString PreviewPath = Socket.PreviewStaticMeshPath;
++			ViewportClient.ClearSocketPreviewMesh(OldName);
++			Socket.Name = NewName;
++			SelectedSocketName = NewName;
++			if (!PreviewPath.empty() && PreviewPath != "None")
++			{
++				ViewportClient.SetSocketPreviewMesh(NewName, PreviewPath);
++			}
++			MarkDirty();
++		}
++	}
++	if (ImGui::IsItemHovered())
++	{
++		ImGui::SetTooltip("Press Enter to apply. Socket name must be unique.");
++	}
++
++	ImGui::Text("Parent Bone: %s", Socket.BoneName.c_str());
++	ImGui::Text("Bone Index: %d", Skeleton->ResolveSocketBoneIndex(Socket));
++	ImGui::Dummy(ImVec2(0, 6));
++
++	bool bChanged = false;
++	FVector Location = Socket.RelativeLocation;
++	if (ImGui::DragFloat3("Location", &Location.X, 0.1f))
++	{
++		Socket.RelativeLocation = Location;
++		bChanged = true;
++	}
++
++	FVector Rotation = Socket.RelativeRotation.ToVector();
++	if (ImGui::DragFloat3("Rotation", &Rotation.X, 0.1f))
++	{
++		Socket.RelativeRotation = FRotator(Rotation);
++		bChanged = true;
++	}
++
++	FVector Scale = Socket.RelativeScale;
++	if (ImGui::DragFloat3("Scale", &Scale.X, 0.1f, 0.001f))
++	{
++		Scale.X = std::max(0.001f, Scale.X);
++		Scale.Y = std::max(0.001f, Scale.Y);
++		Scale.Z = std::max(0.001f, Scale.Z);
++		Socket.RelativeScale = Scale;
++		bChanged = true;
++	}
++
++	if (bChanged)
++	{
++		MarkSocketPreviewDirty(Socket.Name);
++		MarkDirty();
++	}
++
++	ImGui::Dummy(ImVec2(0, 8));
++	ImGui::Separator();
++	ImGui::Text("Preview Mesh");
++
++	char PathBuffer[260] = {};
++	CopyToInputBuffer(PathBuffer, sizeof(PathBuffer), Socket.PreviewStaticMeshPath);
++	if (ImGui::InputText("Path", PathBuffer, sizeof(PathBuffer), ImGuiInputTextFlags_EnterReturnsTrue))
++	{
++		Socket.PreviewStaticMeshPath = FString(PathBuffer).empty() ? FString("None") : FString(PathBuffer);
++		ViewportClient.SetSocketPreviewMesh(Socket.Name, Socket.PreviewStaticMeshPath);
++		MarkDirty();
++	}
++
++	if (ImGui::Button("Clear Preview Mesh"))
++	{
++		Socket.PreviewStaticMeshPath = "None";
++		ViewportClient.ClearSocketPreviewMesh(Socket.Name);
++		MarkDirty();
++	}
++
++	ImGui::SameLine();
++	if (ImGui::Button("Refresh Mesh List"))
++	{
++		FMeshManager::ScanMeshAssets();
+ 	}
+ 
+-	bool bHasChildren = false;
++	const TArray<FAssetListItem>& StaticMeshes = FMeshManager::GetAvailableStaticMeshFiles();
++	const char* CurrentPreview = Socket.PreviewStaticMeshPath.empty() ? "None" : Socket.PreviewStaticMeshPath.c_str();
++	if (ImGui::BeginCombo("Static Mesh", CurrentPreview))
++	{
++		if (ImGui::Selectable("None", Socket.PreviewStaticMeshPath == "None"))
++		{
++			Socket.PreviewStaticMeshPath = "None";
++			ViewportClient.ClearSocketPreviewMesh(Socket.Name);
++			MarkDirty();
++		}
++		for (const FAssetListItem& Item : StaticMeshes)
++		{
++			const bool bSelected = Socket.PreviewStaticMeshPath == Item.FullPath;
++			FString Label = Item.DisplayName.empty() ? Item.FullPath : Item.DisplayName;
++			if (ImGui::Selectable(Label.c_str(), bSelected))
++			{
++				Socket.PreviewStaticMeshPath = Item.FullPath;
++				ViewportClient.SetSocketPreviewMesh(Socket.Name, Socket.PreviewStaticMeshPath);
++				MarkDirty();
++			}
++			if (ImGui::IsItemHovered())
++			{
++				ImGui::SetTooltip("%s", Item.FullPath.c_str());
++			}
++		}
++		ImGui::EndCombo();
++	}
++}
++
++void FMeshEditorWidget::RenderBoneTree(USkeletalMesh* Mesh, const FSkeletalMesh* Asset, int32 Index)
++{
++	if (!Mesh || !Asset || Index < 0 || Index >= static_cast<int32>(Asset->Bones.size()))
++	{
++		return;
++	}
++
++	USkeleton* Skeleton = Mesh->GetSkeleton();
++	const FBone& Bone = Asset->Bones[Index];
++
++	bool bHasChildBones = false;
+ 	for (int32 i = Index + 1; i < static_cast<int32>(Asset->Bones.size()); ++i)
+ 	{
+ 		if (Asset->Bones[i].ParentIndex == Index)
+ 		{
+-			bHasChildren = true;
++			bHasChildBones = true;
+ 			break;
+ 		}
+ 	}
+ 
++	bool bHasSockets = false;
++	if (Skeleton)
++	{
++		for (const FSkeletonSocket& Socket : Skeleton->GetSockets())
++		{
++			if (SocketBelongsToBone(Socket, Bone))
++			{
++				bHasSockets = true;
++				break;
++			}
++		}
++	}
++
++	const bool bHasChildren = bHasChildBones || bHasSockets;
++	ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
++	if (SelectedSocketName == FName::None && Index == SelectedBoneIndex)
++	{
++		Flags |= ImGuiTreeNodeFlags_Selected;
++	}
+ 	if (!bHasChildren)
+ 	{
+ 		Flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+@@ -1602,16 +1853,82 @@ void FMeshEditorWidget::RenderBoneTree(const FSkeletalMesh* Asset, int32 Index)
+ 	if (ImGui::IsItemClicked())
+ 	{
+ 		SelectedBoneIndex = Index;
++		SelectedSocketName = FName::None;
+ 		ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), Index);
+ 	}
+ 
++	if (Skeleton && ImGui::BeginPopupContextItem())
++	{
++		if (ImGui::MenuItem("Add Socket"))
++		{
++			FSkeletonSocket NewSocket;
++			NewSocket.Name = FName(MakeUniqueSocketName(Skeleton, Bone.Name));
++			NewSocket.BoneName = Bone.Name;
++			NewSocket.BoneIndex = Skeleton->FindBoneIndex(Bone.Name);
++			Skeleton->GetMutableSockets().push_back(NewSocket);
++			SelectedBoneIndex = Index;
++			SelectedSocketName = NewSocket.Name;
++			ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), Index);
++			MarkDirty();
++		}
++		ImGui::EndPopup();
++	}
++
+ 	if (bOpen && bHasChildren)
+ 	{
+ 		for (int32 i = Index + 1; i < static_cast<int32>(Asset->Bones.size()); ++i)
+ 		{
+ 			if (Asset->Bones[i].ParentIndex == Index)
+ 			{
+-				RenderBoneTree(Asset, i);
++				RenderBoneTree(Mesh, Asset, i);
++			}
++		}
++
++		if (Skeleton)
++		{
++			TArray<FSkeletonSocket>& Sockets = Skeleton->GetMutableSockets();
++			for (int32 SocketIndex = 0; SocketIndex < static_cast<int32>(Sockets.size()); ++SocketIndex)
++			{
++				FSkeletonSocket& Socket = Sockets[SocketIndex];
++				if (!SocketBelongsToBone(Socket, Bone))
++				{
++					continue;
++				}
++
++				ImGui::PushID(SocketIndex);
++				ImGuiTreeNodeFlags SocketFlags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth;
++				if (SelectedSocketName == Socket.Name)
++				{
++					SocketFlags |= ImGuiTreeNodeFlags_Selected;
++				}
++
++				FString Label = FString("[Socket] ") + Socket.Name.ToString();
++				ImGui::TreeNodeEx(Label.c_str(), SocketFlags);
++				if (ImGui::IsItemClicked())
++				{
++					SelectedBoneIndex = Index;
++					SelectedSocketName = Socket.Name;
++					ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), Index);
++				}
++
++				if (ImGui::BeginPopupContextItem())
++				{
++					if (ImGui::MenuItem("Delete Socket"))
++					{
++						ViewportClient.ClearSocketPreviewMesh(Socket.Name);
++						if (SelectedSocketName == Socket.Name)
++						{
++							SelectedSocketName = FName::None;
++						}
++						Sockets.erase(Sockets.begin() + SocketIndex);
++						MarkDirty();
++						ImGui::EndPopup();
++						ImGui::PopID();
++						break;
++					}
++					ImGui::EndPopup();
++				}
++				ImGui::PopID();
+ 			}
+ 		}
+ 		ImGui::TreePop();
+diff --git a/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.h b/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.h
+index 2a2d250..b291e9e 100644
+--- a/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.h
++++ b/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.h
+@@ -3,11 +3,15 @@
+ #include "Editor/Viewport/Asset/MeshEditorViewportClient.h"
+ #include "Editor/UI/Dialog/FbxImportOptionsDialog.h"
+ #include "Asset/AssetRegistry.h"
++#include "Object/FName.h"
+ 
+ struct FSkeletalMesh;
+ struct ImDrawList;
+ struct ImVec2;
+ class UAnimSequence;
++class USkeletalMesh;
++class USkeleton;
++struct FSkeletonSocket;
+ class UAnimMontage;
+ class UAnimSingleNodeInstance;
+ 
+@@ -79,7 +83,10 @@ private:
+ 
+ 	// Shared helpers
+ 	void RenderViewportPanel(ImVec2 Size);
+-	void RenderBoneTree(const FSkeletalMesh* Asset, int32 Index);
++	void RenderBoneTree(USkeletalMesh* Mesh, const FSkeletalMesh* Asset, int32 Index);
++	void RenderSelectedSocketDetails(USkeletalMesh* Mesh, USkeleton* Skeleton, FSkeletonSocket& Socket);
++	FSkeletonSocket* FindSelectedSocket(USkeleton* Skeleton, int32* OutIndex = nullptr);
++	void MarkSocketPreviewDirty(const FName& SocketName);
+ 	void RenderMeshStatsOverlay(ImDrawList* DrawList, const ImVec2& ViewportPos) const;
+ 
+ 	// Animation tab helpers
+@@ -101,6 +108,7 @@ private:
+ 
+ 	// Skeleton tab state
+ 	int32 SelectedBoneIndex = -1;
++	FName SelectedSocketName = FName::None;
+ 	float HierarchyWidth    = 250.0f;
+ 	float DetailsWidth      = 300.0f;
+ 
+diff --git a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp
+index d301fb7..72f502b 100644
+--- a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp
++++ b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp
+@@ -10,6 +10,10 @@
+ #include "GameFramework/World.h"
+ #include "Component/Debug/GizmoComponent.h"
+ #include "Component/Primitive/SkeletalMeshComponent.h"
++#include "Component/Primitive/StaticMeshComponent.h"
++#include "Animation/Skeleton/Skeleton.h"
++#include "Mesh/MeshManager.h"
++#include "Runtime/Engine.h"
+ #include "Component/Debug/BoneDebugComponent.h"
+ #include "Collision/Ray/RayUtils.h"
+ #include "Settings/EditorSettings.h"
+@@ -34,6 +38,10 @@ void FMeshEditorViewportClient::AddReferencedObjects(FReferenceCollector& Collec
+ 	Collector.AddReferencedObject(Gizmo);
+ 	Collector.AddReferencedObject(PreviewMeshComponent);
+ 	Collector.AddReferencedObject(BoneDebugComponent);
++	for (auto& Pair : SocketPreviewMeshes)
++	{
++		Collector.AddReferencedObject(Pair.second);
++	}
+ 	Collector.AddReferencedObject(PreviewWorld);
+ 	Collector.AddReferencedObject(PreviewActor);
+ }
+@@ -47,6 +55,8 @@ void FMeshEditorViewportClient::Release()
+ 		Viewport = nullptr;
+ 	}
+ 
++	ClearSocketPreviewMeshes();
++
+ 	PreviewWorld = nullptr;
+ 	PreviewActor = nullptr;
+ 
+@@ -75,6 +85,94 @@ void FMeshEditorViewportClient::CreateBoneDebugComponent()
+ 	BoneDebugComponent->CreateRenderState();
+ }
+ 
++
++void FMeshEditorViewportClient::SetSocketPreviewMesh(const FName& SocketName, const FString& StaticMeshPath)
++{
++	if (SocketName == FName::None || !PreviewActor || !PreviewMeshComponent)
++	{
++		return;
++	}
++
++	if (StaticMeshPath.empty() || StaticMeshPath == "None")
++	{
++		ClearSocketPreviewMesh(SocketName);
++		return;
++	}
++
++	UStaticMeshComponent* PreviewComp = FindSocketPreviewMesh(SocketName);
++	if (!PreviewComp)
++	{
++		PreviewComp = PreviewActor->AddComponent<UStaticMeshComponent>();
++		PreviewComp->AttachToComponent(PreviewMeshComponent, SocketName);
++		PreviewComp->SetRelativeTransform(FTransform());
++		SocketPreviewMeshes[SocketName] = PreviewComp;
++	}
++
++	ID3D11Device* Device = GEngine->GetRenderer().GetFD3DDevice().GetDevice();
++	UStaticMesh* StaticMesh = FMeshManager::LoadStaticMesh(StaticMeshPath, Device);
++	PreviewComp->SetStaticMesh(StaticMesh);
++	PreviewComp->MarkTransformDirty();
++}
++
++void FMeshEditorViewportClient::ClearSocketPreviewMesh(const FName& SocketName)
++{
++	auto It = SocketPreviewMeshes.find(SocketName);
++	if (It == SocketPreviewMeshes.end())
++	{
++		return;
++	}
++
++	if (PreviewActor && IsValid(It->second))
++	{
++		PreviewActor->RemoveComponent(It->second);
++	}
++	SocketPreviewMeshes.erase(It);
++}
++
++void FMeshEditorViewportClient::ClearSocketPreviewMeshes()
++{
++	TArray<FName> Names;
++	Names.reserve(SocketPreviewMeshes.size());
++	for (auto& Pair : SocketPreviewMeshes)
++	{
++		Names.push_back(Pair.first);
++	}
++
++	for (const FName& Name : Names)
++	{
++		ClearSocketPreviewMesh(Name);
++	}
++}
++
++void FMeshEditorViewportClient::RefreshSocketPreviewMeshes(USkeletalMesh* Mesh)
++{
++	ClearSocketPreviewMeshes();
++	if (!Mesh)
++	{
++		return;
++	}
++
++	USkeleton* Skeleton = Mesh->GetSkeleton();
++	if (!Skeleton)
++	{
++		return;
++	}
++
++	for (const FSkeletonSocket& Socket : Skeleton->GetSockets())
++	{
++		if (!Socket.PreviewStaticMeshPath.empty() && Socket.PreviewStaticMeshPath != "None")
++		{
++			SetSocketPreviewMesh(Socket.Name, Socket.PreviewStaticMeshPath);
++		}
++	}
++}
++
++UStaticMeshComponent* FMeshEditorViewportClient::FindSocketPreviewMesh(const FName& SocketName) const
++{
++	auto It = SocketPreviewMeshes.find(SocketName);
++	return It != SocketPreviewMeshes.end() ? It->second : nullptr;
++}
++
+ void FMeshEditorViewportClient::ResetCameraToPreviousBounds()
+ {
+ 	if (!PreviewActor)
+@@ -98,7 +196,7 @@ void FMeshEditorViewportClient::ResetCameraToPreviousBounds()
+ 	const float Distance = Radius / std::tan(FovRadians * 0.5f) * 1.25f;
+ 
+ 	const FVector ViewDir = FVector(-1.0f, -1.0f, -0.6f).Normalized();
+-	
++
+ 	ViewTransform.ViewLocation = Center - ViewDir * Distance;
+ 	ViewTransform.LookAt(Center);
+ 
+@@ -288,7 +386,7 @@ void FMeshEditorViewportClient::TickInput(float DeltaTime)
+ 	FViewportCameraControlSettings& ControlSettings = FEditorSettings::Get().MeshEditorViewportSettings.CameraControls;
+ 
+ 	InputSystem& Input = InputSystem::Get();
+-	
++
+ 	FVector LocalMove = FVector::ZeroVector;
+ 	float WorldVerticalMove = 0.0f;
+ 	float CameraSpeed = ControlSettings.MoveSpeed;
+diff --git a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h
+index ccdd026..b60d9d1 100644
+--- a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h
++++ b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h
+@@ -9,6 +9,7 @@
+ #include "Gizmo/BoneTransformGizmoTarget.h"
+ #include "Component/Debug/BoneDebugComponent.h"
+ #include "Object/GarbageCollection.h"
++#include "Object/FName.h"
+ 
+ #include <d3d11.h>
+ #include <functional>
+@@ -19,6 +20,7 @@ class FWindowsWindow;
+ class UWorld;
+ class AActor;
+ class USkeletalMesh;
++class UStaticMeshComponent;
+ 
+ class FMeshEditorViewportClient : public FViewportClient, public IEditorPreviewViewportClient, public FGCObject
+ {
+@@ -36,6 +38,11 @@ public:
+ 	void SetPreviewWorld(UWorld* InWorld) { PreviewWorld = InWorld; }
+ 	void SetPreviewActor(AActor* InActor) { PreviewActor = InActor; }
+ 	void SetPreviewMeshComponent(USkeletalMeshComponent* InComp) { PreviewMeshComponent = InComp; }
++	void SetSocketPreviewMesh(const FName& SocketName, const FString& StaticMeshPath);
++	void ClearSocketPreviewMesh(const FName& SocketName);
++	void ClearSocketPreviewMeshes();
++	void RefreshSocketPreviewMeshes(USkeletalMesh* Mesh);
++	UStaticMeshComponent* FindSocketPreviewMesh(const FName& SocketName) const;
+ 	void SetViewportRect(float X, float Y, float Width, float Height);
+ 	void SetPreviewPickHandler(std::function<bool(const FRay&)> InHandler) { PreviewPickHandler = std::move(InHandler); }
+ 
+@@ -90,6 +97,7 @@ private:
+ 	UGizmoComponent* Gizmo = nullptr;
+ 	USkeletalMeshComponent* PreviewMeshComponent = nullptr;
+ 	UBoneDebugComponent* BoneDebugComponent = nullptr;
++	TMap<FName, UStaticMeshComponent*> SocketPreviewMeshes;
+ 	std::function<bool(const FRay&)> PreviewPickHandler;
+ 
+ 	UWorld* PreviewWorld = nullptr;
+diff --git a/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.cpp b/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.cpp
+index db6f5a8..e94e2d4 100644
+--- a/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.cpp
++++ b/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.cpp
+@@ -8,9 +8,30 @@ void USkeleton::Serialize(FArchive& Ar)
+     Ar << CompatibilitySignature;
+     Ar << ReferenceSkeleton;
+ 
++    if (Ar.IsSaving() || Ar.HasRemaining())
++    {
++        Ar << Sockets;
++    }
++    else if (Ar.IsLoading())
++    {
++        Sockets.clear();
++    }
++
+     if (Ar.IsLoading())
+     {
+         RebuildBoneNameCache();
++        for (FSkeletonSocket& Socket : Sockets)
++        {
++            Socket.BoneIndex = ResolveSocketBoneIndex(Socket);
++            if (Socket.BoneName.empty() && Socket.BoneIndex >= 0 && Socket.BoneIndex < ReferenceSkeleton.GetNumBones())
++            {
++                Socket.BoneName = ReferenceSkeleton.Bones[Socket.BoneIndex].Name;
++            }
++            if (Socket.PreviewStaticMeshPath.empty())
++            {
++                Socket.PreviewStaticMeshPath = "None";
++            }
++        }
+     }
+ }
+ 
+@@ -34,3 +55,54 @@ int32 USkeleton::FindBoneIndex(const FString& BoneName) const
+ 
+     return ReferenceSkeleton.FindBoneIndex(BoneName);
+ }
++
++
++int32 USkeleton::FindSocketIndex(const FName& SocketName) const
++{
++    if (SocketName == FName::None)
++    {
++        return -1;
++    }
++
++    for (int32 SocketIndex = 0; SocketIndex < static_cast<int32>(Sockets.size()); ++SocketIndex)
++    {
++        if (Sockets[SocketIndex].Name == SocketName)
++        {
++            return SocketIndex;
++        }
++    }
++
++    return -1;
++}
++
++const FSkeletonSocket* USkeleton::FindSocket(const FName& SocketName) const
++{
++    const int32 SocketIndex = FindSocketIndex(SocketName);
++    return SocketIndex >= 0 ? &Sockets[SocketIndex] : nullptr;
++}
++
++FSkeletonSocket* USkeleton::FindSocket(const FName& SocketName)
++{
++    const int32 SocketIndex = FindSocketIndex(SocketName);
++    return SocketIndex >= 0 ? &Sockets[SocketIndex] : nullptr;
++}
++
++bool USkeleton::HasSocket(const FName& SocketName) const
++{
++    return FindSocket(SocketName) != nullptr;
++}
++
++int32 USkeleton::ResolveSocketBoneIndex(const FSkeletonSocket& Socket) const
++{
++    if (!Socket.BoneName.empty())
++    {
++        return FindBoneIndex(Socket.BoneName);
++    }
++
++    if (Socket.BoneIndex >= 0 && Socket.BoneIndex < ReferenceSkeleton.GetNumBones())
++    {
++        return Socket.BoneIndex;
++    }
++
++    return -1;
++}
+diff --git a/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.h b/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.h
+index 4976466..9c86651 100644
+--- a/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.h
++++ b/KraftonEngine/Source/Engine/Animation/Skeleton/Skeleton.h
+@@ -68,10 +68,19 @@ public:
+ 
+     int32 FindBoneIndex(const FString& BoneName) const;
+ 
++    const TArray<FSkeletonSocket>& GetSockets() const { return Sockets; }
++    TArray<FSkeletonSocket>& GetMutableSockets() { return Sockets; }
++    int32 FindSocketIndex(const FName& SocketName) const;
++    const FSkeletonSocket* FindSocket(const FName& SocketName) const;
++    FSkeletonSocket* FindSocket(const FName& SocketName);
++    bool HasSocket(const FName& SocketName) const;
++    int32 ResolveSocketBoneIndex(const FSkeletonSocket& Socket) const;
++
+ private:
+     FString            AssetPathFileName = "None";
+     FString            SkeletonAssetGuid;
+     FString            CompatibilitySignature;
+     FReferenceSkeleton ReferenceSkeleton;
++    TArray<FSkeletonSocket> Sockets;
+     TMap<FString, int32> BoneNameToIndex;
+ };
+diff --git a/KraftonEngine/Source/Engine/Animation/Skeleton/SkeletonTypes.h b/KraftonEngine/Source/Engine/Animation/Skeleton/SkeletonTypes.h
+index f64972e..2d4bc69 100644
+--- a/KraftonEngine/Source/Engine/Animation/Skeleton/SkeletonTypes.h
++++ b/KraftonEngine/Source/Engine/Animation/Skeleton/SkeletonTypes.h
+@@ -2,6 +2,8 @@
+ 
+ #include "Core/Types/CoreTypes.h"
+ #include "Math/Matrix.h"
++#include "Math/Transform.h"
++#include "Object/FName.h"
+ #include "Serialization/Archive.h"
+ 
+ inline void SerializeReferenceSkeletonMatrix(FArchive& Ar, FMatrix& Matrix)
+@@ -86,6 +88,55 @@ struct FReferenceSkeleton
+     }
+ };
+ 
++
++struct FSkeletonSocket
++{
++    FName   Name = FName::None;
++    FString BoneName;
++    int32   BoneIndex = -1;
++
++    FVector  RelativeLocation = FVector::ZeroVector;
++    FRotator RelativeRotation = FRotator::ZeroRotator;
++    FVector  RelativeScale    = FVector(1.0f, 1.0f, 1.0f);
++
++    FString PreviewStaticMeshPath = "None";
++
++    bool IsValid() const
++    {
++        return Name != FName::None && (!BoneName.empty() || BoneIndex >= 0);
++    }
++
++    FMatrix GetRelativeTransform() const
++    {
++        return FTransform(RelativeLocation, RelativeRotation, RelativeScale).ToMatrix();
++    }
++
++    friend FArchive& operator<<(FArchive& Ar, FSkeletonSocket& Socket)
++    {
++        Ar << Socket.Name;
++        Ar << Socket.BoneName;
++        Ar << Socket.BoneIndex;
++        Ar << Socket.RelativeLocation;
++        Ar << Socket.RelativeRotation;
++        Ar << Socket.RelativeScale;
++
++        if (Ar.IsSaving() || Ar.HasRemaining())
++        {
++            Ar << Socket.PreviewStaticMeshPath;
++        }
++        else if (Ar.IsLoading())
++        {
++            Socket.PreviewStaticMeshPath = "None";
++        }
++
++        if (Ar.IsLoading() && Socket.PreviewStaticMeshPath.empty())
++        {
++            Socket.PreviewStaticMeshPath = "None";
++        }
++        return Ar;
++    }
++};
++
+ // Skeleton을 참조하는 모든 에셋이 공통으로 저장하는 연결 정보.
+ // Path는 로딩용, AssetGuid는 같은 Skeleton 에셋 판별용, CompatibilitySignature는 구조 호환성 판별용이다.
+ struct FSkeletonBinding
+diff --git a/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.cpp b/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.cpp
+index 167ecc3..9326adb 100644
+--- a/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.cpp
++++ b/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.cpp
+@@ -1,5 +1,6 @@
+ ﻿#include "SkinnedMeshComponent.h"
+ #include "Mesh/Skeletal/SkeletalMesh.h"
++#include "Animation/Skeleton/Skeleton.h"
+ #include "Serialization/Archive.h"
+ #include "Runtime/Engine.h"
+ #include "Mesh/MeshManager.h"
+@@ -165,6 +166,7 @@ void USkinnedMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
+ 	MarkProxyDirty(EDirtyFlag::Mesh);
+ 	MarkProxyDirty(EDirtyFlag::Material);
+ 	MarkWorldBoundsDirty();
++	MarkSocketAttachedChildrenDirty();
+ }
+ 
+ USkeletalMesh* USkinnedMeshComponent::GetSkeletalMesh() const
+@@ -353,6 +355,87 @@ FTransform USkinnedMeshComponent::GetBoneEditBaseLocalTransformByIndex(int32 Bon
+ 	return MatrixToEditorTransform(Asset->Bones[BoneIndex].GetReferenceLocalPose());
+ }
+ 
++
++int32 USkinnedMeshComponent::FindBoneIndexByName(const FString& BoneName) const
++{
++	FSkeletalMesh* Asset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
++	if (!Asset || BoneName.empty())
++	{
++		return -1;
++	}
++
++	for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
++	{
++		if (Asset->Bones[BoneIndex].Name == BoneName)
++		{
++			return BoneIndex;
++		}
++	}
++
++	return -1;
++}
++
++bool USkinnedMeshComponent::HasSocket(const FName& SocketName) const
++{
++	if (SocketName == FName::None || !SkeletalMesh)
++	{
++		return false;
++	}
++
++	if (USkeleton* Skeleton = SkeletalMesh->GetSkeleton())
++	{
++		if (Skeleton->HasSocket(SocketName))
++		{
++			return true;
++		}
++	}
++
++	return FindBoneIndexByName(SocketName.ToString()) >= 0;
++}
++
++FTransform USkinnedMeshComponent::GetSocketTransform(const FName& SocketName) const
++{
++	FSkeletalMesh* Asset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
++	if (!Asset || SocketName == FName::None)
++	{
++		return FTransform(GetWorldMatrix());
++	}
++
++	TArray<FMatrix> GlobalMatrices;
++	BuildBoneEditGlobalMatrices(GlobalMatrices);
++
++	auto GetBoneWorldTransform = [&](int32 BoneIndex) -> FTransform
++	{
++		if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(GlobalMatrices.size()))
++		{
++			return FTransform(GetWorldMatrix());
++		}
++		return FTransform(GlobalMatrices[BoneIndex] * GetWorldMatrix());
++	};
++
++	if (USkeleton* Skeleton = SkeletalMesh->GetSkeleton())
++	{
++		if (const FSkeletonSocket* Socket = Skeleton->FindSocket(SocketName))
++		{
++			int32 BoneIndex = FindBoneIndexByName(Socket->BoneName);
++			if (BoneIndex < 0 && Socket->BoneIndex >= 0 && Socket->BoneIndex < static_cast<int32>(Asset->Bones.size()))
++			{
++				BoneIndex = Socket->BoneIndex;
++			}
++
++			if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(GlobalMatrices.size()))
++			{
++				return FTransform(GetWorldMatrix());
++			}
++
++			const FMatrix SocketWorld = Socket->GetRelativeTransform() * GlobalMatrices[BoneIndex] * GetWorldMatrix();
++			return FTransform(SocketWorld);
++		}
++	}
++
++	return GetBoneWorldTransform(FindBoneIndexByName(SocketName.ToString()));
++}
++
+ void USkinnedMeshComponent::SetBoneLocationByIndex(int32 BoneIndex, const FVector& NewLocation)
+ {
+ 	FSkeletalMesh* Asset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
+@@ -911,6 +994,24 @@ void USkinnedMeshComponent::BuildBoneEditGlobalMatrices(TArray<FMatrix>& OutGlob
+ 	}
+ }
+ 
++
++void USkinnedMeshComponent::MarkSocketAttachedChildrenDirty()
++{
++	for (USceneComponent* Child : GetChildren())
++	{
++		if (!IsValid(Child))
++		{
++			continue;
++		}
++
++		const FName& SocketName = Child->GetAttachSocketName();
++		if (SocketName != FName::None && HasSocket(SocketName))
++		{
++			Child->MarkTransformDirty();
++		}
++	}
++}
++
+ void USkinnedMeshComponent::AddReferencedObjects(FReferenceCollector& Collector)
+ {
+     UMeshComponent::AddReferencedObjects(Collector);
+@@ -1069,6 +1170,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
+ 
+ 	// SceneProxy는 revision 차이만 보고 dynamic vertex buffer upload 여부를 결정한다.
+ 	++SkinnedRevision;
++	MarkSocketAttachedChildrenDirty();
+ }
+ 
+ void USkinnedMeshComponent::RefreshSkinningAfterPoseChanged()
+@@ -1081,6 +1183,7 @@ void USkinnedMeshComponent::RefreshSkinningAfterPoseChanged()
+ 
+ 	// GPU skinning은 같은 revision을 matrix SRV 갱신 신호로 사용한다.
+ 	++SkinnedRevision;
++	MarkSocketAttachedChildrenDirty();
+ }
+ 
+ void USkinnedMeshComponent::RefreshSkinningAfterMorphChanged()
+@@ -1161,10 +1264,10 @@ void USkinnedMeshComponent::PostDuplicate()
+ 					SetMaterial(i, LoadedMat);
+ 				}
+ 			}
+-			
++
+ 		}
+ 	}
+-	else 
++	else
+ 	{
+ 		SetSkeletalMesh(nullptr);
+ 	}
+@@ -1237,7 +1340,7 @@ void USkinnedMeshComponent::PostEditProperty(const char* PropertyName)
+ 		}
+ 	}
+ }
+-// SkinnedComponent는 Picking시 사용하는 Position Data가 
++// SkinnedComponent는 Picking시 사용하는 Position Data가
+ // SkeletalMesh의 Raw Data가 아닌 Skinning이 처리된 후의 SkinnedVertices 데이터를 사용한다.
+ bool USkinnedMeshComponent::LineTraceComponent(const FRay& Ray, FHitResult& OutHitResult)
+ {
+diff --git a/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.h b/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.h
+index b3aca25..75dd5e4 100644
+--- a/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.h
++++ b/KraftonEngine/Source/Engine/Component/Primitive/SkinnedMeshComponent.h
+@@ -57,6 +57,9 @@ public:
+ 	FTransform GetBoneLocalTransformByIndex(int32 BoneIndex) const;
+ 	FTransform GetBoneEditBaseLocalTransformByIndex(int32 BoneIndex) const;
+ 
++	bool HasSocket(const FName& SocketName) const override;
++	FTransform GetSocketTransform(const FName& SocketName) const override;
++
+ 	void SetBoneLocationByIndex(int32 BoneIndex, const FVector& NewLocation);
+ 	void SetBoneRotationByIndex(int32 BoneIndex, const FRotator& NewRotation);
+ 	void SetBoneRotationByIndex(int32 BoneIndex, const FQuat& NewQuat);
+@@ -108,6 +111,8 @@ protected:
+ 	void EnsureBoneEditBasePose();
+ 	void BuildBoneEditGlobalTransforms(TArray<FTransform>& OutGlobals) const;
+ 	void BuildBoneEditGlobalMatrices(TArray<FMatrix>& OutGlobals) const;
++	int32 FindBoneIndexByName(const FString& BoneName) const;
++	void MarkSocketAttachedChildrenDirty();
+ 
+     void AddReferencedObjects(FReferenceCollector& Collector) override;
+ 
+diff --git a/KraftonEngine/Source/Engine/Component/SceneComponent.cpp b/KraftonEngine/Source/Engine/Component/SceneComponent.cpp
+index c10b8a6..d0ee2ae 100644
+--- a/KraftonEngine/Source/Engine/Component/SceneComponent.cpp
++++ b/KraftonEngine/Source/Engine/Component/SceneComponent.cpp
+@@ -17,17 +17,30 @@ static void NotifyOctreeTransformChanged(USceneComponent* Comp)
+ 
+     UWorld* World = OwnerActor->GetWorld();
+     if (!World) return;
+-	
++
+     World->UpdateActorInOctree(OwnerActor);
+ }
+ 
+ void USceneComponent::AttachToComponent(USceneComponent* InParent)
++{
++	AttachToComponent(InParent, FName::None);
++}
++
++void USceneComponent::AttachToComponent(USceneComponent* InParent, const FName& InSocketName)
+ {
+ 	if (!IsValid(InParent) || InParent == this)
+ 	{
+ 		return;
+ 	}
++
+ 	SetParent(InParent);
++	AttachSocketName = InSocketName;
++	MarkTransformDirty();
++}
++
++void USceneComponent::AttachToComponentWithSocket(USceneComponent* InParent, const FString& InSocketName)
++{
++	AttachToComponent(InParent, FName(InSocketName));
+ }
+ 
+ void USceneComponent::PreGetEditableProperties()
+@@ -75,6 +88,7 @@ void USceneComponent::Serialize(FArchive& Ar)
+ 	UActorComponent::Serialize(Ar);
+ 	// ParentComponent / ChildComponents 는 직렬화 제외 — 복제 단계에서 명시적으로 재구성.
+ 
++
+ 	if (Ar.IsLoading())
+ 	{
+ 		RelativeTransform.SetRotation(CachedEditRotator);
+@@ -95,6 +109,7 @@ USceneComponent::USceneComponent()
+ USceneComponent::~USceneComponent()
+ {
+     ParentComponent.Reset();
++	AttachSocketName = FName::None;
+     ChildComponents.clear();
+ }
+ 
+@@ -133,12 +148,13 @@ void USceneComponent::SetParent(USceneComponent* NewParent)
+ 	{
+ 		NewParent = nullptr;
+ 	}
+-	
++
+ 	if (USceneComponent* OldParent = ParentComponent.Get())
+ 	{
+ 		OldParent->RemoveChild(this);
+ 	}
+ 
++	AttachSocketName = FName::None;
+ 	ParentComponent = NewParent;
+ 	if (USceneComponent* Parent = ParentComponent.Get())
+ 	{
+@@ -208,13 +224,18 @@ void USceneComponent::UpdateWorldMatrix() const
+ 		if (bAbsoluteScale)
+ 		{
+ 			// 에디터 아이콘 빌보드는 부모 스케일과 분리해 화면상 크기 변화를 막는다.
+-			FMatrix ParentWorldNoScale = Parent->GetWorldMatrix();
++			FMatrix ParentWorldNoScale = (AttachSocketName != FName::None && Parent->HasSocket(AttachSocketName))
++				? Parent->GetSocketTransform(AttachSocketName).ToMatrix()
++				: Parent->GetWorldMatrix();
+ 			ParentWorldNoScale.RemoveScaling();
+ 			CachedWorldMatrix = RelativeMatrix * ParentWorldNoScale;
+ 		}
+ 		else
+ 		{
+-			CachedWorldMatrix = RelativeMatrix * Parent->GetWorldMatrix();
++			const FMatrix ParentWorld = (AttachSocketName != FName::None && Parent->HasSocket(AttachSocketName))
++				? Parent->GetSocketTransform(AttachSocketName).ToMatrix()
++				: Parent->GetWorldMatrix();
++			CachedWorldMatrix = RelativeMatrix * ParentWorld;
+ 		}
+ 	}
+ 	else
+diff --git a/KraftonEngine/Source/Engine/Component/SceneComponent.h b/KraftonEngine/Source/Engine/Component/SceneComponent.h
+index 9c07686..2b08611 100644
+--- a/KraftonEngine/Source/Engine/Component/SceneComponent.h
++++ b/KraftonEngine/Source/Engine/Component/SceneComponent.h
+@@ -5,6 +5,7 @@
+ #include "Component/ActorComponent.h"
+ #include "Object/Ptr/ObjectPtr.h"
+ #include "Object/Ptr/WeakObjectPtr.h"
++#include "Object/FName.h"
+ #include "Math/MathUtils.h"
+ 
+ class AActor;
+@@ -23,10 +24,14 @@ public:
+ 	// Parent Relation Manager
+ 	UFUNCTION(Callable, Category="Scene|Hierarchy")
+ 	void AttachToComponent(USceneComponent* InParent);
++	void AttachToComponent(USceneComponent* InParent, const FName& InSocketName);
++	UFUNCTION(Callable, Category="Scene|Hierarchy")
++	void AttachToComponentWithSocket(USceneComponent* InParent, const FString& InSocketName);
+ 	UFUNCTION(Callable, Category="Scene|Hierarchy")
+ 	void SetParent(USceneComponent* NewParent);
+ 	UFUNCTION(Pure, Category="Scene|Hierarchy")
+ 	USceneComponent* GetParent() const { return ParentComponent.Get(); }
++	const FName& GetAttachSocketName() const { return AttachSocketName; }
+ 	UFUNCTION(Callable, Category="Scene|Hierarchy")
+ 	void AddChild(USceneComponent* NewChild);
+ 	UFUNCTION(Callable, Category="Scene|Hierarchy")
+@@ -35,6 +40,9 @@ public:
+ 	bool ContainsChild(const USceneComponent* Child) const;
+ 	TArray<USceneComponent*> GetChildren() const;
+ 
++	virtual bool HasSocket(const FName& SocketName) const { (void)SocketName; return false; }
++	virtual FTransform GetSocketTransform(const FName& SocketName) const { (void)SocketName; return FTransform(GetWorldMatrix()); }
++
+ 	void PreGetEditableProperties() override;
+ 	void PostEditProperty(const char* PropertyName) override;
+ 
+@@ -109,6 +117,7 @@ public:
+ protected:
+ 	// Non-owning back-reference. Parent keeps children alive through ChildComponents.
+ 	TWeakObjectPtr<USceneComponent> ParentComponent;
++	FName AttachSocketName = FName::None;
+ 
+ 	// Runtime hierarchy ownership. SceneSaveManager persists topology explicitly, so this remains Transient.
+ 	UPROPERTY(Transient, Instanced, Category="Scene|Hierarchy")
+diff --git a/KraftonEngine/Source/Engine/Serialization/SceneSaveManager.cpp b/KraftonEngine/Source/Engine/Serialization/SceneSaveManager.cpp
+index cdaf95f..1d4db20 100644
+--- a/KraftonEngine/Source/Engine/Serialization/SceneSaveManager.cpp
++++ b/KraftonEngine/Source/Engine/Serialization/SceneSaveManager.cpp
+@@ -61,6 +61,7 @@ namespace SceneKeys
+ 	static constexpr const char* NonSceneComponents = "NonSceneComponents";
+ 	static constexpr const char* Properties = "Properties";
+ 	static constexpr const char* Children = "Children";
++	static constexpr const char* AttachSocket = "AttachSocket";
+ 	static constexpr const char* HiddenInComponentTree = "bHiddenInComponentTree";
+ 	static constexpr const char* ObjectId = "ObjectId";
+ }
+@@ -380,6 +381,10 @@ json::JSON FSceneSaveManager::SerializeSceneComponentTree(USceneComponent* Comp,
+ 	c[SceneKeys::ObjectId] = static_cast<int>(Context.RegisterSceneObject(Comp));
+ 	c[SceneKeys::Properties] = SerializeProperties(Comp, Context);
+ 	SerializeComponentEditorMetadata(c, Comp);
++	if (Comp->GetAttachSocketName() != FName::None)
++	{
++		c[SceneKeys::AttachSocket] = Comp->GetAttachSocketName().ToString();
++	}
+ 
+ 	JSON Children = json::Array();
+ 	for (USceneComponent* Child : Comp->GetChildren()) {
+@@ -625,7 +630,12 @@ USceneComponent* FSceneSaveManager::DeserializeSceneComponentTree(json::JSON& No
+ 		for (auto& ChildJSON : Node[SceneKeys::Children].ArrayRange()) {
+ 			USceneComponent* Child = DeserializeSceneComponentTree(ChildJSON, Owner, Context);
+ 			if (Child) {
+-				Child->AttachToComponent(Comp);
++				FName AttachSocketName = FName::None;
++				if (ChildJSON.hasKey(SceneKeys::AttachSocket))
++				{
++					AttachSocketName = FName(ChildJSON[SceneKeys::AttachSocket].ToString());
++				}
++				Child->AttachToComponent(Comp, AttachSocketName);
+ 			}
+ 		}
+ 	}
