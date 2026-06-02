@@ -29,6 +29,7 @@
 #include "CameraShake/CameraShakeManager.h"
 #include "FloatCurve/FloatCurveManager.h"
 #include "LuaBlueprint/LuaBlueprintManager.h"
+#include "Runtime/NvClothEnvironment.h"
 
 UEngine* GEngine = nullptr;
 
@@ -64,6 +65,8 @@ void UEngine::Init(FWindowsWindow* InWindow)
 		SCOPE_STARTUP_STAT("Renderer::Create");
 		Renderer.Create(Window->GetHWND());
 	}
+
+	FNvClothEnvironment::Initialize();
 
 	ID3D11Device* Device = Renderer.GetFD3DDevice().GetDevice();
 
@@ -123,6 +126,7 @@ void UEngine::Shutdown()
 
 	FMeshBufferManager::Get().Release();
 	Renderer.Release();
+	FNvClothEnvironment::Shutdown();
 }
 
 void UEngine::BeginPlay()

@@ -134,9 +134,20 @@ FBX_RELEASE_LIB_DIR = "ThirdParty\\fbx\\lib\\x64\\release"
 FBX_LIB             = "libfbxsdk.lib"
 FBX_DLL             = "libfbxsdk.dll"
 
+# NvCloth — x64 only. Debug/Release import libs and runtime DLLs are split,
+# and DX11 backend additionally requires DxSolverKernel.cso beside the exe.
+NVCLOTH_LIB_DIR       = "ThirdParty\\NvCloth\\lib"
+NVCLOTH_DEBUG_LIB     = "NvClothDEBUG_x64.lib"
+NVCLOTH_RELEASE_LIB   = "NvCloth_x64.lib"
+NVCLOTH_DEBUG_DLL     = "NvClothDEBUG_x64.dll"
+NVCLOTH_RELEASE_DLL   = "NvCloth_x64.dll"
+NVCLOTH_DX11_KERNEL   = "DxSolverKernel.cso"
+NVCLOTH_BIN_DIR       = "ThirdParty\\NvCloth\\bin"
+
 # Additional linker settings
 ADDITIONAL_LIB_DIRS = [
     f"$(ProjectDir){LUA_LIB_DIR}",
+    f"$(ProjectDir){NVCLOTH_LIB_DIR}",
 ]
 ADDITIONAL_DEPENDENCIES = [
     LUA_LIB,
@@ -404,6 +415,7 @@ def generate_vcxproj(files: dict[str, list[str]]):
             # fmod: Debug면 logging 버전(fmodL_vc.lib), 그 외 release 버전(fmod_vc.lib)
             all_deps.append(FMOD_DEBUG_LIB if cfg == "Debug" else FMOD_RELEASE_LIB)
             all_deps.append(FBX_LIB)
+            all_deps.append(NVCLOTH_DEBUG_LIB if cfg == "Debug" else NVCLOTH_RELEASE_LIB)
         if all_deps:
             ET.SubElement(link, "AdditionalDependencies").text = (
                 ";".join(all_deps) + ";%(AdditionalDependencies)"
@@ -414,13 +426,16 @@ def generate_vcxproj(files: dict[str, list[str]]):
             fmod_dll = FMOD_DEBUG_DLL if cfg == "Debug" else FMOD_RELEASE_DLL
             physx_bin = PHYSX_DEBUG_BIN if cfg == "Debug" else PHYSX_RELEASE_BIN
             fbx_lib_dir = FBX_DEBUG_LIB_DIR if cfg == "Debug" else FBX_RELEASE_LIB_DIR
+            nvcloth_dll = NVCLOTH_DEBUG_DLL if cfg == "Debug" else NVCLOTH_RELEASE_DLL
             post_build = ET.SubElement(idg, "PostBuildEvent")
             ET.SubElement(post_build, "Command").text = (
                 f'xcopy /Y "$(ProjectDir){rmlui_dir}\\*.dll" "$(OutDir)"\n'
                 f'xcopy /Y "$(ProjectDir){FMOD_LIB_DIR}\\{fmod_dll}" "$(OutDir)"\n'
                 f'xcopy /Y "$(ProjectDir){physx_bin}\\*.dll" "$(OutDir)"\n'
                 f'xcopy /Y "$(ProjectDir){LUA_BIN_DIR}\\{LUA_DLL}" "$(OutDir)"\n'
-                f'xcopy /Y "$(ProjectDir){fbx_lib_dir}\\{FBX_DLL}" "$(OutDir)"'
+                f'xcopy /Y "$(ProjectDir){fbx_lib_dir}\\{FBX_DLL}" "$(OutDir)"\n'
+                f'xcopy /Y "$(ProjectDir){NVCLOTH_BIN_DIR}\\{nvcloth_dll}" "$(OutDir)"\n'
+                f'xcopy /Y "$(ProjectDir){NVCLOTH_BIN_DIR}\\{NVCLOTH_DX11_KERNEL}" "$(OutDir)"'
             )
 
         # Reflection codegen — UCLASS/UPROPERTY 매크로가 박힌 헤더로부터
