@@ -2062,10 +2062,48 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 		return;
 	}
 
+	const int32 BodySetupCount = EditingPhysicsAsset->GetBodySetupCount();
+	const int32 ConstraintSetupCount = EditingPhysicsAsset->GetConstraintSetupCount();
+	const bool bFocusSelectedBody = SelectionType == EPhysicsAssetEditorSelectionType::Body
+		&& SelectedBodyIndex >= 0
+		&& SelectedBodyIndex < BodySetupCount
+		&& EditingPhysicsAsset->GetBodySetup(SelectedBodyIndex);
+
+	TArray<bool> VisibleBodies(static_cast<size_t>(BodySetupCount), !bFocusSelectedBody);
+	TArray<bool> VisibleConstraints(static_cast<size_t>(ConstraintSetupCount), !bFocusSelectedBody);
+	if (bFocusSelectedBody)
+	{
+		VisibleBodies[SelectedBodyIndex] = true;
+		for (int32 ConstraintIndex = 0; ConstraintIndex < ConstraintSetupCount; ++ConstraintIndex)
+		{
+			const UPhysicsConstraintTemplate* Constraint = EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex);
+			if (!Constraint)
+			{
+				continue;
+			}
+
+			const int32 ParentBodyIndex = EditingPhysicsAsset->FindBodyIndex(Constraint->GetParentBoneName());
+			const int32 ChildBodyIndex = EditingPhysicsAsset->FindBodyIndex(Constraint->GetChildBoneName());
+			if (ParentBodyIndex == SelectedBodyIndex || ChildBodyIndex == SelectedBodyIndex)
+			{
+				VisibleConstraints[ConstraintIndex] = true;
+				if (ParentBodyIndex >= 0 && ParentBodyIndex < BodySetupCount)
+				{
+					VisibleBodies[ParentBodyIndex] = true;
+				}
+				if (ChildBodyIndex >= 0 && ChildBodyIndex < BodySetupCount)
+				{
+					VisibleBodies[ChildBodyIndex] = true;
+				}
+			}
+		}
+	}
+
 	std::uint64_t TopologyHash = 0;
-	HashInt(TopologyHash, EditingPhysicsAsset->GetBodySetupCount());
-	HashInt(TopologyHash, EditingPhysicsAsset->GetConstraintSetupCount());
-	for (int32 ConstraintIndex = 0; ConstraintIndex < EditingPhysicsAsset->GetConstraintSetupCount(); ++ConstraintIndex)
+	HashInt(TopologyHash, BodySetupCount);
+	HashInt(TopologyHash, ConstraintSetupCount);
+	HashInt(TopologyHash, bFocusSelectedBody ? SelectedBodyIndex : -1);
+	for (int32 ConstraintIndex = 0; ConstraintIndex < ConstraintSetupCount; ++ConstraintIndex)
 	{
 		if (const UPhysicsConstraintTemplate* Constraint = EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex))
 		{
@@ -2087,23 +2125,44 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 
 	if (bConstraintGraphLayoutDirty)
 	{
-		for (int32 BodyIndex = 0; BodyIndex < EditingPhysicsAsset->GetBodySetupCount(); ++BodyIndex)
+		int32 VisibleBodyOrdinal = 0;
+		for (int32 BodyIndex = 0; BodyIndex < BodySetupCount; ++BodyIndex)
 		{
-			const float X = (BodyIndex % 2 == 0) ? 20.0f : 520.0f;
-			const float Y = 30.0f + static_cast<float>(BodyIndex / 2) * 110.0f;
+			if (!VisibleBodies[BodyIndex])
+			{
+				continue;
+			}
+
+			const float X = bFocusSelectedBody
+				? (BodyIndex == SelectedBodyIndex ? 20.0f : 520.0f)
+				: ((BodyIndex % 2 == 0) ? 20.0f : 520.0f);
+			const float Y = 30.0f + static_cast<float>(bFocusSelectedBody ? VisibleBodyOrdinal : BodyIndex / 2) * 110.0f;
 			ed::SetNodePosition(ToPhysicsNodeId(MakeBodyNodeId(BodyIndex)), ImVec2(X, Y));
+			++VisibleBodyOrdinal;
 		}
-		for (int32 ConstraintIndex = 0; ConstraintIndex < EditingPhysicsAsset->GetConstraintSetupCount(); ++ConstraintIndex)
+		int32 VisibleConstraintOrdinal = 0;
+		for (int32 ConstraintIndex = 0; ConstraintIndex < ConstraintSetupCount; ++ConstraintIndex)
 		{
+			if (!VisibleConstraints[ConstraintIndex])
+			{
+				continue;
+			}
+
 			ed::SetNodePosition(
 				ToPhysicsNodeId(MakeConstraintNodeId(ConstraintIndex)),
-				ImVec2(270.0f, 45.0f + static_cast<float>(ConstraintIndex) * 110.0f));
+				ImVec2(270.0f, 45.0f + static_cast<float>(bFocusSelectedBody ? VisibleConstraintOrdinal : ConstraintIndex) * 110.0f));
+			++VisibleConstraintOrdinal;
 		}
 		bConstraintGraphLayoutDirty = false;
 	}
 
-	for (int32 BodyIndex = 0; BodyIndex < EditingPhysicsAsset->GetBodySetupCount(); ++BodyIndex)
+	for (int32 BodyIndex = 0; BodyIndex < BodySetupCount; ++BodyIndex)
 	{
+		if (!VisibleBodies[BodyIndex])
+		{
+			continue;
+		}
+
 		const USkeletalBodySetup* BodySetup = EditingPhysicsAsset->GetBodySetup(BodyIndex);
 		if (!BodySetup)
 		{
@@ -2134,8 +2193,13 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 		ed::EndNode();
 	}
 
-	for (int32 ConstraintIndex = 0; ConstraintIndex < EditingPhysicsAsset->GetConstraintSetupCount(); ++ConstraintIndex)
+	for (int32 ConstraintIndex = 0; ConstraintIndex < ConstraintSetupCount; ++ConstraintIndex)
 	{
+		if (!VisibleConstraints[ConstraintIndex])
+		{
+			continue;
+		}
+
 		const UPhysicsConstraintTemplate* Constraint = EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex);
 		if (!Constraint)
 		{
@@ -2167,8 +2231,13 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 		ed::EndNode();
 	}
 
-	for (int32 ConstraintIndex = 0; ConstraintIndex < EditingPhysicsAsset->GetConstraintSetupCount(); ++ConstraintIndex)
+	for (int32 ConstraintIndex = 0; ConstraintIndex < ConstraintSetupCount; ++ConstraintIndex)
 	{
+		if (!VisibleConstraints[ConstraintIndex])
+		{
+			continue;
+		}
+
 		const UPhysicsConstraintTemplate* Constraint = EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex);
 		if (!Constraint)
 		{
@@ -2177,7 +2246,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 
 		const int32 ParentBodyIndex = EditingPhysicsAsset->FindBodyIndex(Constraint->GetParentBoneName());
 		const int32 ChildBodyIndex = EditingPhysicsAsset->FindBodyIndex(Constraint->GetChildBoneName());
-		if (ParentBodyIndex >= 0)
+		if (ParentBodyIndex >= 0 && ParentBodyIndex < BodySetupCount && VisibleBodies[ParentBodyIndex])
 		{
 			ed::Link(
 				ToPhysicsLinkId(MakeParentLinkId(ConstraintIndex)),
@@ -2185,7 +2254,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 				ToPhysicsPinId(MakeConstraintInputPinId(ConstraintIndex)),
 				ImColor(130, 210, 190));
 		}
-		if (ChildBodyIndex >= 0)
+		if (ChildBodyIndex >= 0 && ChildBodyIndex < BodySetupCount && VisibleBodies[ChildBodyIndex])
 		{
 			ed::Link(
 				ToPhysicsLinkId(MakeChildLinkId(ConstraintIndex)),
@@ -2334,11 +2403,17 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 		int32 ConstraintIndex = -1;
 		const uint32 NodeId = PhysicsNodeIdToU32(SelectedNodes[0]);
 		if (DecodeBodyNode(NodeId, BodyIndex)
+			&& BodyIndex >= 0
+			&& BodyIndex < BodySetupCount
+			&& VisibleBodies[BodyIndex]
 			&& (SelectionType != EPhysicsAssetEditorSelectionType::Body || BodyIndex != SelectedBodyIndex))
 		{
 			SelectBody(BodyIndex, false);
 		}
 		else if (DecodeConstraintNode(NodeId, ConstraintIndex)
+			&& ConstraintIndex >= 0
+			&& ConstraintIndex < ConstraintSetupCount
+			&& VisibleConstraints[ConstraintIndex]
 			&& (SelectionType != EPhysicsAssetEditorSelectionType::Constraint || ConstraintIndex != SelectedConstraintIndex))
 		{
 			SelectConstraint(ConstraintIndex, false);
@@ -2351,6 +2426,9 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 		{
 			int32 ConstraintIndex = -1;
 			if (DecodeConstraintLink(PhysicsLinkIdToU32(SelectedLinks[0]), ConstraintIndex)
+				&& ConstraintIndex >= 0
+				&& ConstraintIndex < ConstraintSetupCount
+				&& VisibleConstraints[ConstraintIndex]
 				&& (SelectionType != EPhysicsAssetEditorSelectionType::Constraint || ConstraintIndex != SelectedConstraintIndex))
 			{
 				SelectConstraint(ConstraintIndex, false);
