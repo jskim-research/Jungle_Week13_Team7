@@ -1235,6 +1235,9 @@
     <ClCompile Include="Source\Engine\GameFramework\Actor\DecalActor.cpp">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\GameFramework\Actor\EmptyActor.cpp">
+      <Filter>Source\Engine\GameFramework\Actor</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\GameFramework\Actor\HeightFogActor.cpp">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClCompile>
@@ -2496,6 +2499,9 @@
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\GameFramework\Actor\DecalActor.h">
+      <Filter>Source\Engine\GameFramework\Actor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\GameFramework\Actor\EmptyActor.h">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\GameFramework\Actor\HeightFogActor.h">

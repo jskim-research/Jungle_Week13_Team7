@@ -526,6 +526,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Engine\GameFramework\Actor\BoxActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\CapsuleActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\DecalActor.cpp" />
+    <ClCompile Include="Source\Engine\GameFramework\Actor\EmptyActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\HeightFogActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\PawnStaticMesh.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\SkeletalMeshActor.cpp" />
@@ -949,6 +950,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClInclude Include="Source\Engine\GameFramework\Actor\BoxActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\CapsuleActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\DecalActor.h" />
+    <ClInclude Include="Source\Engine\GameFramework\Actor\EmptyActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\HeightFogActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\PawnStaticMesh.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\SkeletalMeshActor.h" />

@@ -8,6 +8,7 @@
 #include "Editor/Selection/SelectionManager.h"
 #include "Engine/Platform/WindowsWindow.h"
 #include "Engine/Input/InputSystem.h"
+#include "GameFramework/Actor/EmptyActor.h"
 #include "GameFramework/Actor/DecalActor.h"
 #include "GameFramework/Actor/HeightFogActor.h"
 #include "GameFramework/Actor/TriggerVolumeBase.h"
@@ -1723,6 +1724,7 @@ void FLevelViewportLayout::RenderViewportPlaceActorPopup()
 			}
 		};
 
+		PlaceActorMenuItem("Empty Actor", EViewportPlaceActorType::EmptyActor);
 		PlaceActorMenuItem("Cube", EViewportPlaceActorType::Cube);
 		PlaceActorMenuItem("Sphere", EViewportPlaceActorType::Sphere);
 		PlaceActorMenuItem("Cylinder", EViewportPlaceActorType::Cylinder);
@@ -1856,6 +1858,17 @@ AActor* FLevelViewportLayout::SpawnActorFromViewportMenu(EViewportPlaceActorType
 
 	switch (Type)
 	{
+	case EViewportPlaceActorType::EmptyActor:
+	{
+		AEmptyActor* Actor = World->SpawnActor<AEmptyActor>();
+		if (Actor)
+		{
+			Actor->InitDefaultComponents();
+			SpawnedActor = Actor;
+			SpawnLocation.Z += 1.0f;
+		}
+		break;
+	}
 	case EViewportPlaceActorType::Cube:
 	{
 		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();
