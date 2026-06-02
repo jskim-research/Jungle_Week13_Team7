@@ -16,12 +16,6 @@
     <Filter Include="Shaders\Editor">
       <UniqueIdentifier>{f3afd37d-e427-b6e6-d610-351b0cbf0f39}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shaders\Generated">
-      <UniqueIdentifier>{89cde20b-0d22-3693-892a-01ff6973b7f3}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Shaders\Generated\Materials">
-      <UniqueIdentifier>{3de592bd-0830-b23c-449c-06a97393139e}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Shaders\Geometry">
       <UniqueIdentifier>{a95f0cc6-e11f-2881-9524-de9a7fdc530e}</UniqueIdentifier>
     </Filter>
@@ -86,7 +80,7 @@
       <UniqueIdentifier>{ebf11781-61db-1727-e031-70fd890518c6}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Editor\UI\Asset\Physics">
-      <UniqueIdentifier>{58e05f96-203f-4f23-9501-991afae9471c}</UniqueIdentifier>
+      <UniqueIdentifier>{a9510143-b9c8-a4a8-aa42-31438e50f6bb}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Editor\UI\ContentBrowser">
       <UniqueIdentifier>{09a2ea7f-e891-b580-bef0-471bcd9b5d4b}</UniqueIdentifier>
@@ -329,10 +323,10 @@
       <UniqueIdentifier>{c1985821-1144-9a46-639a-f7de31f4a1fa}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine\Physics\BodySetup">
-      <UniqueIdentifier>{a4b8c2d1-3e5f-4a6b-9c0d-1e2f3a4b5c6d}</UniqueIdentifier>
+      <UniqueIdentifier>{82dfb48c-2b18-ea88-f3c9-3e4f77095d27}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine\Physics\PhysX">
-      <UniqueIdentifier>{b5c9d3e2-4f6a-5b7c-0d1e-2f3a4b5c6d7e}</UniqueIdentifier>
+      <UniqueIdentifier>{d87c17f2-a59e-599d-8e89-e08d70a1c594}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine\Platform">
       <UniqueIdentifier>{813e0a37-91de-2afc-805f-1a0f801727b9}</UniqueIdentifier>
@@ -412,14 +406,29 @@
     <Filter Include="Source\Game\Lua">
       <UniqueIdentifier>{a904550b-6c67-d00d-ee77-c5aaf7b88e71}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\ObjViewer">
-      <UniqueIdentifier>{3e63d691-bd37-40d8-2cea-c874f8e3a95b}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ThirdParty">
       <UniqueIdentifier>{b6ce33ca-bd0b-67d0-3b00-df63693ce519}</UniqueIdentifier>
     </Filter>
     <Filter Include="ThirdParty\ImGui">
       <UniqueIdentifier>{5fdcaaee-156a-a40d-82bd-8b77a5a402df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\NvCloth">
+      <UniqueIdentifier>{ea768f62-fea7-cd01-ccb4-22ff5394179d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\NvCloth\include">
+      <UniqueIdentifier>{c060c8e9-bdc2-4ec8-5634-9a7c1b055b7a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\NvCloth\include\NvCloth">
+      <UniqueIdentifier>{4cd6acae-72b2-3ccc-1de0-9ac79b0a6bd0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\NvCloth\include\NvCloth\ps">
+      <UniqueIdentifier>{be2f4c21-239e-9602-74ac-bee3baca3f7d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\NvCloth\include\NvCloth\ps\unix">
+      <UniqueIdentifier>{842b8b7d-75eb-a7b5-9f5e-b3938297a1a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\NvCloth\include\NvCloth\ps\windows">
+      <UniqueIdentifier>{0653b2ec-5aea-df4b-00b4-fe8e7e400e84}</UniqueIdentifier>
     </Filter>
     <Filter Include="ThirdParty\RmlUi">
       <UniqueIdentifier>{6066d5f1-456c-59ef-100e-ddaf00f74497}</UniqueIdentifier>
@@ -573,6 +582,9 @@
     <FxCompile Include="Shaders\Common\Functions.hlsli">
       <Filter>Shaders\Common</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\Common\GeneratedSurfacePass.hlsli">
+      <Filter>Shaders\Common</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\Common\ShadowSampling.hlsli">
       <Filter>Shaders\Common</Filter>
     </FxCompile>
@@ -593,18 +605,6 @@
     </FxCompile>
     <FxCompile Include="Shaders\Editor\Gizmo.hlsl">
       <Filter>Shaders\Editor</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\Generated\Materials\BD78AAE88B260EBC_ParticleSprite.hlsl">
-      <Filter>Shaders\Generated\Materials</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\Generated\Materials\DDDFE619B008A8BB0000B824223D4600_ParticleSprite.hlsl">
-      <Filter>Shaders\Generated\Materials</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\Generated\Materials\_41AAC49C33C14A5000013C79B41DEE10_ParticleMesh.hlsl">
-      <Filter>Shaders\Generated\Materials</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\Generated\Materials\_628A9F53151EB9DD000131497CDADFC0_ParticleSprite.hlsl">
-      <Filter>Shaders\Generated\Materials</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\Geometry\Decal.hlsl">
       <Filter>Shaders\Geometry</Filter>
@@ -1529,7 +1529,22 @@
     <ClCompile Include="Source\Engine\Physics\CollisionWireUtils.cpp">
       <Filter>Source\Engine\Physics</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\ConstraintInstance.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\NativePhysicsScene.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\PhysicsAsset.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\PhysicsAssetManager.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Physics\PhysicsAssetUtils.cpp">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Physics\PhysicsConstraintTemplate.cpp">
       <Filter>Source\Engine\Physics</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Physics\BodySetup\BodySetup.cpp">
@@ -1537,9 +1552,6 @@
     </ClCompile>
     <ClCompile Include="Source\Engine\Physics\BodySetup\BodySetupCore.cpp">
       <Filter>Source\Engine\Physics\BodySetup</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Engine\Physics\NativePhysicsScene.cpp">
-      <Filter>Source\Engine\Physics</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Physics\PhysX\PhysXPhysicsScene.cpp">
       <Filter>Source\Engine\Physics\PhysX</Filter>
@@ -1658,9 +1670,6 @@
     <ClCompile Include="Source\Engine\Render\RenderPass\AlphaBlendPass.cpp">
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Render\RenderPass\DecalPass.cpp">
-      <Filter>Source\Engine\Render\RenderPass</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Engine\Render\RenderPass\DOFGatherPass.cpp">
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClCompile>
@@ -1668,6 +1677,9 @@
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Render\RenderPass\DOFSetupPass.cpp">
+      <Filter>Source\Engine\Render\RenderPass</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Render\RenderPass\DecalPass.cpp">
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Render\RenderPass\EditorLinesPass.cpp">
@@ -1829,18 +1841,6 @@
     <ClCompile Include="Source\Game\Lua\GameLuaBindings.cpp">
       <Filter>Source\Game\Lua</Filter>
     </ClCompile>
-    <ClCompile Include="Source\ObjViewer\ObjViewerEngine.cpp">
-      <Filter>Source\ObjViewer</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\ObjViewer\ObjViewerPanel.cpp">
-      <Filter>Source\ObjViewer</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\ObjViewer\ObjViewerRenderPipeline.cpp">
-      <Filter>Source\ObjViewer</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\ObjViewer\ObjViewerViewportClient.cpp">
-      <Filter>Source\ObjViewer</Filter>
-    </ClCompile>
     <ClCompile Include="ThirdParty\ImGui\imgui.cpp">
       <Filter>ThirdParty\ImGui</Filter>
     </ClCompile>
@@ -1981,9 +1981,6 @@
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Asset\Physics\PhysicsAssetEditorWidget.h">
       <Filter>Source\Editor\UI\Asset\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Engine\Physics\PhysicsAssetUtils.h">
-      <Filter>Source\Engine\Physics</Filter>
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\ContentBrowser\ContentBrowser.h">
       <Filter>Source\Editor\UI\ContentBrowser</Filter>
@@ -2885,6 +2882,36 @@
     <ClInclude Include="Source\Engine\Physics\BodyInstance.h">
       <Filter>Source\Engine\Physics</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\CollisionDebugDraw.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\CollisionWireUtils.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\ConstraintInstance.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\IPhysicsScene.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\NativePhysicsScene.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\PhysicsAsset.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\PhysicsAssetManager.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\PhysicsAssetUtils.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\PhysicsBodyDebug.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Physics\PhysicsConstraintTemplate.h">
+      <Filter>Source\Engine\Physics</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Physics\BodySetup\AggregateGeom.h">
       <Filter>Source\Engine\Physics\BodySetup</Filter>
     </ClInclude>
@@ -2896,12 +2923,6 @@
     </ClInclude>
     <ClInclude Include="Source\Engine\Physics\BodySetup\BodySetupEnums.h">
       <Filter>Source\Engine\Physics\BodySetup</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Engine\Physics\IPhysicsScene.h">
-      <Filter>Source\Engine\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Engine\Physics\NativePhysicsScene.h">
-      <Filter>Source\Engine\Physics</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Physics\PhysX\PhysXPhysicsScene.h">
       <Filter>Source\Engine\Physics\PhysX</Filter>
@@ -3038,9 +3059,6 @@
     <ClInclude Include="Source\Engine\Render\RenderPass\AlphaBlendPass.h">
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Render\RenderPass\DecalPass.h">
-      <Filter>Source\Engine\Render\RenderPass</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Engine\Render\RenderPass\DOFGatherPass.h">
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClInclude>
@@ -3048,6 +3066,9 @@
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Render\RenderPass\DOFSetupPass.h">
+      <Filter>Source\Engine\Render\RenderPass</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Render\RenderPass\DecalPass.h">
       <Filter>Source\Engine\Render\RenderPass</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Render\RenderPass\EditorLinesPass.h">
@@ -3262,18 +3283,6 @@
     </ClInclude>
     <ClInclude Include="Source\Game\Lua\GameLuaBindings.h">
       <Filter>Source\Game\Lua</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\ObjViewer\ObjViewerEngine.h">
-      <Filter>Source\ObjViewer</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\ObjViewer\ObjViewerPanel.h">
-      <Filter>Source\ObjViewer</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\ObjViewer\ObjViewerRenderPipeline.h">
-      <Filter>Source\ObjViewer</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\ObjViewer\ObjViewerViewportClient.h">
-      <Filter>Source\ObjViewer</Filter>
     </ClInclude>
     <ClInclude Include="ThirdParty\stb_image.h">
       <Filter>ThirdParty</Filter>
@@ -4213,6 +4222,78 @@
     </ClInclude>
     <ClInclude Include="ThirdParty\lua\include\lualib.h">
       <Filter>ThirdParty\lua\include</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\Allocator.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\Callbacks.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\Cloth.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\DxContextManagerCallback.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\Fabric.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\Factory.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\PhaseConfig.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\Range.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\Solver.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\Ps.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsAlignedMalloc.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsAllocator.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsArray.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsAtomic.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsBasicTemplates.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsBitUtils.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsHash.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsHashInternals.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsHashMap.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsIntrinsics.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsMathUtils.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\PsUserAllocated.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\unix\PsUnixIntrinsics.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps\unix</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\NvCloth\include\NvCloth\ps\windows\PsWindowsIntrinsics.h">
+      <Filter>ThirdParty\NvCloth\include\NvCloth\ps\windows</Filter>
     </ClInclude>
     <ClInclude Include="ThirdParty\RmlUi\Include\RmlUi\Core.h">
       <Filter>ThirdParty\RmlUi\Include\RmlUi</Filter>

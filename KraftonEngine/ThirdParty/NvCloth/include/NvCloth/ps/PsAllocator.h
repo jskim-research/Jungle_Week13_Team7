@@ -1,4 +1,4 @@
-// This code contains NVIDIA Confidential Information and is disclosed to you
+﻿// This code contains NVIDIA Confidential Information and is disclosed to you
 // under a form of NVIDIA software license agreement provided separately to you.
 //
 // Notice
@@ -37,11 +37,7 @@
 
 #if(PX_WINDOWS_FAMILY || PX_XBOXONE)
 #include <exception>
-#if PX_VC >= 16
-	#include <typeinfo>
-#else
-	#include <typeinfo.h>
-#endif
+#include <typeinfo>
 #endif
 #if(PX_APPLE_FAMILY)
 #include <typeinfo>
