@@ -1,0 +1,571 @@
+diff --git a/KraftonEngine/KraftonEngine.vcxproj b/KraftonEngine/KraftonEngine.vcxproj
+index 1f723e6..60040f9 100644
+--- a/KraftonEngine/KraftonEngine.vcxproj
++++ b/KraftonEngine/KraftonEngine.vcxproj
+@@ -550,6 +550,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
+     <ClCompile Include="Source\Engine\GameFramework\Pawn\LuaCharacter.cpp" />
+     <ClCompile Include="Source\Engine\GameFramework\Pawn\Pawn.cpp" />
+     <ClCompile Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.cpp" />
++    <ClCompile Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.cpp" />
+     <ClCompile Include="Source\Engine\Gizmo\ComponentGizmoTarget.cpp" />
+     <ClCompile Include="Source\Engine\Input\InputSystem.cpp" />
+     <ClCompile Include="Source\Engine\Lua\LuaScriptManager.cpp" />
+@@ -974,6 +975,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
+     <ClInclude Include="Source\Engine\GameFramework\Pawn\LuaCharacter.h" />
+     <ClInclude Include="Source\Engine\GameFramework\Pawn\Pawn.h" />
+     <ClInclude Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.h" />
++    <ClInclude Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.h" />
+     <ClInclude Include="Source\Engine\Gizmo\ComponentGizmoTarget.h" />
+     <ClInclude Include="Source\Engine\Gizmo\GizmoTransformTarget.h" />
+     <ClInclude Include="Source\Engine\Input\InputSystem.h" />
+diff --git a/KraftonEngine/KraftonEngine.vcxproj.filters b/KraftonEngine/KraftonEngine.vcxproj.filters
+index bab5fdd..9d8e0d0 100644
+--- a/KraftonEngine/KraftonEngine.vcxproj.filters
++++ b/KraftonEngine/KraftonEngine.vcxproj.filters
+@@ -1307,6 +1307,9 @@
+     <ClCompile Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.cpp">
+       <Filter>Source\Engine\Gizmo</Filter>
+     </ClCompile>
++    <ClCompile Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.cpp">
++      <Filter>Source\Engine\Gizmo</Filter>
++    </ClCompile>
+     <ClCompile Include="Source\Engine\Gizmo\ComponentGizmoTarget.cpp">
+       <Filter>Source\Engine\Gizmo</Filter>
+     </ClCompile>
+@@ -2573,6 +2576,9 @@
+     <ClInclude Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.h">
+       <Filter>Source\Engine\Gizmo</Filter>
+     </ClInclude>
++    <ClInclude Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.h">
++      <Filter>Source\Engine\Gizmo</Filter>
++    </ClInclude>
+     <ClInclude Include="Source\Engine\Gizmo\ComponentGizmoTarget.h">
+       <Filter>Source\Engine\Gizmo</Filter>
+     </ClInclude>
+diff --git a/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp b/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp
+index c0087ee..c36d06b 100644
+--- a/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp
++++ b/KraftonEngine/Source/Editor/UI/Asset/Mesh/MeshEditorWidget.cpp
+@@ -394,6 +394,10 @@ void FMeshEditorWidget::Tick(float DeltaTime)
+ 	if (ViewportClient.IsRenderable())
+ 	{
+ 		ViewportClient.Tick(DeltaTime);
++		if (ViewportClient.ConsumeSocketTransformEdited())
++		{
++			MarkDirty();
++		}
+ 	}
+ 
+ 	if (ActiveTab == EMeshEditorTab::Animation)
+@@ -1706,6 +1710,7 @@ void FMeshEditorWidget::RenderSelectedSocketDetails(USkeletalMesh* Mesh, USkelet
+ 			{
+ 				ViewportClient.SetSocketPreviewMesh(NewName, PreviewPath);
+ 			}
++			ViewportClient.SetSelectedSocket(Mesh, NewName);
+ 			MarkDirty();
+ 		}
+ 	}
+@@ -1746,6 +1751,7 @@ void FMeshEditorWidget::RenderSelectedSocketDetails(USkeletalMesh* Mesh, USkelet
+ 	if (bChanged)
+ 	{
+ 		MarkSocketPreviewDirty(Socket.Name);
++		ViewportClient.SetSelectedSocket(Mesh, Socket.Name);
+ 		MarkDirty();
+ 	}
+ 
+@@ -1868,7 +1874,7 @@ void FMeshEditorWidget::RenderBoneTree(USkeletalMesh* Mesh, const FSkeletalMesh*
+ 			Skeleton->GetMutableSockets().push_back(NewSocket);
+ 			SelectedBoneIndex = Index;
+ 			SelectedSocketName = NewSocket.Name;
+-			ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), Index);
++			ViewportClient.SetSelectedSocket(Cast<USkeletalMesh>(EditedObject), NewSocket.Name);
+ 			MarkDirty();
+ 		}
+ 		ImGui::EndPopup();
+@@ -1908,7 +1914,7 @@ void FMeshEditorWidget::RenderBoneTree(USkeletalMesh* Mesh, const FSkeletalMesh*
+ 				{
+ 					SelectedBoneIndex = Index;
+ 					SelectedSocketName = Socket.Name;
+-					ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), Index);
++					ViewportClient.SetSelectedSocket(Cast<USkeletalMesh>(EditedObject), Socket.Name);
+ 				}
+ 
+ 				if (ImGui::BeginPopupContextItem())
+@@ -1919,6 +1925,7 @@ void FMeshEditorWidget::RenderBoneTree(USkeletalMesh* Mesh, const FSkeletalMesh*
+ 						if (SelectedSocketName == Socket.Name)
+ 						{
+ 							SelectedSocketName = FName::None;
++							ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), Index);
+ 						}
+ 						Sockets.erase(Sockets.begin() + SocketIndex);
+ 						MarkDirty();
+diff --git a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp
+index 72f502b..d77d098 100644
+--- a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp
++++ b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.cpp
+@@ -75,6 +75,11 @@ void FMeshEditorViewportClient::CreatePreviewGizmo()
+ 	Gizmo->SetScene(&PreviewWorld->GetScene());
+ 	Gizmo->CreateRenderState();
+ 	Gizmo->Deactivate();
++
++	SocketTarget.SetOnSocketChanged([this](const FName&)
++	{
++		bSocketTransformEdited = true;
++	});
+ }
+ 
+ void FMeshEditorViewportClient::CreateBoneDebugComponent()
+@@ -289,6 +294,7 @@ void FMeshEditorViewportClient::SetSelectedBone(USkeletalMesh* Mesh, int32 BoneI
+ {
+ 	SelectedMesh = Mesh;
+ 	SelectedBoneIndex = BoneIndex;
++	SelectedSocketName = FName::None;
+ 	RenderOptions.WeightBoneHeatMapBoneIndex = BoneIndex;
+ 
+ 	if (Gizmo && PreviewMeshComponent && BoneIndex >= 0)
+@@ -308,6 +314,50 @@ void FMeshEditorViewportClient::SetSelectedBone(USkeletalMesh* Mesh, int32 BoneI
+ 	}
+ }
+ 
++void FMeshEditorViewportClient::SetSelectedSocket(USkeletalMesh* Mesh, const FName& SocketName)
++{
++	SelectedMesh = Mesh;
++	SelectedSocketName = SocketName;
++
++	int32 SocketBoneIndex = -1;
++	if (Mesh)
++	{
++		if (USkeleton* Skeleton = Mesh->GetSkeleton())
++		{
++			if (const FSkeletonSocket* Socket = Skeleton->FindSocket(SocketName))
++			{
++				SocketBoneIndex = Skeleton->ResolveSocketBoneIndex(*Socket);
++			}
++		}
++	}
++
++	SelectedBoneIndex = SocketBoneIndex;
++	RenderOptions.WeightBoneHeatMapBoneIndex = SocketBoneIndex;
++
++	if (Gizmo && PreviewMeshComponent && SocketName != FName::None)
++	{
++		SocketTarget.SetSocket(PreviewMeshComponent, SocketName);
++		Gizmo->SetTarget(&SocketTarget);
++	}
++	else if (Gizmo)
++	{
++		Gizmo->Deactivate();
++	}
++
++	if (BoneDebugComponent)
++	{
++		BoneDebugComponent->SetTargetMeshComponent(PreviewMeshComponent);
++		BoneDebugComponent->SetSelectedBoneIndex(SocketBoneIndex);
++	}
++}
++
++bool FMeshEditorViewportClient::ConsumeSocketTransformEdited()
++{
++	const bool bEdited = bSocketTransformEdited;
++	bSocketTransformEdited = false;
++	return bEdited;
++}
++
+ const FBone* FMeshEditorViewportClient::GetSelectedBone() const
+ {
+ 	if (!SelectedMesh) return nullptr;
+diff --git a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h
+index b60d9d1..c647556 100644
+--- a/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h
++++ b/KraftonEngine/Source/Editor/Viewport/Asset/MeshEditorViewportClient.h
+@@ -7,6 +7,7 @@
+ #include "Editor/Slate/SWindow.h"
+ #include "Core/Types/RayTypes.h"
+ #include "Gizmo/BoneTransformGizmoTarget.h"
++#include "Gizmo/SocketTransformGizmoTarget.h"
+ #include "Component/Debug/BoneDebugComponent.h"
+ #include "Object/GarbageCollection.h"
+ #include "Object/FName.h"
+@@ -67,6 +68,8 @@ public:
+ 	void Tick(float DeltaTime);
+ 
+ 	void SetSelectedBone(USkeletalMesh* Mesh, int32 BoneIndex);
++	void SetSelectedSocket(USkeletalMesh* Mesh, const FName& SocketName);
++	bool ConsumeSocketTransformEdited();
+ 	const FBone* GetSelectedBone() const;
+ 
+ 	EBoneDebugDrawMode GetBoneDebugDrawMode() const;
+@@ -88,12 +91,15 @@ private:
+ private:
+ 	USkeletalMesh* SelectedMesh = nullptr;
+ 	int32 SelectedBoneIndex = -1;
++	FName SelectedSocketName = FName::None;
++	bool bSocketTransformEdited = false;
+ 
+ 	FViewport* Viewport = nullptr;
+ 	FWindowsWindow* Window = nullptr;
+ 	FViewportRenderOptions RenderOptions;
+ 
+ 	FBoneTransformGizmoTarget BoneTarget;
++	FSocketTransformGizmoTarget SocketTarget;
+ 	UGizmoComponent* Gizmo = nullptr;
+ 	USkeletalMeshComponent* PreviewMeshComponent = nullptr;
+ 	UBoneDebugComponent* BoneDebugComponent = nullptr;
+diff --git a/KraftonEngine/Source/Engine/Gizmo/SocketTransformGizmoTarget.cpp b/KraftonEngine/Source/Engine/Gizmo/SocketTransformGizmoTarget.cpp
+new file mode 100644
+index 0000000..7f23a7b
+--- /dev/null
++++ b/KraftonEngine/Source/Engine/Gizmo/SocketTransformGizmoTarget.cpp
+@@ -0,0 +1,294 @@
++#include "SocketTransformGizmoTarget.h"
++
++#include "Animation/Skeleton/Skeleton.h"
++#include "Component/Primitive/SkeletalMeshComponent.h"
++#include "Component/SceneComponent.h"
++#include "Mesh/Skeletal/SkeletalMesh.h"
++
++#include <algorithm>
++#include <cmath>
++#include <utility>
++
++namespace
++{
++    constexpr float SocketMatrixDecomposeTolerance = 1.0e-6f;
++
++    FTransform DecomposeSocketMatrix(const FMatrix& Matrix)
++    {
++        FTransform Result;
++        Result.Location = Matrix.GetLocation();
++        Result.Scale = Matrix.GetScale();
++
++        FMatrix RotationMatrix = Matrix;
++        RotationMatrix.M[3][0] = 0.0f;
++        RotationMatrix.M[3][1] = 0.0f;
++        RotationMatrix.M[3][2] = 0.0f;
++        RotationMatrix.M[3][3] = 1.0f;
++
++        if (std::fabs(Result.Scale.X) > SocketMatrixDecomposeTolerance)
++        {
++            RotationMatrix.M[0][0] /= Result.Scale.X;
++            RotationMatrix.M[0][1] /= Result.Scale.X;
++            RotationMatrix.M[0][2] /= Result.Scale.X;
++        }
++        if (std::fabs(Result.Scale.Y) > SocketMatrixDecomposeTolerance)
++        {
++            RotationMatrix.M[1][0] /= Result.Scale.Y;
++            RotationMatrix.M[1][1] /= Result.Scale.Y;
++            RotationMatrix.M[1][2] /= Result.Scale.Y;
++        }
++        if (std::fabs(Result.Scale.Z) > SocketMatrixDecomposeTolerance)
++        {
++            RotationMatrix.M[2][0] /= Result.Scale.Z;
++            RotationMatrix.M[2][1] /= Result.Scale.Z;
++            RotationMatrix.M[2][2] /= Result.Scale.Z;
++        }
++
++        Result.Rotation = RotationMatrix.ToQuat().GetNormalized();
++        return Result;
++    }
++
++    FMatrix GetAffineInverseForSocketEdit(const FMatrix& Matrix)
++    {
++        const double A = Matrix.M[0][0];
++        const double B = Matrix.M[0][1];
++        const double C = Matrix.M[0][2];
++        const double D = Matrix.M[1][0];
++        const double E = Matrix.M[1][1];
++        const double F = Matrix.M[1][2];
++        const double G = Matrix.M[2][0];
++        const double H = Matrix.M[2][1];
++        const double I = Matrix.M[2][2];
++
++        const double Det = A * (E * I - F * H) - B * (D * I - F * G) + C * (D * H - E * G);
++        if (std::fabs(Det) < 1.0e-12)
++        {
++            return Matrix.GetInverse();
++        }
++
++        const double InvDet = 1.0 / Det;
++
++        FMatrix Result = FMatrix::Identity;
++        Result.M[0][0] = static_cast<float>((E * I - F * H) * InvDet);
++        Result.M[0][1] = static_cast<float>((C * H - B * I) * InvDet);
++        Result.M[0][2] = static_cast<float>((B * F - C * E) * InvDet);
++        Result.M[1][0] = static_cast<float>((F * G - D * I) * InvDet);
++        Result.M[1][1] = static_cast<float>((A * I - C * G) * InvDet);
++        Result.M[1][2] = static_cast<float>((C * D - A * F) * InvDet);
++        Result.M[2][0] = static_cast<float>((D * H - E * G) * InvDet);
++        Result.M[2][1] = static_cast<float>((B * G - A * H) * InvDet);
++        Result.M[2][2] = static_cast<float>((A * E - B * D) * InvDet);
++
++        const FVector Translation = Matrix.GetLocation();
++        Result.M[3][0] = -(Translation.X * Result.M[0][0] + Translation.Y * Result.M[1][0] + Translation.Z * Result.M[2][0]);
++        Result.M[3][1] = -(Translation.X * Result.M[0][1] + Translation.Y * Result.M[1][1] + Translation.Z * Result.M[2][1]);
++        Result.M[3][2] = -(Translation.X * Result.M[0][2] + Translation.Y * Result.M[1][2] + Translation.Z * Result.M[2][2]);
++        return Result;
++    }
++
++    FVector ClampSocketScale(const FVector& Scale)
++    {
++        return FVector(
++            std::max(0.001f, Scale.X),
++            std::max(0.001f, Scale.Y),
++            std::max(0.001f, Scale.Z));
++    }
++}
++
++FSocketTransformGizmoTarget::FSocketTransformGizmoTarget()
++    : MeshComponent(nullptr), SocketName(FName::None)
++{
++}
++
++FSocketTransformGizmoTarget::FSocketTransformGizmoTarget(USkeletalMeshComponent* InMeshComp, const FName& InSocketName)
++    : MeshComponent(InMeshComp), SocketName(InSocketName)
++{
++}
++
++void FSocketTransformGizmoTarget::SetSocket(USkeletalMeshComponent* InMeshComp, const FName& InSocketName)
++{
++    MeshComponent = InMeshComp;
++    SocketName = InSocketName;
++}
++
++void FSocketTransformGizmoTarget::SetOnSocketChanged(std::function<void(const FName&)> InCallback)
++{
++    OnSocketChanged = std::move(InCallback);
++}
++
++bool FSocketTransformGizmoTarget::IsValid() const
++{
++    return MeshComponent.IsValid() && SocketName != FName::None && GetMutableSocket() != nullptr;
++}
++
++UWorld* FSocketTransformGizmoTarget::GetWorld() const
++{
++    USkeletalMeshComponent* Comp = MeshComponent.Get();
++    return Comp ? Comp->GetWorld() : nullptr;
++}
++
++FVector FSocketTransformGizmoTarget::GetWorldLocation() const
++{
++    return GetWorldTransform().Location;
++}
++
++FRotator FSocketTransformGizmoTarget::GetWorldRotation() const
++{
++    return GetWorldTransform().Rotation.ToRotator();
++}
++
++FQuat FSocketTransformGizmoTarget::GetWorldQuat() const
++{
++    return GetWorldTransform().Rotation;
++}
++
++FVector FSocketTransformGizmoTarget::GetWorldScale() const
++{
++    return GetWorldTransform().Scale;
++}
++
++void FSocketTransformGizmoTarget::SetWorldLocation(const FVector& NewLocation)
++{
++    FTransform Desired = GetWorldTransform();
++    Desired.Location = NewLocation;
++    ApplyWorldTransform(Desired);
++}
++
++void FSocketTransformGizmoTarget::SetWorldRotation(const FRotator& NewRotation)
++{
++    FTransform Desired = GetWorldTransform();
++    Desired.Rotation = NewRotation.ToQuaternion().GetNormalized();
++    ApplyWorldTransform(Desired);
++}
++
++void FSocketTransformGizmoTarget::SetWorldRotation(const FQuat& NewQuat)
++{
++    FTransform Desired = GetWorldTransform();
++    Desired.Rotation = NewQuat.GetNormalized();
++    ApplyWorldTransform(Desired);
++}
++
++void FSocketTransformGizmoTarget::SetWorldScale(const FVector& NewScale)
++{
++    FTransform Desired = GetWorldTransform();
++    Desired.Scale = ClampSocketScale(NewScale);
++    ApplyWorldTransform(Desired);
++}
++
++void FSocketTransformGizmoTarget::AddWorldOffset(const FVector& Delta)
++{
++    FTransform Desired = GetWorldTransform();
++    Desired.Location += Delta;
++    ApplyWorldTransform(Desired);
++}
++
++void FSocketTransformGizmoTarget::AddWorldRotation(const FQuat& Delta, bool bWorldSpace)
++{
++    FTransform Desired = GetWorldTransform();
++    const FQuat NormalizedDelta = Delta.GetNormalized();
++    Desired.Rotation = bWorldSpace
++        ? (NormalizedDelta * Desired.Rotation).GetNormalized()
++        : (Desired.Rotation * NormalizedDelta).GetNormalized();
++    ApplyWorldTransform(Desired);
++}
++
++void FSocketTransformGizmoTarget::AddScaleDelta(const FVector& Delta)
++{
++    FTransform Desired = GetWorldTransform();
++    Desired.Scale = ClampSocketScale(Desired.Scale + Delta);
++    ApplyWorldTransform(Desired);
++}
++
++FSkeletonSocket* FSocketTransformGizmoTarget::GetMutableSocket() const
++{
++    USkeletalMeshComponent* Comp = MeshComponent.Get();
++    USkeletalMesh* Mesh = Comp ? Comp->GetSkeletalMesh() : nullptr;
++    USkeleton* Skeleton = Mesh ? Mesh->GetSkeleton() : nullptr;
++    return Skeleton ? Skeleton->FindSocket(SocketName) : nullptr;
++}
++
++int32 FSocketTransformGizmoTarget::ResolveSocketBoneIndex(const FSkeletonSocket& Socket) const
++{
++    USkeletalMeshComponent* Comp = MeshComponent.Get();
++    USkeletalMesh* Mesh = Comp ? Comp->GetSkeletalMesh() : nullptr;
++    USkeleton* Skeleton = Mesh ? Mesh->GetSkeleton() : nullptr;
++    return Skeleton ? Skeleton->ResolveSocketBoneIndex(Socket) : -1;
++}
++
++FMatrix FSocketTransformGizmoTarget::GetBoneWorldMatrix(int32 BoneIndex) const
++{
++    USkeletalMeshComponent* Comp = MeshComponent.Get();
++    if (!Comp || BoneIndex < 0)
++    {
++        return FMatrix::Identity;
++    }
++
++    return FTransform(
++        Comp->GetBoneLocationByIndex(BoneIndex),
++        Comp->GetBoneQuatByIndex(BoneIndex),
++        Comp->GetBoneScaleByIndex(BoneIndex)).ToMatrix();
++}
++
++FTransform FSocketTransformGizmoTarget::GetWorldTransform() const
++{
++    USkeletalMeshComponent* Comp = MeshComponent.Get();
++    FSkeletonSocket* Socket = GetMutableSocket();
++    if (!Comp || !Socket)
++    {
++        return FTransform();
++    }
++
++    const int32 BoneIndex = ResolveSocketBoneIndex(*Socket);
++    if (BoneIndex < 0)
++    {
++        return FTransform(Comp->GetWorldMatrix());
++    }
++
++    const FMatrix SocketWorldMatrix = Socket->GetRelativeTransform() * GetBoneWorldMatrix(BoneIndex);
++    return DecomposeSocketMatrix(SocketWorldMatrix);
++}
++
++void FSocketTransformGizmoTarget::ApplyWorldTransform(const FTransform& DesiredWorldTransform)
++{
++    FSkeletonSocket* Socket = GetMutableSocket();
++    if (!Socket)
++    {
++        return;
++    }
++
++    const int32 BoneIndex = ResolveSocketBoneIndex(*Socket);
++    if (BoneIndex < 0)
++    {
++        return;
++    }
++
++    const FMatrix BoneWorldMatrix = GetBoneWorldMatrix(BoneIndex);
++    const FMatrix SocketLocalMatrix = DesiredWorldTransform.ToMatrix() * GetAffineInverseForSocketEdit(BoneWorldMatrix);
++    FTransform LocalTransform = DecomposeSocketMatrix(SocketLocalMatrix);
++    LocalTransform.Scale = ClampSocketScale(LocalTransform.Scale);
++
++    Socket->RelativeLocation = LocalTransform.Location;
++    Socket->RelativeRotation = LocalTransform.Rotation.ToRotator();
++    Socket->RelativeScale = LocalTransform.Scale;
++
++    NotifySocketChanged();
++}
++
++void FSocketTransformGizmoTarget::NotifySocketChanged() const
++{
++    if (USkeletalMeshComponent* Comp = MeshComponent.Get())
++    {
++        for (USceneComponent* Child : Comp->GetChildren())
++        {
++            if (IsValid(Child) && Child->GetAttachSocketName() == SocketName)
++            {
++                Child->MarkTransformDirty();
++            }
++        }
++    }
++
++    if (OnSocketChanged)
++    {
++        OnSocketChanged(SocketName);
++    }
++}
+diff --git a/KraftonEngine/Source/Engine/Gizmo/SocketTransformGizmoTarget.h b/KraftonEngine/Source/Engine/Gizmo/SocketTransformGizmoTarget.h
+new file mode 100644
+index 0000000..895d5c8
+--- /dev/null
++++ b/KraftonEngine/Source/Engine/Gizmo/SocketTransformGizmoTarget.h
+@@ -0,0 +1,52 @@
++#pragma once
++
++#include "GizmoTransformTarget.h"
++#include "Object/Ptr/WeakObjectPtr.h"
++#include "Object/FName.h"
++
++#include <functional>
++
++class USkeletalMeshComponent;
++struct FSkeletonSocket;
++
++class FSocketTransformGizmoTarget : public IGizmoTransformTarget
++{
++public:
++    FSocketTransformGizmoTarget();
++    FSocketTransformGizmoTarget(USkeletalMeshComponent* InMeshComp, const FName& InSocketName);
++    ~FSocketTransformGizmoTarget() override = default;
++
++public:
++    void SetSocket(USkeletalMeshComponent* InMeshComp, const FName& InSocketName);
++    void SetOnSocketChanged(std::function<void(const FName&)> InCallback);
++
++    bool IsValid() const override;
++    UWorld* GetWorld() const override;
++
++    FVector GetWorldLocation() const override;
++    FRotator GetWorldRotation() const override;
++    FQuat GetWorldQuat() const override;
++    FVector GetWorldScale() const override;
++
++    void SetWorldLocation(const FVector& NewLocation) override;
++    void SetWorldRotation(const FRotator& NewRotation) override;
++    void SetWorldRotation(const FQuat& NewQuat) override;
++    void SetWorldScale(const FVector& NewScale) override;
++
++    void AddWorldOffset(const FVector& Delta) override;
++    void AddWorldRotation(const FQuat& Delta, bool bWorldSpace) override;
++    void AddScaleDelta(const FVector& Delta) override;
++
++private:
++    FSkeletonSocket* GetMutableSocket() const;
++    int32 ResolveSocketBoneIndex(const FSkeletonSocket& Socket) const;
++    FMatrix GetBoneWorldMatrix(int32 BoneIndex) const;
++    FTransform GetWorldTransform() const;
++    void ApplyWorldTransform(const FTransform& DesiredWorldTransform);
++    void NotifySocketChanged() const;
++
++private:
++    TWeakObjectPtr<USkeletalMeshComponent> MeshComponent;
++    FName SocketName = FName::None;
++    std::function<void(const FName&)> OnSocketChanged;
++};

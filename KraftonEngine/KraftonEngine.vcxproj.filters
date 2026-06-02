@@ -1307,6 +1307,9 @@
     <ClCompile Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.cpp">
       <Filter>Source\Engine\Gizmo</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.cpp">
+      <Filter>Source\Engine\Gizmo</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Gizmo\ComponentGizmoTarget.cpp">
       <Filter>Source\Engine\Gizmo</Filter>
     </ClCompile>
@@ -2571,6 +2574,9 @@
       <Filter>Source\Engine\GameFramework\Pawn</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.h">
+      <Filter>Source\Engine\Gizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.h">
       <Filter>Source\Engine\Gizmo</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Gizmo\ComponentGizmoTarget.h">

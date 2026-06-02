@@ -2,6 +2,8 @@
 
 #include "Core/Types/CoreTypes.h"
 #include "Math/Matrix.h"
+#include "Math/Transform.h"
+#include "Object/FName.h"
 #include "Serialization/Archive.h"
 
 inline void SerializeReferenceSkeletonMatrix(FArchive& Ar, FMatrix& Matrix)
@@ -82,6 +84,55 @@ struct FReferenceSkeleton
     friend FArchive& operator<<(FArchive& Ar, FReferenceSkeleton& Skeleton)
     {
         Ar << Skeleton.Bones;
+        return Ar;
+    }
+};
+
+
+struct FSkeletonSocket
+{
+    FName   Name = FName::None;
+    FString BoneName;
+    int32   BoneIndex = -1;
+
+    FVector  RelativeLocation = FVector::ZeroVector;
+    FRotator RelativeRotation = FRotator::ZeroRotator;
+    FVector  RelativeScale    = FVector(1.0f, 1.0f, 1.0f);
+
+    FString PreviewStaticMeshPath = "None";
+
+    bool IsValid() const
+    {
+        return Name != FName::None && (!BoneName.empty() || BoneIndex >= 0);
+    }
+
+    FMatrix GetRelativeTransform() const
+    {
+        return FTransform(RelativeLocation, RelativeRotation, RelativeScale).ToMatrix();
+    }
+
+    friend FArchive& operator<<(FArchive& Ar, FSkeletonSocket& Socket)
+    {
+        Ar << Socket.Name;
+        Ar << Socket.BoneName;
+        Ar << Socket.BoneIndex;
+        Ar << Socket.RelativeLocation;
+        Ar << Socket.RelativeRotation;
+        Ar << Socket.RelativeScale;
+
+        if (Ar.IsSaving() || Ar.HasRemaining())
+        {
+            Ar << Socket.PreviewStaticMeshPath;
+        }
+        else if (Ar.IsLoading())
+        {
+            Socket.PreviewStaticMeshPath = "None";
+        }
+
+        if (Ar.IsLoading() && Socket.PreviewStaticMeshPath.empty())
+        {
+            Socket.PreviewStaticMeshPath = "None";
+        }
         return Ar;
     }
 };

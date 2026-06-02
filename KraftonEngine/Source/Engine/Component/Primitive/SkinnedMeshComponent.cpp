@@ -1,5 +1,6 @@
 ﻿#include "SkinnedMeshComponent.h"
 #include "Mesh/Skeletal/SkeletalMesh.h"
+#include "Animation/Skeleton/Skeleton.h"
 #include "Serialization/Archive.h"
 #include "Runtime/Engine.h"
 #include "Mesh/MeshManager.h"
@@ -165,6 +166,7 @@ void USkinnedMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
 	MarkProxyDirty(EDirtyFlag::Mesh);
 	MarkProxyDirty(EDirtyFlag::Material);
 	MarkWorldBoundsDirty();
+	MarkSocketAttachedChildrenDirty();
 }
 
 USkeletalMesh* USkinnedMeshComponent::GetSkeletalMesh() const
@@ -351,6 +353,87 @@ FTransform USkinnedMeshComponent::GetBoneEditBaseLocalTransformByIndex(int32 Bon
 	}
 
 	return MatrixToEditorTransform(Asset->Bones[BoneIndex].GetReferenceLocalPose());
+}
+
+
+int32 USkinnedMeshComponent::FindBoneIndexByName(const FString& BoneName) const
+{
+	FSkeletalMesh* Asset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!Asset || BoneName.empty())
+	{
+		return -1;
+	}
+
+	for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Asset->Bones.size()); ++BoneIndex)
+	{
+		if (Asset->Bones[BoneIndex].Name == BoneName)
+		{
+			return BoneIndex;
+		}
+	}
+
+	return -1;
+}
+
+bool USkinnedMeshComponent::HasSocket(const FName& SocketName) const
+{
+	if (SocketName == FName::None || !SkeletalMesh)
+	{
+		return false;
+	}
+
+	if (USkeleton* Skeleton = SkeletalMesh->GetSkeleton())
+	{
+		if (Skeleton->HasSocket(SocketName))
+		{
+			return true;
+		}
+	}
+
+	return FindBoneIndexByName(SocketName.ToString()) >= 0;
+}
+
+FTransform USkinnedMeshComponent::GetSocketTransform(const FName& SocketName) const
+{
+	FSkeletalMesh* Asset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!Asset || SocketName == FName::None)
+	{
+		return FTransform(GetWorldMatrix());
+	}
+
+	TArray<FMatrix> GlobalMatrices;
+	BuildBoneEditGlobalMatrices(GlobalMatrices);
+
+	auto GetBoneWorldTransform = [&](int32 BoneIndex) -> FTransform
+	{
+		if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(GlobalMatrices.size()))
+		{
+			return FTransform(GetWorldMatrix());
+		}
+		return FTransform(GlobalMatrices[BoneIndex] * GetWorldMatrix());
+	};
+
+	if (USkeleton* Skeleton = SkeletalMesh->GetSkeleton())
+	{
+		if (const FSkeletonSocket* Socket = Skeleton->FindSocket(SocketName))
+		{
+			int32 BoneIndex = FindBoneIndexByName(Socket->BoneName);
+			if (BoneIndex < 0 && Socket->BoneIndex >= 0 && Socket->BoneIndex < static_cast<int32>(Asset->Bones.size()))
+			{
+				BoneIndex = Socket->BoneIndex;
+			}
+
+			if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(GlobalMatrices.size()))
+			{
+				return FTransform(GetWorldMatrix());
+			}
+
+			const FMatrix SocketWorld = Socket->GetRelativeTransform() * GlobalMatrices[BoneIndex] * GetWorldMatrix();
+			return FTransform(SocketWorld);
+		}
+	}
+
+	return GetBoneWorldTransform(FindBoneIndexByName(SocketName.ToString()));
 }
 
 void USkinnedMeshComponent::SetBoneLocationByIndex(int32 BoneIndex, const FVector& NewLocation)
@@ -911,6 +994,24 @@ void USkinnedMeshComponent::BuildBoneEditGlobalMatrices(TArray<FMatrix>& OutGlob
 	}
 }
 
+
+void USkinnedMeshComponent::MarkSocketAttachedChildrenDirty()
+{
+	for (USceneComponent* Child : GetChildren())
+	{
+		if (!IsValid(Child))
+		{
+			continue;
+		}
+
+		const FName& SocketName = Child->GetAttachSocketName();
+		if (SocketName != FName::None && HasSocket(SocketName))
+		{
+			Child->MarkTransformDirty();
+		}
+	}
+}
+
 void USkinnedMeshComponent::AddReferencedObjects(FReferenceCollector& Collector)
 {
     UMeshComponent::AddReferencedObjects(Collector);
@@ -1069,6 +1170,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
 	// SceneProxy는 revision 차이만 보고 dynamic vertex buffer upload 여부를 결정한다.
 	++SkinnedRevision;
+	MarkSocketAttachedChildrenDirty();
 }
 
 void USkinnedMeshComponent::RefreshSkinningAfterPoseChanged()
@@ -1081,6 +1183,7 @@ void USkinnedMeshComponent::RefreshSkinningAfterPoseChanged()
 
 	// GPU skinning은 같은 revision을 matrix SRV 갱신 신호로 사용한다.
 	++SkinnedRevision;
+	MarkSocketAttachedChildrenDirty();
 }
 
 void USkinnedMeshComponent::RefreshSkinningAfterMorphChanged()
@@ -1161,10 +1264,10 @@ void USkinnedMeshComponent::PostDuplicate()
 					SetMaterial(i, LoadedMat);
 				}
 			}
-			
+
 		}
 	}
-	else 
+	else
 	{
 		SetSkeletalMesh(nullptr);
 	}
@@ -1237,7 +1340,7 @@ void USkinnedMeshComponent::PostEditProperty(const char* PropertyName)
 		}
 	}
 }
-// SkinnedComponent는 Picking시 사용하는 Position Data가 
+// SkinnedComponent는 Picking시 사용하는 Position Data가
 // SkeletalMesh의 Raw Data가 아닌 Skinning이 처리된 후의 SkinnedVertices 데이터를 사용한다.
 bool USkinnedMeshComponent::LineTraceComponent(const FRay& Ray, FHitResult& OutHitResult)
 {
