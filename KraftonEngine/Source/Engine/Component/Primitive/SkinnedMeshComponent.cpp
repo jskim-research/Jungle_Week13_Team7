@@ -429,7 +429,7 @@ FTransform USkinnedMeshComponent::GetSocketTransform(const FName& SocketName) co
 			}
 
 			const FMatrix SocketWorld = Socket->GetRelativeTransform() * GlobalMatrices[BoneIndex] * GetWorldMatrix();
-			return FTransform(SocketWorld);
+			return MatrixToEditorTransform(SocketWorld);
 		}
 	}
 

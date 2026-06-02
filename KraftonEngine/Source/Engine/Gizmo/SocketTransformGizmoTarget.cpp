@@ -93,6 +93,53 @@ namespace
             std::max(0.001f, Scale.Y),
             std::max(0.001f, Scale.Z));
     }
+
+    float ClosestAngleEquivalent(float NewAngle, float PreviousAngle)
+    {
+        float Best = NewAngle;
+        float BestDelta = std::fabs(Best - PreviousAngle);
+
+        for (int32 Offset = -1; Offset <= 1; ++Offset)
+        {
+            const float Candidate = NewAngle + 360.0f * static_cast<float>(Offset);
+            const float CandidateDelta = std::fabs(Candidate - PreviousAngle);
+            if (CandidateDelta < BestDelta)
+            {
+                Best = Candidate;
+                BestDelta = CandidateDelta;
+            }
+        }
+
+        return Best;
+    }
+
+    FRotator MakeClosestEquivalentRotator(const FRotator& NewRotator, const FRotator& PreviousRotator)
+    {
+        auto Score = [](const FRotator& A, const FRotator& B)
+        {
+            const float PitchDelta = A.Pitch - B.Pitch;
+            const float YawDelta = A.Yaw - B.Yaw;
+            const float RollDelta = A.Roll - B.Roll;
+            return PitchDelta * PitchDelta + YawDelta * YawDelta + RollDelta * RollDelta;
+        };
+
+        auto ClosestByAxis = [](const FRotator& Candidate, const FRotator& Previous)
+        {
+            return FRotator(
+                ClosestAngleEquivalent(Candidate.Pitch, Previous.Pitch),
+                ClosestAngleEquivalent(Candidate.Yaw, Previous.Yaw),
+                ClosestAngleEquivalent(Candidate.Roll, Previous.Roll));
+        };
+
+        const FRotator Direct = ClosestByAxis(NewRotator, PreviousRotator);
+        const FRotator GimbalEquivalent = ClosestByAxis(
+            FRotator(180.0f - NewRotator.Pitch, NewRotator.Yaw + 180.0f, NewRotator.Roll + 180.0f),
+            PreviousRotator);
+
+        return Score(GimbalEquivalent, PreviousRotator) < Score(Direct, PreviousRotator)
+            ? GimbalEquivalent
+            : Direct;
+    }
 }
 
 FSocketTransformGizmoTarget::FSocketTransformGizmoTarget()
@@ -210,7 +257,7 @@ void FSocketTransformGizmoTarget::AddWorldRotation(const FQuat& Delta, bool bWor
         NewLocalQuat = (NewLocalQuat * NormalizedDelta).GetNormalized();
     }
 
-    Socket->RelativeRotation = NewLocalQuat.ToRotator();
+    Socket->RelativeRotation = MakeClosestEquivalentRotator(NewLocalQuat.ToRotator(), Socket->RelativeRotation);
     NotifySocketChanged();
 }
 
@@ -294,7 +341,7 @@ void FSocketTransformGizmoTarget::ApplyWorldTransform(const FTransform& DesiredW
     LocalTransform.Scale = ClampSocketScale(LocalTransform.Scale);
 
     Socket->RelativeLocation = LocalTransform.Location;
-    Socket->RelativeRotation = LocalTransform.Rotation.ToRotator();
+    Socket->RelativeRotation = MakeClosestEquivalentRotator(LocalTransform.Rotation.ToRotator(), Socket->RelativeRotation);
     Socket->RelativeScale = LocalTransform.Scale;
 
     NotifySocketChanged();
