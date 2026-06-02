@@ -12,6 +12,7 @@
 #include "GameFramework/GameMode/PlayerController.h"
 #include "GameFramework/Camera/PlayerCameraManager.h"
 #include "Object/Reflection/UClass.h"
+#include "Profiling/Stats/PhysicsStats.h"
 #include "Profiling/Stats/Stats.h"
 #include "Profiling/Time/Timer.h"
 #include "Runtime/Engine.h"
@@ -413,6 +414,8 @@ void UWorld::BeginPlay()
 
 void UWorld::Tick(float DeltaTime, ELevelTick TickType)
 {
+	PHYSICS_STATS_RESET_FRAME();
+
 	{
 		SCOPE_STAT_CAT("FlushPrimitive", "1_WorldTick");
 		Partition.FlushPrimitive();

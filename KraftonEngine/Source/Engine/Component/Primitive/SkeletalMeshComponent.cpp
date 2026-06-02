@@ -32,6 +32,8 @@
 #include "Physics/PhysicsAsset.h"
 #include "Physics/PhysicsAssetManager.h"
 #include "Physics/PhysicsConstraintTemplate.h"
+#include "Profiling/Stats/PhysicsStats.h"
+#include "Profiling/Stats/Stats.h"
 #include "GameFramework/World.h"
 
 #include <PxPhysicsAPI.h>
@@ -537,6 +539,30 @@ void USkeletalMeshComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	if (bRagdollActive)
 	{
+		uint32 ValidBodyCount = 0;
+		for (const FBodyInstance* Body : Bodies)
+		{
+			if (Body && Body->IsValidBodyInstance())
+			{
+				++ValidBodyCount;
+			}
+		}
+
+		uint32 ValidConstraintCount = 0;
+		for (const FConstraintInstance* Constraint : Constraints)
+		{
+			if (Constraint)
+			{
+				++ValidConstraintCount;
+			}
+		}
+
+		PHYSICS_STATS_ADD_RAGDOLL_COMPONENT(
+			ValidBodyCount,
+			static_cast<uint32>(Bodies.size()) - ValidBodyCount,
+			ValidConstraintCount,
+			static_cast<uint32>(Constraints.size()) - ValidConstraintCount);
+
 		Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 		SyncSkeletonPoseFromBodies();
 		return;
@@ -767,6 +793,8 @@ void USkeletalMeshComponent::SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset)
 
 void USkeletalMeshComponent::InstantiatePhysicsAsset()
 {
+	PHYSICS_STATS_ADD_RAGDOLL_INSTANTIATE();
+
 	TermPhysicsAsset();
 
 	CreateBodiesFromPhysicsAsset();
@@ -946,6 +974,11 @@ void USkeletalMeshComponent::InitConstraints()
 
 void USkeletalMeshComponent::TermPhysicsAsset()
 {
+	if (!Bodies.empty() || !Constraints.empty())
+	{
+		PHYSICS_STATS_ADD_RAGDOLL_TERM();
+	}
+
 	const FBodyInstanceInitParams InitParams = MakeBodyInstanceInitParams(this, true);
 
 	for (FConstraintInstance* Constraint : Constraints)
@@ -994,6 +1027,8 @@ void USkeletalMeshComponent::EndRagdoll()
 
 void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 {
+	SCOPE_STAT_CAT("Ragdoll_SyncBodiesFromAnimation", "Physics");
+
 	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
 	USkeletalMesh* SkelMesh = GetSkeletalMesh();
 	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
@@ -1035,6 +1070,8 @@ void USkeletalMeshComponent::SyncBodiesFromAnimationPose()
 
 void USkeletalMeshComponent::SyncSkeletonPoseFromBodies()
 {
+	SCOPE_STAT_CAT("Ragdoll_SyncSkeletonFromBodies", "Physics");
+
 	UPhysicsAsset* PhysicsAsset = GetPhysicsAsset();
 	USkeletalMesh* SkelMesh = GetSkeletalMesh();
 	FSkeletalMesh* Asset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
