@@ -5,6 +5,7 @@
 #include "Engine/Profiling/Stats/MemoryStats.h"
 #include "Engine/Profiling/Stats/ShadowStats.h"
 #include "Engine/Profiling/Stats/ParticleStats.h"
+#include "Engine/Profiling/Stats/PhysicsStats.h"
 #include "Engine/Profiling/Stats/Stats.h"
 #include "Engine/Profiling/GPUProfiler.h"
 #include "Slate/SWindow.h"
@@ -331,6 +332,76 @@ void FOverlayStatSystem::BuildParticleLines(TArray<FString>& OutLines) const
 #endif
 }
 
+void FOverlayStatSystem::BuildPhysicsLines(TArray<FString>& OutLines) const
+{
+#if STATS
+	char Buffer[160] = {};
+	double PhysicsSceneMs = 0.0;
+	double SyncBodiesMs = 0.0;
+	double SyncSkeletonMs = 0.0;
+	uint32 SyncBodiesCalls = 0;
+	uint32 SyncSkeletonCalls = 0;
+
+	const TArray<FStatEntry>& CPUSnapshot = FStatManager::Get().GetSnapshot();
+	for (const FStatEntry& Entry : CPUSnapshot)
+	{
+		if (Entry.CallCount == 0 || !Entry.Name)
+		{
+			continue;
+		}
+
+		if (Entry.Category && strcmp(Entry.Category, "1_WorldTick") == 0 && strcmp(Entry.Name, "PhysicsScene") == 0)
+		{
+			PhysicsSceneMs = Entry.LastTime * 1000.0;
+		}
+		else if (Entry.Category && strcmp(Entry.Category, "Physics") == 0)
+		{
+			if (strcmp(Entry.Name, "Ragdoll_SyncBodiesFromAnimation") == 0)
+			{
+				SyncBodiesMs = Entry.LastTime * 1000.0;
+				SyncBodiesCalls = Entry.CallCount;
+			}
+			else if (strcmp(Entry.Name, "Ragdoll_SyncSkeletonFromBodies") == 0)
+			{
+				SyncSkeletonMs = Entry.LastTime * 1000.0;
+				SyncSkeletonCalls = Entry.CallCount;
+			}
+		}
+	}
+
+	OutLines.push_back(FString("--- Physics ---"));
+
+	snprintf(Buffer, sizeof(Buffer), "Physics Scene : %.3f ms", PhysicsSceneMs);
+	OutLines.push_back(FString(Buffer));
+
+	snprintf(Buffer, sizeof(Buffer), "Ragdoll Components : %u", FPhysicsStats::RagdollActiveComponentCount);
+	OutLines.push_back(FString(Buffer));
+
+	snprintf(Buffer, sizeof(Buffer), "Ragdoll Bodies : %u  invalid %u",
+		FPhysicsStats::RagdollBodyCount,
+		FPhysicsStats::RagdollInvalidBodyCount);
+	OutLines.push_back(FString(Buffer));
+
+	snprintf(Buffer, sizeof(Buffer), "Ragdoll Constraints : %u  invalid %u",
+		FPhysicsStats::RagdollConstraintCount,
+		FPhysicsStats::RagdollInvalidConstraintCount);
+	OutLines.push_back(FString(Buffer));
+
+	snprintf(Buffer, sizeof(Buffer), "Sync Bodies From Anim : %.3f ms  calls %u", SyncBodiesMs, SyncBodiesCalls);
+	OutLines.push_back(FString(Buffer));
+
+	snprintf(Buffer, sizeof(Buffer), "Sync Skeleton From Bodies : %.3f ms  calls %u", SyncSkeletonMs, SyncSkeletonCalls);
+	OutLines.push_back(FString(Buffer));
+
+	snprintf(Buffer, sizeof(Buffer), "PhysicsAsset Instantiate/Term : %u / %u",
+		FPhysicsStats::RagdollInstantiateCount,
+		FPhysicsStats::RagdollTermCount);
+	OutLines.push_back(FString(Buffer));
+#else
+	OutLines.push_back(FString("Physics stats unavailable (STATS=0)"));
+#endif
+}
+
 void FOverlayStatSystem::BuildLines(const UEditorEngine& Editor, TArray<FOverlayStatLine>& OutLines) const
 {
 	OutLines.clear();
@@ -359,6 +430,10 @@ void FOverlayStatSystem::BuildLines(const UEditorEngine& Editor, TArray<FOverlay
 	if (bShowParticle)
 	{
 		EstimatedLineCount += 4;
+	}
+	if (bShowPhysics)
+	{
+		EstimatedLineCount += 7;
 	}
 	OutLines.reserve(EstimatedLineCount);
 
@@ -409,6 +484,13 @@ void FOverlayStatSystem::BuildLines(const UEditorEngine& Editor, TArray<FOverlay
 	{
 		Lines.clear();
 		BuildParticleLines(Lines);
+		AppendGroup(Lines);
+	}
+
+	if (bShowPhysics)
+	{
+		Lines.clear();
+		BuildPhysicsLines(Lines);
 		AppendGroup(Lines);
 	}
 }
@@ -523,5 +605,12 @@ void FOverlayStatSystem::RenderImGui(const UEditorEngine& Editor, const FRect& V
 		Lines.clear();
 		BuildParticleLines(Lines);
 		RenderWindow("##StatParticleOverlay", "Stat Particle", ImVec4(0.04f, 0.08f, 0.14f, 0.62f), Lines);
+	}
+
+	if (bShowPhysics)
+	{
+		Lines.clear();
+		BuildPhysicsLines(Lines);
+		RenderWindow("##StatPhysicsOverlay", "Stat Physics", ImVec4(0.07f, 0.08f, 0.09f, 0.62f), Lines);
 	}
 }
