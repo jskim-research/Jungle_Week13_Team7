@@ -140,6 +140,12 @@ FFourWheeledVehicleRuntimeParams UFourWheeledVehicleMovementComponent::BuildRunt
 	Params.MaxSteerAngleDeg = MaxSteerAngleDeg;
 	Params.EnginePeakTorque = EnginePeakTorque;
 	Params.BrakeTorque = BrakeTorque;
+	Params.bEnableDownforce = bEnableDownforce;
+	Params.DownforceCoeff = DownforceCoeff;
+	Params.MaxDownforceMultiplier = MaxDownforceMultiplier;
+	Params.bUseRearWheelDrive = bUseRearWheelDrive;
+	Params.TireFrictionMultiplier = TireFrictionMultiplier;
+	Params.TireLatGripScale = TireLatGripScale;
 	Params.CenterOfMassOffset = CenterOfMassOffset;
 	Params.WheelCenterOffsets[0] = WheelOffsetLF;
 	Params.WheelCenterOffsets[1] = WheelOffsetRF;

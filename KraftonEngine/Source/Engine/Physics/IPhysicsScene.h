@@ -30,6 +30,12 @@ struct FFourWheeledVehicleRuntimeParams
 	float MaxSteerAngleDeg = 28.0f;
 	float EnginePeakTorque = 900.0f;
 	float BrakeTorque = 1500.0f;
+	bool bEnableDownforce = true;
+	float DownforceCoeff = 5.0f;
+	float MaxDownforceMultiplier = 3.5f;
+	bool bUseRearWheelDrive = true;
+	float TireFrictionMultiplier = 1.85f;
+	float TireLatGripScale = 2.8f;
 	FVector CenterOfMassOffset = FVector(0.0f, 0.0f, -0.35f);
 	FVector WheelCenterOffsets[4] = {
 		FVector(-0.80f, -1.45f, -0.35f),

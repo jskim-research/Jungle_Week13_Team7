@@ -840,10 +840,36 @@ struct FPhysXPhysicsScene::FPhysXVehicleInstance
 	PxVehicleWheelQueryResult VehicleWheelQueryResult;
 	FFourWheeledVehicleRuntimeState State;
 	float DisplayEngineOmega = 0.0f;
+	float CachedChassisMass = 800.0f;
+	bool bCachedEnableDownforce = true;
+	float CachedDownforceCoeff = 5.0f;
+	float CachedMaxDownforceMultiplier = 3.5f;
 };
 
 namespace
 {
+	PxVehicleTireData MakeRacingSlickTireData(bool bFrontAxle, float LatGripScale)
+	{
+		PxVehicleTireData TireData;
+		TireData.mType = 0;
+
+		const float BaseLatStiffY = 0.3125f * (180.0f / PxPi);
+		const float GripScale = std::max(LatGripScale, 1.0f);
+		const float AxleBias = bFrontAxle ? 1.05f : 0.95f;
+		TireData.mLatStiffY = BaseLatStiffY * GripScale * AxleBias;
+		TireData.mLatStiffX = 1.8f;
+		TireData.mLongitudinalStiffnessPerUnitGravity = 1200.0f;
+
+		TireData.mFrictionVsSlipGraph[0][0] = 0.0f;
+		TireData.mFrictionVsSlipGraph[0][1] = 1.0f;
+		TireData.mFrictionVsSlipGraph[1][0] = bFrontAxle ? 0.10f : 0.11f;
+		TireData.mFrictionVsSlipGraph[1][1] = bFrontAxle ? 1.20f : 1.15f;
+		TireData.mFrictionVsSlipGraph[2][0] = 0.45f;
+		TireData.mFrictionVsSlipGraph[2][1] = bFrontAxle ? 0.82f : 0.72f;
+
+		return TireData;
+	}
+
 	PxVehicleWheelsSimData* CreateFourWheelSimData(const FFourWheeledVehicleRuntimeParams& Params)
 	{
 		PxVehicleWheelsSimData* WheelsSimData = PxVehicleWheelsSimData::allocate(4);
@@ -878,8 +904,8 @@ namespace
 			SuspensionData.mMaxDroop = 0.18f;
 			WheelsSimData->setSuspensionData(WheelIndex, SuspensionData);
 
-			PxVehicleTireData TireData;
-			TireData.mType = 0;
+			const bool bFrontAxle = WheelIndex < 2;
+			PxVehicleTireData TireData = MakeRacingSlickTireData(bFrontAxle, Params.TireLatGripScale);
 			WheelsSimData->setTireData(WheelIndex, TireData);
 
 			const PxVec3 WheelOffset = ToPxVec3(Params.WheelCenterOffsets[WheelIndex] - Params.CenterOfMassOffset);
@@ -893,9 +919,9 @@ namespace
 
 		PxVehicleTireLoadFilterData TireLoadFilter;
 		TireLoadFilter.mMinNormalisedLoad = 0.0f;
-		TireLoadFilter.mMinFilteredNormalisedLoad = 0.23f;
-		TireLoadFilter.mMaxNormalisedLoad = 3.0f;
-		TireLoadFilter.mMaxFilteredNormalisedLoad = 3.0f;
+		TireLoadFilter.mMinFilteredNormalisedLoad = 0.15f;
+		TireLoadFilter.mMaxNormalisedLoad = 5.0f;
+		TireLoadFilter.mMaxFilteredNormalisedLoad = 5.0f;
 		WheelsSimData->setTireLoadFilterData(TireLoadFilter);
 		return WheelsSimData;
 	}
@@ -905,7 +931,9 @@ namespace
 		PxVehicleDriveSimData4W DriveData;
 
 		PxVehicleDifferential4WData DiffData;
-		DiffData.mType = PxVehicleDifferential4WData::eDIFF_TYPE_LS_4WD;
+		DiffData.mType = Params.bUseRearWheelDrive
+			? PxVehicleDifferential4WData::eDIFF_TYPE_LS_REARWD
+			: PxVehicleDifferential4WData::eDIFF_TYPE_LS_4WD;
 		DriveData.setDiffData(DiffData);
 
 		PxVehicleEngineData EngineData;
@@ -1186,8 +1214,10 @@ void FPhysXPhysicsScene::RegisterVehicle(UFourWheeledVehicleMovementComponent* V
 	Instance->VehicleWheelQueryResult.wheelQueryResults = Instance->WheelQueryResults;
 	Instance->VehicleWheelQueryResult.nbWheelQueryResults = 4;
 	Instance->State.bValid = true;
+	CacheVehicleAeroParams(*Instance, Params);
 	Vehicles.push_back(Instance);
 
+	ApplyVehicleTireFriction(Params);
 	EnsureVehicleFrictionPairs();
 	EnsureVehicleBatchQuery();
 	if (VehicleSceneQuery && VehicleSceneQuery->BatchQuery && VehicleSceneQuery->RaycastResults)
@@ -1234,6 +1264,9 @@ void FPhysXPhysicsScene::UpdateVehicle(UFourWheeledVehicleMovementComponent* Veh
 	{
 		return;
 	}
+
+	CacheVehicleAeroParams(*Instance, Params);
+	ApplyVehicleTireFriction(Params);
 
 	Instance->RawInput.setAnalogAccel(FMath::Clamp(Params.ThrottleInput, 0.0f, 1.0f));
 	Instance->RawInput.setAnalogBrake(FMath::Clamp(Params.BrakeInput, 0.0f, 1.0f));
@@ -1323,7 +1356,19 @@ void FPhysXPhysicsScene::EnsureVehicleFrictionPairs()
 	SurfaceTypes[0].mType = 0;
 	const PxMaterial* SurfaceMaterial = DefaultMaterial;
 	VehicleFrictionPairs->setup(NumTireTypes, NumSurfaceTypes, &SurfaceMaterial, SurfaceTypes);
-	VehicleFrictionPairs->setTypePairFriction(0, 0, 1.0f);
+	VehicleFrictionPairs->setTypePairFriction(0, 0, 1.85f);
+}
+
+void FPhysXPhysicsScene::ApplyVehicleTireFriction(const FFourWheeledVehicleRuntimeParams& Params)
+{
+	EnsureVehicleFrictionPairs();
+	if (!VehicleFrictionPairs)
+	{
+		return;
+	}
+
+	const float Friction = std::clamp(Params.TireFrictionMultiplier, 0.5f, 3.0f);
+	VehicleFrictionPairs->setTypePairFriction(0, 0, Friction);
 }
 
 void FPhysXPhysicsScene::ReleaseVehicleSceneQuery()
@@ -1494,6 +1539,14 @@ void FPhysXPhysicsScene::RunVehicleUpdates(float DeltaTime)
 	if (NbVehicles == 0)
 	{
 		return;
+	}
+
+	for (FPhysXVehicleInstance* Instance : Vehicles)
+	{
+		if (Instance)
+		{
+			ApplySimpleDownforce(*Instance);
+		}
 	}
 
 	const PxVec3 Gravity = Scene->getGravity();
@@ -2075,4 +2128,42 @@ bool FPhysXPhysicsScene::RaycastByObjectTypes(const FVector& Start, const FVecto
 	OutHit.WorldNormal = OutHit.ImpactNormal;
 
 	return true;
+}
+
+void FPhysXPhysicsScene::CacheVehicleAeroParams(FPhysXVehicleInstance& Instance, const FFourWheeledVehicleRuntimeParams& Params) const
+{
+	Instance.CachedChassisMass = std::max(Params.ChassisMass, 1.0f);
+	Instance.bCachedEnableDownforce = Params.bEnableDownforce;
+	Instance.CachedDownforceCoeff = std::max(Params.DownforceCoeff, 0.0f);
+	Instance.CachedMaxDownforceMultiplier = std::max(Params.MaxDownforceMultiplier, 0.0f);
+}
+
+void FPhysXPhysicsScene::ApplySimpleDownforce(FPhysXVehicleInstance& Instance) const
+{
+	if (!Instance.bCachedEnableDownforce || Instance.CachedDownforceCoeff <= 0.0f || !Instance.Vehicle)
+	{
+		return;
+	}
+
+	PxRigidDynamic* ChassisActor = Instance.Vehicle->getRigidDynamicActor();
+	if (!ChassisActor)
+	{
+		return;
+	}
+
+	const PxVec3 Velocity = ChassisActor->getLinearVelocity();
+	const float HorizontalSpeedSq = Velocity.x * Velocity.x + Velocity.y * Velocity.y;
+	if (HorizontalSpeedSq < 0.25f)
+	{
+		return;
+	}
+
+	float DownforceN = Instance.CachedDownforceCoeff * HorizontalSpeedSq;
+	if (Instance.CachedMaxDownforceMultiplier > 0.0f)
+	{
+		const float MaxDownforceN = Instance.CachedChassisMass * 9.81f * Instance.CachedMaxDownforceMultiplier;
+		DownforceN = std::min(DownforceN, MaxDownforceN);
+	}
+
+	ChassisActor->addForce(PxVec3(0.0f, 0.0f, -DownforceN), PxForceMode::eFORCE);
 }

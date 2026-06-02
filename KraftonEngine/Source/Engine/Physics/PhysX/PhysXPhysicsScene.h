@@ -111,4 +111,7 @@ private:
 	void RunVehicleSuspensionRaycasts();
 	void RunVehicleUpdates(float DeltaTime);
 	void ReleaseVehicles();
+	void CacheVehicleAeroParams(FPhysXVehicleInstance& Instance, const FFourWheeledVehicleRuntimeParams& Params) const;
+	void ApplySimpleDownforce(FPhysXVehicleInstance& Instance) const;
+	void ApplyVehicleTireFriction(const FFourWheeledVehicleRuntimeParams& Params);
 };

@@ -55,6 +55,18 @@ private:
 	float EnginePeakTorque = 900.0f;
 	UPROPERTY(Edit, Save, Category="Vehicle", DisplayName="Brake Torque", Min=0.0f, Max=100000.0f, Speed=10.0f)
 	float BrakeTorque = 1500.0f;
+	UPROPERTY(Edit, Save, Category="Vehicle|Aero", DisplayName="Enable Simple Downforce")
+	bool bEnableDownforce = true;
+	UPROPERTY(Edit, Save, Category="Vehicle|Aero", DisplayName="Downforce Coeff (N per (m/s)^2)", Min=0.0f, Max=50.0f, Speed=0.1f)
+	float DownforceCoeff = 5.0f;
+	UPROPERTY(Edit, Save, Category="Vehicle|Aero", DisplayName="Max Downforce Multiplier (x weight)", Min=0.0f, Max=10.0f, Speed=0.1f)
+	float MaxDownforceMultiplier = 3.5f;
+	UPROPERTY(Edit, Save, Category="Vehicle|Tires", DisplayName="Rear Wheel Drive")
+	bool bUseRearWheelDrive = true;
+	UPROPERTY(Edit, Save, Category="Vehicle|Tires", DisplayName="Tire Friction Multiplier", Min=0.5f, Max=3.0f, Speed=0.05f)
+	float TireFrictionMultiplier = 1.85f;
+	UPROPERTY(Edit, Save, Category="Vehicle|Tires", DisplayName="Lateral Grip Scale", Min=1.0f, Max=6.0f, Speed=0.1f)
+	float TireLatGripScale = 2.8f;
 	UPROPERTY(Edit, Save, Category="Vehicle", DisplayName="Center Of Mass Offset", Type=Vec3, Min=0.0f, Max=0.0f, Speed=0.01f)
 	FVector CenterOfMassOffset = FVector(0.0f, 0.0f, -0.35f);
 	UPROPERTY(Edit, Save, Category="Vehicle", DisplayName="Wheel LF Offset", Type=Vec3, Min=0.0f, Max=0.0f, Speed=0.01f)
