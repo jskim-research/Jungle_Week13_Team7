@@ -139,6 +139,7 @@ FFourWheeledVehicleRuntimeParams UFourWheeledVehicleMovementComponent::BuildRunt
 	Params.ChassisMass = ChassisMass;
 	Params.MaxSteerAngleDeg = MaxSteerAngleDeg;
 	Params.EnginePeakTorque = EnginePeakTorque;
+	Params.EngineMaxRPM = EngineMaxRPM;
 	Params.BrakeTorque = BrakeTorque;
 	Params.bEnableDownforce = bEnableDownforce;
 	Params.DownforceCoeff = DownforceCoeff;

@@ -937,22 +937,30 @@ namespace
 		DriveData.setDiffData(DiffData);
 
 		PxVehicleEngineData EngineData;
-		EngineData.mPeakTorque = std::max(Params.EnginePeakTorque, 0.0f);
-		EngineData.mMaxOmega = 900.0f;
+		const float MaxRPM = std::max(Params.EngineMaxRPM, 1000.0f);
+		EngineData.mPeakTorque = std::max(Params.EnginePeakTorque, 1.0f);
+		EngineData.mMaxOmega = MaxRPM * PxPi * 2.0f / 60.0f;
+		EngineData.mTorqueCurve.clear();
+		EngineData.mTorqueCurve.addPair(0.0f, 0.50f);
+		EngineData.mTorqueCurve.addPair(0.30f, 0.88f);
+		EngineData.mTorqueCurve.addPair(0.55f, 1.00f);
+		EngineData.mTorqueCurve.addPair(0.78f, 0.98f);
+		EngineData.mTorqueCurve.addPair(1.00f, 0.90f);
 		DriveData.setEngineData(EngineData);
 
 		PxVehicleGearsData GearsData;
 		GearsData.mNbRatios = PxVehicleGearsData::eNINTH;
-		GearsData.mFinalRatio = 3.20f;
-		GearsData.mSwitchTime = 0.08f;
-		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 3.10f;
-		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 2.40f;
-		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 1.90f;
-		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 1.55f;
-		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.30f;
-		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.12f;
-		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 0.96f;
-		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 0.84f;
+		GearsData.mFinalRatio = 2.55f;
+		GearsData.mSwitchTime = 0.06f;
+		GearsData.mRatios[PxVehicleGearsData::eREVERSE] = -3.20f;
+		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 2.95f;
+		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 2.35f;
+		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 1.88f;
+		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 1.52f;
+		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.26f;
+		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.08f;
+		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 0.92f;
+		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 0.78f;
 		DriveData.setGearsData(GearsData);
 
 		PxVehicleClutchData ClutchData;
@@ -1006,7 +1014,7 @@ namespace
 
 	float ComputeWheelDrivenEngineOmega(const PxVehicleDrive4W* Vehicle, uint32_t GearIndex)
 	{
-		if (!Vehicle || GearIndex <= PxVehicleGearsData::eNEUTRAL)
+		if (!Vehicle || GearIndex == PxVehicleGearsData::eNEUTRAL)
 		{
 			return 0.0f;
 		}
@@ -1018,14 +1026,14 @@ namespace
 		}
 
 		const float GearRatio = GearsData.mRatios[GearIndex] * GearsData.mFinalRatio;
-		if (GearRatio <= 0.0f)
+		if (FMath::IsNearlyZero(GearRatio))
 		{
 			return 0.0f;
 		}
 
 		const float WheelRadius = std::max(Vehicle->mWheelsSimData.getWheelData(0).mRadius, 0.01f);
 		const float WheelOmega = std::abs(Vehicle->computeForwardSpeed()) / WheelRadius;
-		return WheelOmega * GearRatio;
+		return WheelOmega * std::abs(GearRatio);
 	}
 
 	float ComputeGearShiftRevRatio(const PxVehicleDrive4W* Vehicle, uint32_t GearIndex, float DisplayEngineOmega)
@@ -1099,7 +1107,7 @@ namespace
 			DisplayEngineOmega = IdleOmega;
 		}
 
-		if (EffectiveGear <= PxVehicleGearsData::eNEUTRAL)
+		if (EffectiveGear == PxVehicleGearsData::eNEUTRAL)
 		{
 			const float TargetOmega = IdleOmega + FMath::Clamp(ThrottleInput, 0.0f, 1.0f) * (MaxOmega - IdleOmega);
 			const float RiseRate = MaxOmega * 8.0f;

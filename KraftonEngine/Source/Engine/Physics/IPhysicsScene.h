@@ -28,7 +28,8 @@ struct FFourWheeledVehicleRuntimeParams
 	float WheelWidth = 0.30f;
 	float ChassisMass = 800.0f;
 	float MaxSteerAngleDeg = 28.0f;
-	float EnginePeakTorque = 900.0f;
+	float EnginePeakTorque = 750.0f;
+	float EngineMaxRPM = 15000.0f;
 	float BrakeTorque = 1500.0f;
 	bool bEnableDownforce = true;
 	float DownforceCoeff = 5.0f;

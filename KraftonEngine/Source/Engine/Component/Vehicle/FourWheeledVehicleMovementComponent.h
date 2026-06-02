@@ -52,7 +52,9 @@ private:
 	UPROPERTY(Edit, Save, Category="Vehicle", DisplayName="Show Driving HUD")
 	bool bShowDrivingHud = true;
 	UPROPERTY(Edit, Save, Category="Vehicle", DisplayName="Engine Peak Torque", Min=0.0f, Max=100000.0f, Speed=10.0f)
-	float EnginePeakTorque = 900.0f;
+	float EnginePeakTorque = 750.0f;
+	UPROPERTY(Edit, Save, Category="Vehicle", DisplayName="Engine Max RPM", Min=1000.0f, Max=25000.0f, Speed=100.0f)
+	float EngineMaxRPM = 15000.0f;
 	UPROPERTY(Edit, Save, Category="Vehicle", DisplayName="Brake Torque", Min=0.0f, Max=100000.0f, Speed=10.0f)
 	float BrakeTorque = 1500.0f;
 	UPROPERTY(Edit, Save, Category="Vehicle|Aero", DisplayName="Enable Simple Downforce")
