@@ -1,5 +1,6 @@
 #include "F1CarVisualControlComponent.h"
 
+#include "Component/Vehicle/FourWheeledVehicleMovementComponent.h"
 #include "Component/Primitive/StaticMeshComponent.h"
 #include "Component/SceneComponent.h"
 #include "Core/TickFunction.h"
@@ -128,6 +129,15 @@ void UF1CarVisualControlComponent::SetupWheel(UStaticMeshComponent* WheelMesh, U
 		CaliperMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	}
 
+	const FVector ForwardAxis = NormalizeOrFallback(VehicleForwardAxis, FVector(0.0f, -1.0f, 0.0f));
+	float CamberRollDeg = 0.0f;
+	if (bFront && FrontWheelCamberDeg > 0.0f)
+	{
+		const bool bLeftSide = PathContains(WheelMesh, "-lf") || PathContains(WheelMesh, "-lr");
+		CamberRollDeg = bLeftSide ? -FrontWheelCamberDeg : FrontWheelCamberDeg;
+	}
+
+	const FQuat CamberQuat = FQuat::FromAxisAngle(ForwardAxis, CamberRollDeg * FMath::DegToRad);
 	WheelMesh->AttachToComponent(SpinPivot);
 	WheelMesh->SetRelativeLocation(WheelLocation - PivotLocation);
 	WheelMesh->SetRelativeRotation(FRotator::ZeroRotator);
@@ -139,6 +149,15 @@ void UF1CarVisualControlComponent::SetupWheel(UStaticMeshComponent* WheelMesh, U
 	Wheel.CaliperMesh = CaliperMesh;
 	Wheel.SpinSign = SpinSign;
 	Wheel.bFront = bFront;
+	Wheel.SpinAxisLocal = CamberQuat.RotateVector(NormalizeOrFallback(WheelSpinAxis, FVector::XAxisVector));
+	if (Wheel.SpinAxisLocal.IsNearlyZero())
+	{
+		Wheel.SpinAxisLocal = FVector::XAxisVector;
+	}
+	else
+	{
+		Wheel.SpinAxisLocal = Wheel.SpinAxisLocal.GetSafeNormal();
+	}
 	Wheels.push_back(Wheel);
 }
 
@@ -166,23 +185,43 @@ void UF1CarVisualControlComponent::UpdateInputAndMotion(float DeltaTime)
 		DriveInput -= 1.0f;
 	}
 
-	const float TargetSteer = SteerInput * MaxSteerAngleDeg;
-	CurrentSteerDeg = Approach(CurrentSteerDeg, TargetSteer, SteerInterpSpeed * MaxSteerAngleDeg * DeltaTime);
+	const float TargetSteerDeg = SteerInput * MaxSteerAngleDeg;
+	if (!bMoveVehicleRoot)
+	{
+		if (AActor* Owner = GetOwner())
+		{
+			if (const UFourWheeledVehicleMovementComponent* VehicleMovement =
+				Owner->GetComponentByClass<UFourWheeledVehicleMovementComponent>())
+			{
+				const FFourWheeledVehicleRuntimeState& State = VehicleMovement->GetVehicleState();
+				if (State.bValid)
+				{
+					CurrentSpeed = State.ForwardSpeed;
+				}
+			}
+		}
+	}
 
-	if (DriveInput > 0.0f)
-	{
-		CurrentSpeed += Acceleration * DriveInput * DeltaTime;
-	}
-	else if (DriveInput < 0.0f)
-	{
-		CurrentSpeed += BrakeDeceleration * DriveInput * DeltaTime;
-	}
-	else
-	{
-		CurrentSpeed = Approach(CurrentSpeed, 0.0f, DragDeceleration * DeltaTime);
-	}
+	const float MaxSteerDelta = SteerInterpSpeed * MaxSteerAngleDeg * DeltaTime;
+	CurrentSteerDeg = Approach(CurrentSteerDeg, TargetSteerDeg, MaxSteerDelta);
 
-	CurrentSpeed = FMath::Clamp(CurrentSpeed, -MaxSpeed * 0.35f, MaxSpeed);
+	if (bMoveVehicleRoot)
+	{
+		if (DriveInput > 0.0f)
+		{
+			CurrentSpeed += Acceleration * DriveInput * DeltaTime;
+		}
+		else if (DriveInput < 0.0f)
+		{
+			CurrentSpeed += BrakeDeceleration * DriveInput * DeltaTime;
+		}
+		else
+		{
+			CurrentSpeed = Approach(CurrentSpeed, 0.0f, DragDeceleration * DeltaTime);
+		}
+
+		CurrentSpeed = FMath::Clamp(CurrentSpeed, -MaxSpeed * 0.35f, MaxSpeed);
+	}
 
 	if (bMoveVehicleRoot && VehicleRoot)
 	{
@@ -194,8 +233,11 @@ void UF1CarVisualControlComponent::UpdateInputAndMotion(float DeltaTime)
 		VehicleRoot->MoveLocal(ForwardAxis * (CurrentSpeed * DeltaTime));
 	}
 
-	const float Radius = std::max(WheelRadius, 0.01f);
-	WheelSpinDeg += (CurrentSpeed * DeltaTime / Radius) * FMath::RadToDeg;
+	if (!bMoveVehicleRoot || CurrentSpeed != 0.0f)
+	{
+		const float Radius = std::max(WheelRadius, 0.01f);
+		WheelSpinDeg += (CurrentSpeed * DeltaTime / Radius) * FMath::RadToDeg;
+	}
 }
 
 void UF1CarVisualControlComponent::ApplyVisualRotations()
@@ -207,7 +249,6 @@ void UF1CarVisualControlComponent::ApplyVisualRotations()
 		SteeringWheelPivot->SetRelativeRotation(Rotation);
 	}
 
-	const FVector SpinAxis = NormalizeOrFallback(WheelSpinAxis, FVector::XAxisVector);
 	const FVector SteerAxis = NormalizeOrFallback(FrontSteerAxis, FVector::ZAxisVector);
 	for (FWheelVisual& Wheel : Wheels)
 	{
@@ -218,6 +259,9 @@ void UF1CarVisualControlComponent::ApplyVisualRotations()
 
 		if (Wheel.SpinPivot)
 		{
+			const FVector SpinAxis = Wheel.SpinAxisLocal.IsNearlyZero()
+				? NormalizeOrFallback(WheelSpinAxis, FVector::XAxisVector)
+				: Wheel.SpinAxisLocal;
 			const FQuat SpinRotation = FQuat::FromAxisAngle(SpinAxis, WheelSpinDeg * Wheel.SpinSign * FMath::DegToRad);
 			Wheel.SpinPivot->SetRelativeRotation(SpinRotation);
 		}

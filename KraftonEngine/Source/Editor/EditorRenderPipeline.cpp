@@ -15,6 +15,7 @@
 #include "Engine/Render/Types/ForwardLightData.h"
 #include "Engine/Render/Types/MinimalViewInfo.h"
 #include "Component/Light/LightComponentBase.h"
+#include "Component/Vehicle/FourWheeledVehicleMovementComponent.h"
 #include "Core/ProjectSettings.h"
 #include "Math/MathUtils.h"
 
@@ -366,6 +367,8 @@ void FEditorRenderPipeline::CollectCommands(FLevelEditorViewportClient* VC, UWor
 
 		Collector.CollectDebugDraw(Frame, Scene);
 	}
+
+	UFourWheeledVehicleMovementComponent::AppendDrivingHudForWorld(*World);
 
 	// ── 3. 커맨드 일괄 생성 (프록시 + 동적) ──
 	{

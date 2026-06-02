@@ -28,6 +28,7 @@ private:
 		TObjectPtr<UStaticMeshComponent> CaliperMesh = nullptr;
 		float SpinSign = 1.0f;
 		bool bFront = false;
+		FVector SpinAxisLocal = FVector(1.0f, 0.0f, 0.0f);
 	};
 
 	UPROPERTY(Edit, Save, Category="F1 Visual", DisplayName="Enable Runtime Controls")
@@ -56,8 +57,10 @@ private:
 	FVector FrontSteerAxis = FVector(0.0f, 0.0f, 1.0f);
 	UPROPERTY(Edit, Save, Category="F1 Visual", DisplayName="Wheel Spin Axis", Type=Vec3, Min=0.0f, Max=0.0f, Speed=0.1f)
 	FVector WheelSpinAxis = FVector(1.0f, 0.0f, 0.0f);
+	UPROPERTY(Edit, Save, Category="F1 Visual", DisplayName="Front Wheel Camber Deg", Min=0.0f, Max=15.0f, Speed=0.1f)
+	float FrontWheelCamberDeg = 2.5f;
 	UPROPERTY(Edit, Save, Category="F1 Visual", DisplayName="Steering Wheel Axis", Type=Vec3, Min=0.0f, Max=0.0f, Speed=0.1f)
-	FVector SteeringWheelAxis = FVector(1.0f, 0.0f, 0.0f);
+	FVector SteeringWheelAxis = FVector(0.0f, 0.0f, 1.0f);
 	UPROPERTY(Edit, Save, Category="F1 Visual", DisplayName="Move Vehicle Root")
 	bool bMoveVehicleRoot = true;
 

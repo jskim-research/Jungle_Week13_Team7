@@ -1103,6 +1103,9 @@
     <ClCompile Include="Source\Engine\Component\Vehicle\F1CarVisualControlComponent.cpp">
       <Filter>Source\Engine\Component\Vehicle</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Component\Vehicle\FourWheeledVehicleMovementComponent.cpp">
+      <Filter>Source\Engine\Component\Vehicle</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Component\Primitive\BillboardComponent.cpp">
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClCompile>
@@ -2334,6 +2337,9 @@
       <Filter>Source\Engine\Component\Movement</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Vehicle\F1CarVisualControlComponent.h">
+      <Filter>Source\Engine\Component\Vehicle</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\Vehicle\FourWheeledVehicleMovementComponent.h">
       <Filter>Source\Engine\Component\Vehicle</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Primitive\BillboardComponent.h">

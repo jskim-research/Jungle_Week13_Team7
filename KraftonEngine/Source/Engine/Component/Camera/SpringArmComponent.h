@@ -4,6 +4,7 @@
 #include "Core/Types/CollisionTypes.h"
 #include "Math/Vector.h"
 #include "Math/Quat.h"
+#include "Math/Rotator.h"
 
 #include "Source/Engine/Component/Camera/SpringArmComponent.generated.h"
 // ============================================================
@@ -71,6 +72,10 @@ public:
 	bool bInheritPitch           = true;
 	bool bInheritYaw             = true;
 	bool bInheritRoll            = false;
+
+	// Arm 방향 오프셋 — 에디터에서 설정한 SpringArm RelativeRotation (Tick 이 덮어쓰기 전 값).
+	UPROPERTY(Edit, Save, Category="SpringArm", DisplayName="Arm Pivot Rotation", Type=Vec3, Min=0.0f, Max=0.0f, Speed=0.1f)
+	FRotator ArmPivotRotation = FRotator::ZeroRotator;
 
 private:
 	// 매 Tick 에 갱신되는 보간 상태 — 부착점 (parent + TargetOffset) 위치/회전.

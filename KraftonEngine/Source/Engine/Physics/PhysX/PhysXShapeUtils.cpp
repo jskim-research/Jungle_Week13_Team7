@@ -42,6 +42,13 @@ namespace PhysXShapeUtils
 			}
 		}
 
+		// Non-simulated physics shapes are drivable ground (BoxComponent floor, static meshes).
+		// Simulated chassis / props are excluded so suspension rays hit the floor only.
+		if (Comp->IsPhysicsCollisionEnabled() && !Comp->GetSimulatePhysics())
+		{
+			Filter.word2 |= static_cast<physx::PxU32>(VehicleDrivableQueryBit);
+		}
+
 		Shape->setSimulationFilterData(Filter);
 		Shape->setQueryFilterData(Filter);
 	}

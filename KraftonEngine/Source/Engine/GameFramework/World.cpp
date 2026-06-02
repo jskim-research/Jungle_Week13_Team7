@@ -437,13 +437,14 @@ void UWorld::Tick(float DeltaTime, ELevelTick TickType)
 		GameTimeSeconds += DeltaTime;
 	}
 
+	// Gameplay/vehicle 입력은 물리 적분 전에 반영 (이전: Physics → TickManager 이면 입력이 1프레임 늦음).
+	TickManager.Tick(this, DeltaTime, TickType);
+
 	if (bHasBegunPlay && PhysicsScene)
 	{
 		SCOPE_STAT_CAT("PhysicsScene", "1_WorldTick");
 		PhysicsScene->Tick(DeltaTime);
 	}
-
-	TickManager.Tick(this, DeltaTime, TickType);
 
 	// 카메라는 물리/액터 Tick 이후 갱신 — 차량 1인칭처럼 physics body 에 붙은 카메라가
 	// 같은 프레임의 최신 transform 으로 POV cache 를 채운다.

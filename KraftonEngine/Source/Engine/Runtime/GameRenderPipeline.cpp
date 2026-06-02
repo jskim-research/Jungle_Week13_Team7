@@ -6,6 +6,9 @@
 #include "GameFramework/World.h"
 #include "Component/Camera/CameraComponent.h"
 #include "Component/Camera/CineCameraComponent.h"
+#include "Component/Vehicle/FourWheeledVehicleMovementComponent.h"
+#include "GameFramework/AActor.h"
+#include "Render/Scene/FScene.h"
 #include "Render/Types/MinimalViewInfo.h"
 #include "Input/InputSystem.h"
 #include "Viewport/Viewport.h"
@@ -66,9 +69,12 @@ void FGameRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 	Frame.SetRenderOptions(Opts);
 
 	FScene* Scene = &World->GetScene();
+	Scene->ClearFrameData();
 
 	PrepareViewport(VP, Ctx);
 	BuildFrame(VP, POV, Scene, World);
+
+	UFourWheeledVehicleMovementComponent::AppendDrivingHudForWorld(*World);
 
 	FCollectOutput Output;
 	CollectCommands(Scene, Renderer, Output);
