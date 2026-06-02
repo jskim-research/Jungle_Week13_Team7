@@ -839,6 +839,7 @@ struct FPhysXPhysicsScene::FPhysXVehicleInstance
 	PxWheelQueryResult WheelQueryResults[4];
 	PxVehicleWheelQueryResult VehicleWheelQueryResult;
 	FFourWheeledVehicleRuntimeState State;
+	float DisplayEngineOmega = 0.0f;
 };
 
 namespace
@@ -913,6 +914,17 @@ namespace
 		DriveData.setEngineData(EngineData);
 
 		PxVehicleGearsData GearsData;
+		GearsData.mNbRatios = PxVehicleGearsData::eNINTH;
+		GearsData.mFinalRatio = 3.20f;
+		GearsData.mSwitchTime = 0.08f;
+		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 3.10f;
+		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 2.40f;
+		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 1.90f;
+		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 1.55f;
+		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.30f;
+		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.12f;
+		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 0.96f;
+		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 0.84f;
 		DriveData.setGearsData(GearsData);
 
 		PxVehicleClutchData ClutchData;
@@ -942,39 +954,92 @@ namespace
 		case PxVehicleGearsData::eFOURTH: return "4";
 		case PxVehicleGearsData::eFIFTH: return "5";
 		case PxVehicleGearsData::eSIXTH: return "6";
+		case PxVehicleGearsData::eSEVENTH: return "7";
+		case PxVehicleGearsData::eEIGHTH: return "8";
 		default: return "?";
 		}
 	}
 
-	void UpdateVehicleEngineState(PxVehicleDrive4W* Vehicle, FFourWheeledVehicleRuntimeState& State)
+	FString GearDisplayForVehicle(const PxVehicleDrive4W* Vehicle)
+	{
+		if (!Vehicle)
+		{
+			return "--";
+		}
+
+		const uint32_t CurrentGear = Vehicle->mDriveDynData.getCurrentGear();
+		const uint32_t TargetGear = Vehicle->mDriveDynData.getTargetGear();
+		if (CurrentGear == PxVehicleGearsData::eNEUTRAL && TargetGear > PxVehicleGearsData::eNEUTRAL)
+		{
+			return GearIndexToDisplay(TargetGear);
+		}
+		return GearIndexToDisplay(CurrentGear);
+	}
+
+	float ComputeWheelDrivenEngineOmega(const PxVehicleDrive4W* Vehicle, uint32_t GearIndex)
+	{
+		if (!Vehicle || GearIndex <= PxVehicleGearsData::eNEUTRAL)
+		{
+			return 0.0f;
+		}
+
+		const PxVehicleGearsData& GearsData = Vehicle->mDriveSimData.getGearsData();
+		if (GearIndex >= GearsData.mNbRatios)
+		{
+			return 0.0f;
+		}
+
+		const float GearRatio = GearsData.mRatios[GearIndex] * GearsData.mFinalRatio;
+		if (GearRatio <= 0.0f)
+		{
+			return 0.0f;
+		}
+
+		const float WheelRadius = std::max(Vehicle->mWheelsSimData.getWheelData(0).mRadius, 0.01f);
+		const float WheelOmega = std::abs(Vehicle->computeForwardSpeed()) / WheelRadius;
+		return WheelOmega * GearRatio;
+	}
+
+	void UpdateVehicleEngineState(PxVehicleDrive4W* Vehicle, FFourWheeledVehicleRuntimeState& State, float& DisplayEngineOmega, float ThrottleInput, float DeltaTime)
 	{
 		if (!Vehicle)
 		{
 			return;
 		}
 
-		const float EngineOmega = Vehicle->mDriveDynData.getEngineRotationSpeed();
+		const uint32_t CurrentGear = Vehicle->mDriveDynData.getCurrentGear();
+		const uint32_t TargetGear = Vehicle->mDriveDynData.getTargetGear();
+		const uint32_t EffectiveGear = TargetGear > PxVehicleGearsData::eNEUTRAL ? TargetGear : CurrentGear;
+		const float SimEngineOmega = std::max(
+			Vehicle->mDriveDynData.getEngineRotationSpeed(),
+			ComputeWheelDrivenEngineOmega(Vehicle, EffectiveGear));
 		const float MaxOmega = std::max(Vehicle->mDriveSimData.getEngineData().mMaxOmega, 1.0f);
-		State.EngineRPM = EngineOmega * 60.0f / (2.0f * PxPi);
-		State.EngineRPMRatio = FMath::Clamp(EngineOmega / MaxOmega, 0.0f, 1.0f);
+		const float IdleRPM = 1500.0f;
+		const float IdleOmega = IdleRPM * (2.0f * PxPi) / 60.0f;
+		if (DisplayEngineOmega <= 0.0f)
+		{
+			DisplayEngineOmega = IdleOmega;
+		}
 
-		const uint32_t Gear = Vehicle->mDriveDynData.getCurrentGear();
-		if (Gear <= PxVehicleGearsData::eNEUTRAL)
+		if (EffectiveGear <= PxVehicleGearsData::eNEUTRAL)
 		{
-			State.ShiftHint = "Select 1st";
-		}
-		else if (State.EngineRPMRatio >= 0.88f && Gear < PxVehicleGearsData::eSIXTH)
-		{
-			State.ShiftHint = "Shift up";
-		}
-		else if (State.EngineRPMRatio <= 0.32f && Gear > PxVehicleGearsData::eFIRST)
-		{
-			State.ShiftHint = "Shift down";
+			const float TargetOmega = IdleOmega + FMath::Clamp(ThrottleInput, 0.0f, 1.0f) * (MaxOmega - IdleOmega);
+			const float RiseRate = MaxOmega * 8.0f;
+			const float FallRate = MaxOmega * 1.8f;
+			const float MaxDelta = (TargetOmega > DisplayEngineOmega ? RiseRate : FallRate) * std::max(DeltaTime, 0.0f);
+			const float Delta = FMath::Clamp(TargetOmega - DisplayEngineOmega, -MaxDelta, MaxDelta);
+			DisplayEngineOmega += Delta;
 		}
 		else
 		{
-			State.ShiftHint = "Hold";
+			DisplayEngineOmega = std::max(SimEngineOmega, IdleOmega);
 		}
+
+		const float DisplayRPM = DisplayEngineOmega * 60.0f / (2.0f * PxPi);
+		const float DisplayOmega = DisplayRPM * (2.0f * PxPi) / 60.0f;
+		State.EngineRPM = DisplayRPM;
+		State.EngineRPMRatio = FMath::Clamp(DisplayOmega / MaxOmega, 0.0f, 1.0f);
+
 	}
 }
 
@@ -1132,7 +1197,14 @@ void FPhysXPhysicsScene::UpdateVehicle(UFourWheeledVehicleMovementComponent* Veh
 	if (Params.bUseManualGears)
 	{
 		Instance->Vehicle->mDriveDynData.setUseAutoGears(false);
-		if (Params.bGearShiftUpPressed)
+		if (Params.bGearNeutralPressed)
+		{
+			Instance->Vehicle->mDriveDynData.setGearUp(false);
+			Instance->Vehicle->mDriveDynData.setGearDown(false);
+			Instance->Vehicle->mDriveDynData.setCurrentGear(PxVehicleGearsData::eNEUTRAL);
+			Instance->Vehicle->mDriveDynData.setTargetGear(PxVehicleGearsData::eNEUTRAL);
+		}
+		else if (Params.bGearShiftUpPressed)
 		{
 			Instance->Vehicle->mDriveDynData.setGearUp(true);
 		}
@@ -1148,9 +1220,9 @@ void FPhysXPhysicsScene::UpdateVehicle(UFourWheeledVehicleMovementComponent* Veh
 
 	Instance->State.bValid = true;
 	Instance->State.CurrentGear = static_cast<int32>(Instance->Vehicle->mDriveDynData.getCurrentGear());
-	Instance->State.GearDisplay = GearIndexToDisplay(Instance->Vehicle->mDriveDynData.getCurrentGear());
+	Instance->State.GearDisplay = GearDisplayForVehicle(Instance->Vehicle);
 	Instance->State.ForwardSpeed = Instance->Vehicle->computeForwardSpeed();
-	UpdateVehicleEngineState(Instance->Vehicle, Instance->State);
+	UpdateVehicleEngineState(Instance->Vehicle, Instance->State, Instance->DisplayEngineOmega, Params.ThrottleInput, 0.0f);
 	const float FrontSteerDeg = Params.SteerInput * Params.MaxSteerAngleDeg;
 	Instance->State.WheelSteerDeg[0] = FrontSteerDeg;
 	Instance->State.WheelSteerDeg[1] = FrontSteerDeg;
@@ -1387,8 +1459,8 @@ void FPhysXPhysicsScene::RunVehicleUpdates(float DeltaTime)
 		Instance->State.bValid = true;
 		Instance->State.ForwardSpeed = Instance->Vehicle->computeForwardSpeed();
 		Instance->State.CurrentGear = static_cast<int32>(Instance->Vehicle->mDriveDynData.getCurrentGear());
-		Instance->State.GearDisplay = GearIndexToDisplay(Instance->Vehicle->mDriveDynData.getCurrentGear());
-		UpdateVehicleEngineState(Instance->Vehicle, Instance->State);
+		Instance->State.GearDisplay = GearDisplayForVehicle(Instance->Vehicle);
+		UpdateVehicleEngineState(Instance->Vehicle, Instance->State, Instance->DisplayEngineOmega, Instance->RawInput.getAnalogAccel(), DeltaTime);
 		Instance->State.WheelSteerDeg[0] = Instance->WheelQueryResults[0].steerAngle * 180.0f / PxPi;
 		Instance->State.WheelSteerDeg[1] = Instance->WheelQueryResults[1].steerAngle * 180.0f / PxPi;
 		for (PxU32 WheelIndex = 0; WheelIndex < WheelsPerVehicle; ++WheelIndex)

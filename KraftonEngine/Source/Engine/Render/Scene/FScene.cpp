@@ -380,9 +380,9 @@ void FScene::ClearFrameData()
 	Grid = {};
 }
 
-void FScene::AddOverlayText(FString Text, const FVector2& Position, float Scale)
+void FScene::AddOverlayText(FString Text, const FVector2& Position, float Scale, EOverlayTextAnchor Anchor)
 {
-	OverlayTexts.push_back({ std::move(Text), Position, Scale });
+	OverlayTexts.push_back({ std::move(Text), Position, Scale, Anchor });
 }
 
 void FScene::AddDebugAABB(const FVector& Min, const FVector& Max, const FColor& Color)

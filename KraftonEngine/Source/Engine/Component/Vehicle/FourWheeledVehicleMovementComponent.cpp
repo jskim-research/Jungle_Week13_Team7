@@ -1,4 +1,4 @@
-#include "FourWheeledVehicleMovementComponent.h"
+﻿#include "FourWheeledVehicleMovementComponent.h"
 
 #include "Component/Primitive/StaticMeshComponent.h"
 #include "GameFramework/AActor.h"
@@ -133,6 +133,7 @@ FFourWheeledVehicleRuntimeParams UFourWheeledVehicleMovementComponent::BuildRunt
 	Params.bUseManualGears = bUseManualGears;
 	Params.bGearShiftUpPressed = Input.GetKeyDown(VK_RBUTTON);
 	Params.bGearShiftDownPressed = Input.GetKeyDown(VK_LBUTTON);
+	Params.bGearNeutralPressed = Input.GetKeyDown('N');
 	Params.WheelRadius = WheelRadius;
 	Params.WheelWidth = WheelWidth;
 	Params.ChassisMass = ChassisMass;
@@ -242,24 +243,21 @@ void UFourWheeledVehicleMovementComponent::AppendDrivingHud(FScene& Scene) const
 		return;
 	}
 
-	const InputSystem& Input = InputSystem::Get();
-	const float ThrottlePct = Input.GetKey('W') ? 100.0f : 0.0f;
-	const float BrakePct = Input.GetKey('S') ? 100.0f : 0.0f;
-	const float SteerDeg = SmoothedSteerInput * MaxSteerAngleDeg;
 	const float SpeedKmh = VehicleState.bValid ? FMath::Abs(VehicleState.ForwardSpeed) * 3.6f : 0.0f;
 	const float EngineRPM = VehicleState.bValid ? VehicleState.EngineRPM : 0.0f;
 	const float EngineRPMRatio = VehicleState.bValid ? VehicleState.EngineRPMRatio : 0.0f;
 	const char* GearLabel = VehicleState.bValid ? VehicleState.GearDisplay.c_str() : "--";
-	const char* ShiftHint = VehicleState.bValid ? VehicleState.ShiftHint.c_str() : "--";
+	const bool bRedline = EngineRPMRatio >= 0.88f;
 
 	char LineBuffer[96];
-	float LineY = 20.0f;
-	const float LineStep = 32.0f;
-	const float HudScale = 2.0f;
+	const float LineStep = 22.0f;
+	const float HudScale = 1.25f;
+	const float HudX = -260.0f;
+	float LineY = -LineStep * 2.0f;
 
 	auto AddLine = [&](const char* Text)
 	{
-		Scene.AddOverlayText(Text, FVector2(20.0f, LineY), HudScale);
+		Scene.AddOverlayText(Text, FVector2(HudX, LineY), HudScale, FScene::EOverlayTextAnchor::RightCenter);
 		LineY += LineStep;
 	};
 
@@ -269,27 +267,11 @@ void UFourWheeledVehicleMovementComponent::AppendDrivingHud(FScene& Scene) const
 	snprintf(LineBuffer, sizeof(LineBuffer), "Speed: %.0f km/h", SpeedKmh);
 	AddLine(LineBuffer);
 
-	snprintf(LineBuffer, sizeof(LineBuffer), "RPM: %.0f", EngineRPM);
+	snprintf(LineBuffer, sizeof(LineBuffer), bRedline ? "RPM: %.0f REDLINE" : "RPM: %.0f", EngineRPM);
 	AddLine(LineBuffer);
 
-	snprintf(LineBuffer, sizeof(LineBuffer), "RPM Load: %.0f%%", EngineRPMRatio * 100.0f);
+	snprintf(LineBuffer, sizeof(LineBuffer), bRedline ? "Rev: %.0f%% !" : "Rev: %.0f%%", EngineRPMRatio * 100.0f);
 	AddLine(LineBuffer);
-
-	snprintf(LineBuffer, sizeof(LineBuffer), "Throttle: %.0f%%", ThrottlePct);
-	AddLine(LineBuffer);
-
-	snprintf(LineBuffer, sizeof(LineBuffer), "Brake: %.0f%%", BrakePct);
-	AddLine(LineBuffer);
-
-	snprintf(LineBuffer, sizeof(LineBuffer), "Steer: %+.0f deg", SteerDeg);
-	AddLine(LineBuffer);
-
-	if (bUseManualGears)
-	{
-		snprintf(LineBuffer, sizeof(LineBuffer), "Shift: %s", ShiftHint);
-		AddLine(LineBuffer);
-		AddLine("Controls: RMB up / LMB down");
-	}
 }
 
 void UFourWheeledVehicleMovementComponent::AppendDrivingHudForWorld(UWorld& World)

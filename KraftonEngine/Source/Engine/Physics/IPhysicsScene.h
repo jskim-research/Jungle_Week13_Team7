@@ -23,6 +23,7 @@ struct FFourWheeledVehicleRuntimeParams
 	bool bUseManualGears = true;
 	bool bGearShiftUpPressed = false;
 	bool bGearShiftDownPressed = false;
+	bool bGearNeutralPressed = false;
 	float WheelRadius = 0.36f;
 	float WheelWidth = 0.30f;
 	float ChassisMass = 800.0f;
@@ -46,7 +47,6 @@ struct FFourWheeledVehicleRuntimeState
 	float EngineRPMRatio = 0.0f;
 	int32 CurrentGear = 0;
 	FString GearDisplay = "N";
-	FString ShiftHint = "";
 	float WheelRotationDeg[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	float WheelSteerDeg[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 };
