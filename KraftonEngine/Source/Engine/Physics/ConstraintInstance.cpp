@@ -62,6 +62,11 @@ void FConstraintInstance::InitConstraint(
 		return;
 	}
 
+	if (!ParentBody->Actor->is<PxRigidDynamic>() && !ChildBody->Actor->is<PxRigidDynamic>())
+	{
+		return;
+	}
+
 	PxD6Joint* Joint = PxD6JointCreate(
 		*InitParams.Physics,
 		ParentBody->Actor,
