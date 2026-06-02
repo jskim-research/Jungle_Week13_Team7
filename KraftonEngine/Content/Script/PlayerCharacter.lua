@@ -410,7 +410,6 @@ function PlayerCharacter.BeginUltimate()
 
     -- 카메라 전환
     CameraManager.ToggleOwnerCamera(ultimateCamera, 0)
-
     Reflection.Call(movementComp, "StopMovementImmediately")
     Reflection.Call(movementComp, "SetMovementInputEnabled", false)
 
@@ -481,16 +480,6 @@ function PlayerCharacter.BeginUltimate()
     -- CameraManager.SetVignette(0.7, 0.7, 0.5)
 
     Wait(0.4)
-
-    -- 여기서 실제 게임플레이 위치를 원래 위치로 복귀시킨다.
-    -- 카메라 연출 경로는 유지하되, 궁극기 종료 후 캐릭터가 이상한 위치에 남지 않게 한다.
-    Reflection.Call(owner, "SetActorLocation", originalLocation)
-
-    if originalRotation ~= nil then
-        Reflection.Call(owner, "SetActorRotation", originalRotation)
-    else
-        PlayerCharacter.FaceOwnerToDirection(nil, actorForward)
-    end
 
     Reflection.Call(movementComp, "SetMovementInputEnabled", true)
 
