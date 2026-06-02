@@ -12,6 +12,7 @@ namespace physx
 	class PxPhysics;
 	class PxRigidActor;
 	class PxScene;
+	class PxTriangleMesh;
 }
 
 // UE: FInitBodySpawnParams — spawn/simulation policy for InitBody.
@@ -38,6 +39,7 @@ struct FBodyInstance
 	UBodySetup* BodySetup = nullptr;
 
 	physx::PxRigidActor* Actor = nullptr;
+	TArray<physx::PxTriangleMesh*> RuntimeTriangleMeshes;
 
 	bool bSimulatePhysics = false;
 	bool bEnableCollision = true;
@@ -52,6 +54,7 @@ struct FBodyInstance
 
 	void CreateShapesFromBodySetup(const FBodyInstanceInitParams& InitParams);
 	void CreateShapesFromComponent(const FBodyInstanceInitParams& InitParams);
+	bool CreateShapesFromStaticMeshComplex(const FBodyInstanceInitParams& InitParams);
 
 	void SyncBodyToComponent();
 	void SyncComponentToBody();

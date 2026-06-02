@@ -3,12 +3,15 @@
 #include "Physics/PhysicsBodyDebug.h"
 
 #include "Component/PrimitiveComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 #include "Component/SceneComponent.h"
 #include "Component/Shape/BoxComponent.h"
 #include "Component/Shape/CapsuleComponent.h"
 #include "Component/Shape/SphereComponent.h"
 #include "GameFramework/AActor.h"
 #include "Math/MathUtils.h"
+#include "Mesh/Static/StaticMesh.h"
+#include "Mesh/Static/StaticMeshAsset.h"
 #include "Physics/BodySetup/BodySetup.h"
 #include "Physics/PhysX/PhysXShapeUtils.h"
 
@@ -158,11 +161,12 @@ void FBodyInstance::InitBody(
 
 	if (bEnableCollision)
 	{
-		if (BodySetup && BodySetup->HasSimpleCollision())
+		const bool bCreatedComplexStaticMesh = CreateShapesFromStaticMeshComplex(InitParams);
+		if (!bCreatedComplexStaticMesh && BodySetup && BodySetup->HasSimpleCollision())
 		{
 			CreateShapesFromBodySetup(InitParams);
 		}
-		else
+		else if (!bCreatedComplexStaticMesh)
 		{
 			CreateShapesFromComponent(InitParams);
 		}
@@ -191,6 +195,14 @@ void FBodyInstance::TermBody(const FBodyInstanceInitParams& InitParams)
 {
 	if (!Actor)
 	{
+		for (PxTriangleMesh* TriangleMesh : RuntimeTriangleMeshes)
+		{
+			if (TriangleMesh)
+			{
+				TriangleMesh->release();
+			}
+		}
+		RuntimeTriangleMeshes.clear();
 		return;
 	}
 
@@ -201,6 +213,107 @@ void FBodyInstance::TermBody(const FBodyInstanceInitParams& InitParams)
 	}
 	Actor->release();
 	Actor = nullptr;
+	for (PxTriangleMesh* TriangleMesh : RuntimeTriangleMeshes)
+	{
+		if (TriangleMesh)
+		{
+			TriangleMesh->release();
+		}
+	}
+	RuntimeTriangleMeshes.clear();
+}
+
+bool FBodyInstance::CreateShapesFromStaticMeshComplex(const FBodyInstanceInitParams& InitParams)
+{
+	if (!Actor || !OwnerComponent || !InitParams.Physics || !InitParams.DefaultMaterial || !bEnableCollision || bSimulatePhysics)
+	{
+		return false;
+	}
+
+	UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(OwnerComponent);
+	if (!StaticMeshComp)
+	{
+		return false;
+	}
+
+	if (BodySetup && BodySetup->GetCollisionTraceFlag() == ECollisionTraceFlag::UseSimpleAsComplex)
+	{
+		return false;
+	}
+
+	UStaticMesh* StaticMesh = StaticMeshComp->GetStaticMesh();
+	FStaticMesh* MeshAsset = StaticMesh ? StaticMesh->GetStaticMeshAsset() : nullptr;
+	if (!MeshAsset || MeshAsset->Vertices.empty() || MeshAsset->Indices.size() < 3)
+	{
+		return false;
+	}
+
+	const uint32 TriangleCount = static_cast<uint32>(MeshAsset->Indices.size() / 3);
+	if (TriangleCount == 0)
+	{
+		return false;
+	}
+
+	TArray<PxVec3> Points;
+	Points.reserve(MeshAsset->Vertices.size());
+	for (const FNormalVertex& Vertex : MeshAsset->Vertices)
+	{
+		Points.push_back(ToPxVec3(Vertex.pos));
+	}
+
+	PxTriangleMeshDesc MeshDesc;
+	MeshDesc.points.count = static_cast<PxU32>(Points.size());
+	MeshDesc.points.stride = sizeof(PxVec3);
+	MeshDesc.points.data = Points.data();
+	MeshDesc.triangles.count = static_cast<PxU32>(TriangleCount);
+	MeshDesc.triangles.stride = sizeof(uint32) * 3;
+	MeshDesc.triangles.data = MeshAsset->Indices.data();
+
+	PxCookingParams CookingParams{ PxTolerancesScale() };
+	PxCooking* Cooking = PxCreateCooking(PX_PHYSICS_VERSION, InitParams.Physics->getFoundation(), CookingParams);
+	if (!Cooking)
+	{
+		return false;
+	}
+
+	PxTriangleMeshCookingResult::Enum CookResult = PxTriangleMeshCookingResult::eFAILURE;
+	PxTriangleMesh* TriangleMesh = Cooking->createTriangleMesh(
+		MeshDesc,
+		InitParams.Physics->getPhysicsInsertionCallback(),
+		&CookResult);
+	Cooking->release();
+
+	if (!TriangleMesh || CookResult == PxTriangleMeshCookingResult::eFAILURE)
+	{
+		if (TriangleMesh)
+		{
+			TriangleMesh->release();
+		}
+		return false;
+	}
+
+	const FVector Scale = OwnerComponent->GetWorldScale();
+	const PxVec3 MeshScale(
+		(std::max)(0.001f, AbsScale(Scale.X)),
+		(std::max)(0.001f, AbsScale(Scale.Y)),
+		(std::max)(0.001f, AbsScale(Scale.Z)));
+	PxTriangleMeshGeometry Geometry(TriangleMesh, PxMeshScale(MeshScale, PxQuat(PxIdentity)));
+	if (!Geometry.isValid())
+	{
+		TriangleMesh->release();
+		return false;
+	}
+
+	PxShape* Shape = PxRigidActorExt::createExclusiveShape(*Actor, Geometry, *InitParams.DefaultMaterial);
+	if (!Shape)
+	{
+		TriangleMesh->release();
+		return false;
+	}
+
+	PhysXShapeUtils::FinalizeShape(Shape, OwnerComponent);
+	RuntimeTriangleMeshes.push_back(TriangleMesh);
+	return true;
 }
 
 void FBodyInstance::CreateShapesFromBodySetup(const FBodyInstanceInitParams& InitParams)

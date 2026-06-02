@@ -749,9 +749,9 @@
               "BoxExtent" : [1.000000, 1.000000, 1.000000],
               "CachedEditRotator" : [0.500000, 0.000000, -0.059998],
               "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
-              "CollisionEnabled" : [3, 0, 0, 0, 0, 0, 0, 0],
+              "CollisionEnabled" : [0, 0, 0, 0, 0, 0, 0, 0],
               "Mass" : 1.000000,
-              "ObjectType" : [1, 0, 0, 0, 0, 0, 0, 0],
+              "ObjectType" : [0, 0, 0, 0, 0, 0, 0, 0],
               "RelativeTransform.Location" : [0.441792, 1.546648, -1.010000],
               "RelativeTransform.Scale" : [1.199999, 5.601000, 1.000000],
               "ResponseContainer" : {
@@ -783,9 +783,9 @@
               "BoxExtent" : [1.000000, 1.000000, 1.000000],
               "CachedEditRotator" : [0.500000, -0.000000, -0.160004],
               "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
-              "CollisionEnabled" : [3, 0, 0, 0, 0, 0, 0, 0],
+              "CollisionEnabled" : [0, 0, 0, 0, 0, 0, 0, 0],
               "Mass" : 1.000000,
-              "ObjectType" : [1, 0, 0, 0, 0, 0, 0, 0],
+              "ObjectType" : [0, 0, 0, 0, 0, 0, 0, 0],
               "RelativeTransform.Location" : [0.420401, 12.718608, -1.046000],
               "RelativeTransform.Scale" : [1.200000, 5.601000, 1.000000],
               "ResponseContainer" : {
@@ -815,10 +815,10 @@
         "Properties" : {
           "CachedEditRotator" : [-0.000000, -179.999954, 0.000000],
           "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
-          "CollisionEnabled" : [0, 0, 0, 0, 0, 0, 0, 0],
+          "CollisionEnabled" : [3, 0, 0, 0, 0, 0, 0, 0],
           "Mass" : 1.000000,
           "MaterialSlots" : ["Content/Material/Auto/material0.mat", "Content/Material/Auto/material1.mat", "Content/Material/Auto/material2.mat", "Content/Material/Auto/material3.mat"],
-          "ObjectType" : [0, 0, 0, 0, 0, 0, 0, 0],
+          "ObjectType" : [1, 0, 0, 0, 0, 0, 0, 0],
           "RelativeTransform.Location" : [0.000000, 0.000000, -1.000000],
           "RelativeTransform.Scale" : [20.000000, 20.000000, 20.000000],
           "ResponseContainer" : {
