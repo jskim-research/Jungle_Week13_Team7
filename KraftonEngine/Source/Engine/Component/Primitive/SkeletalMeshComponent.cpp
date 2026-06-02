@@ -1167,6 +1167,52 @@ FConstraintInstance* USkeletalMeshComponent::GetConstraintInstance(int32 Constra
 	return Constraints[ConstraintIndex];
 }
 
+void USkeletalMeshComponent::UpdateWorldAABB() const
+{
+	if (bRagdollActive && !Bodies.empty())
+	{
+		FBoundingBox RagdollBounds;
+
+		for (FBodyInstance* Body : Bodies)
+		{
+			if (!Body || !Body->Actor)
+			{
+				continue;
+			}
+
+			if (Body->Actor->getNbShapes() == 0)
+			{
+				continue;
+			}
+
+			// PhysX actor + attached shapes 기준 world AABB
+			const PxBounds3 PxBounds = Body->Actor->getWorldBounds(1.01f);
+
+			if (!PxBounds.isValid())
+			{
+				continue;
+			}
+
+			const FVector Min = ToFVector(PxBounds.minimum);
+			const FVector Max = ToFVector(PxBounds.maximum);
+
+			RagdollBounds.Expand(Min);
+			RagdollBounds.Expand(Max);
+		}
+
+		if (RagdollBounds.IsValid())
+		{
+			WorldAABBMinLocation = RagdollBounds.Min;
+			WorldAABBMaxLocation = RagdollBounds.Max;
+			bWorldAABBDirty = false;
+			bHasValidWorldAABB = true;
+			return;
+		}
+	}
+
+	USkinnedMeshComponent::UpdateWorldAABB();
+}
+
 bool USkeletalMeshComponent::EvaluateAnimInstance(float DeltaTime)
 {
     if (!AnimInstance) return false;
