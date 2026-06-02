@@ -50,8 +50,13 @@ public:
 	void ClearFrameData();
 
 	// --- Overlay text (screen-space) ---
-	struct FOverlayText { FString Text; FVector2 Position; float Scale; };
-	void AddOverlayText(FString Text, const FVector2& Position, float Scale);
+	enum class EOverlayTextAnchor
+	{
+		TopLeft,
+		RightCenter,
+	};
+	struct FOverlayText { FString Text; FVector2 Position; float Scale; EOverlayTextAnchor Anchor; };
+	void AddOverlayText(FString Text, const FVector2& Position, float Scale, EOverlayTextAnchor Anchor = EOverlayTextAnchor::TopLeft);
 	const TArray<FOverlayText>& GetOverlayTexts() const { return OverlayTexts; }
 
 	// --- Debug AABB ---

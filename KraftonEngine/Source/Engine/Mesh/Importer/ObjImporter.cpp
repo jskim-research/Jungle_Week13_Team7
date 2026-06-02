@@ -6,11 +6,79 @@
 #include "Mesh/MeshManager.h"
 #include "SimpleJSON/json.hpp"
 #include "Materials/MaterialManager.h"
+#include "stb_image.h"
 #include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <charconv>
 #include <chrono>
+#include <vector>
+
+namespace
+{
+	bool ReadFileBytes(const FString& FilePath, std::vector<uint8>& OutBytes)
+	{
+		OutBytes.clear();
+
+		std::ifstream File(FPaths::ToWide(FilePath), std::ios::binary | std::ios::ate);
+		if (!File.is_open())
+		{
+			return false;
+		}
+
+		const std::streamsize FileSize = File.tellg();
+		if (FileSize <= 0)
+		{
+			return false;
+		}
+
+		File.seekg(0, std::ios::beg);
+		OutBytes.resize(static_cast<size_t>(FileSize));
+		return !!File.read(reinterpret_cast<char*>(OutBytes.data()), FileSize);
+	}
+
+	bool TextureHasTransparentAlpha(const FString& TexturePath)
+	{
+		std::vector<uint8> FileBytes;
+		if (!ReadFileBytes(TexturePath, FileBytes))
+		{
+			return false;
+		}
+
+		int Width = 0;
+		int Height = 0;
+		int OrigChannels = 0;
+		stbi_uc* Pixels = stbi_load_from_memory(
+			FileBytes.data(),
+			static_cast<int>(FileBytes.size()),
+			&Width,
+			&Height,
+			&OrigChannels,
+			4);
+		if (!Pixels || Width <= 0 || Height <= 0)
+		{
+			if (Pixels)
+			{
+				stbi_image_free(Pixels);
+			}
+			return false;
+		}
+
+		const int PixelCount = Width * Height;
+		bool bHasTransparentAlpha = false;
+		for (int PixelIndex = 0; PixelIndex < PixelCount; ++PixelIndex)
+		{
+			if (Pixels[PixelIndex * 4 + 3] < 255)
+			{
+				bHasTransparentAlpha = true;
+				break;
+			}
+		}
+
+		stbi_image_free(Pixels);
+		return bHasTransparentAlpha;
+	}
+}
 
 const FVector FallbackColor3 = FVector(1.0f, 0.0f, 1.0f);
 const FVector4 FallbackColor4 = FVector4(1.0f, 0.0f, 1.0f, 1.0f);
@@ -489,7 +557,9 @@ FString FObjImporter::ConvertMtlInfoToMat(const FObjMaterialInfo* MtlInfo)
 	JsonData["Origin"] = "ObjImport";
 	JsonData["ShaderPath"] = "Shaders/Geometry/UberLit.hlsl";
 
-	const bool bTransparent = MtlInfo->Dissolve < 1.0f;
+	const bool bTransparent =
+		MtlInfo->Dissolve < 1.0f ||
+		(!MtlInfo->map_Kd.empty() && TextureHasTransparentAlpha(MtlInfo->map_Kd));
 	if (bTransparent)
 	{
 		JsonData["RenderPass"] = "AlphaBlend";
@@ -505,6 +575,7 @@ FString FObjImporter::ConvertMtlInfoToMat(const FObjMaterialInfo* MtlInfo)
 	{
 		JsonData["Textures"]["DiffuseTexture"] = MtlInfo->map_Kd;
 
+		JsonData["Parameters"]["HasDiffuseTexture"] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][0] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][1] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][2] = 1.0f;
@@ -512,6 +583,7 @@ FString FObjImporter::ConvertMtlInfoToMat(const FObjMaterialInfo* MtlInfo)
 	}
 	else
 	{
+		JsonData["Parameters"]["HasDiffuseTexture"] = 0.0f;
 		JsonData["Parameters"]["SectionColor"][0] = MtlInfo->Kd.X;
 		JsonData["Parameters"]["SectionColor"][1] = MtlInfo->Kd.Y;
 		JsonData["Parameters"]["SectionColor"][2] = MtlInfo->Kd.Z;

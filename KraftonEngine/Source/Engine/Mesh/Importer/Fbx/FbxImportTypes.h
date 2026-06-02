@@ -14,6 +14,7 @@ struct FFbxImportedMaterialInfo
 	FString DiffuseTexturePath;
 	FString NormalTexturePath;
 	float   Opacity = 1.0f;
+	bool    bDiffuseTextureHasAlpha = false;
 };
 
 struct FFbxStaticMeshImportResult
