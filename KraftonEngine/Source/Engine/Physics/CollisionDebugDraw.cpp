@@ -103,7 +103,9 @@ namespace
 		const FVector AbsWorldScale(AbsScale(ComponentScale.X), AbsScale(ComponentScale.Y), AbsScale(ComponentScale.Z));
 		const float UniformScale = MaxAbsScale(ComponentScale);
 		const FVector ComponentLocation = ComponentWorldMatrix.GetLocation();
-		const FQuat ComponentRotation = ComponentWorldMatrix.ToQuat();
+		FMatrix ComponentRotationMatrix = ComponentWorldMatrix;
+		ComponentRotationMatrix.RemoveScaling();
+		const FQuat ComponentRotation = ComponentRotationMatrix.ToQuat().GetNormalized();
 
 		const physx::PxQuat PxCorrection = PhysXShapeUtils::GetCapsuleAxisCorrectionQuat();
 		const FQuat CapsuleAxisCorrectionF(PxCorrection.x, PxCorrection.y, PxCorrection.z, PxCorrection.w);
