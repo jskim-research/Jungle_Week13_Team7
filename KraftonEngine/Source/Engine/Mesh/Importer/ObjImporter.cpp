@@ -505,6 +505,7 @@ FString FObjImporter::ConvertMtlInfoToMat(const FObjMaterialInfo* MtlInfo)
 	{
 		JsonData["Textures"]["DiffuseTexture"] = MtlInfo->map_Kd;
 
+		JsonData["Parameters"]["HasDiffuseTexture"] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][0] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][1] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][2] = 1.0f;
@@ -512,6 +513,7 @@ FString FObjImporter::ConvertMtlInfoToMat(const FObjMaterialInfo* MtlInfo)
 	}
 	else
 	{
+		JsonData["Parameters"]["HasDiffuseTexture"] = 0.0f;
 		JsonData["Parameters"]["SectionColor"][0] = MtlInfo->Kd.X;
 		JsonData["Parameters"]["SectionColor"][1] = MtlInfo->Kd.Y;
 		JsonData["Parameters"]["SectionColor"][2] = MtlInfo->Kd.Z;

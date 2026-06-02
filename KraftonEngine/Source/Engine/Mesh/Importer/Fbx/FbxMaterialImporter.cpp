@@ -272,6 +272,7 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 	if (!MaterialInfo.DiffuseTexturePath.empty())
 	{
 		JsonData["Textures"]["DiffuseTexture"] = FPaths::MakeProjectRelative(MaterialInfo.DiffuseTexturePath);
+		JsonData["Parameters"]["HasDiffuseTexture"] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][0] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][1] = 1.0f;
 		JsonData["Parameters"]["SectionColor"][2] = 1.0f;
@@ -279,6 +280,7 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 	}
 	else
 	{
+		JsonData["Parameters"]["HasDiffuseTexture"] = 0.0f;
 		JsonData["Parameters"]["SectionColor"][0] = MaterialInfo.DiffuseColor.X;
 		JsonData["Parameters"]["SectionColor"][1] = MaterialInfo.DiffuseColor.Y;
 		JsonData["Parameters"]["SectionColor"][2] = MaterialInfo.DiffuseColor.Z;

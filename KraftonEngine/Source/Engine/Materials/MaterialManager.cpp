@@ -997,6 +997,16 @@ bool FMaterialManager::InjectDefaultParameters(json::JSON& JsonData, FMaterialTe
 			continue;
 		}
 
+		if (ParamName == "HasDiffuseTexture")
+		{
+			const bool bHasDiffuseTexture =
+				JsonData.hasKey(MatKeys::Textures) &&
+				JsonData[MatKeys::Textures].hasKey("DiffuseTexture") &&
+				!JsonData[MatKeys::Textures]["DiffuseTexture"].ToString().empty();
+			JsonData[MatKeys::Parameters][ParamName] = bHasDiffuseTexture ? 1.0f : 0.0f;
+			continue;
+		}
+
 		if (ParamName == "HasNormalMap")
 		{
 			JsonData[MatKeys::Parameters][ParamName] = 0.0f;
