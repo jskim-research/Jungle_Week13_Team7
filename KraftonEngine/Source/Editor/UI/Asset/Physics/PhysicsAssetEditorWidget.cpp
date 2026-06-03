@@ -10,6 +10,7 @@
 #include "Physics/PhysicsAssetManager.h"
 #include "Physics/PhysicsAssetUtils.h"
 #include "Physics/PhysicsConstraintTemplate.h"
+#include "Physics/BodyInstance.h"
 #include "Platform/Paths.h"
 #include "Runtime/Engine.h"
 #include "GameFramework/AActor.h"
@@ -19,6 +20,7 @@
 #include "Component/Light/DirectionalLightComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 #include "Component/Debug/GizmoComponent.h"
 #include "Debug/DrawDebugHelpers.h"
 #include "Gizmo/GizmoTransformTarget.h"
@@ -40,6 +42,8 @@
 #include <filesystem>
 #include <imgui.h>
 #include <string>
+#include <PxPhysicsAPI.h>
+#include <extensions/PxD6Joint.h>
 
 static uint32 GNextPhysicsAssetEditorInstanceId = 0;
 namespace ed = ax::NodeEditor;
@@ -525,6 +529,26 @@ namespace
 			return FVector4(1.0f, 0.62f, 0.16f, 0.34f);
 		}
 		return FVector4(0.12f, 0.68f, 1.0f, 0.24f);
+	}
+
+	physx::PxVec3 ToPxVec3(const FVector& Value)
+	{
+		return physx::PxVec3(Value.X, Value.Y, Value.Z);
+	}
+
+	FVector ToFVector(const physx::PxVec3& Value)
+	{
+		return FVector(Value.x, Value.y, Value.z);
+	}
+
+	FQuat ToFQuat(const physx::PxQuat& Value)
+	{
+		return FQuat(Value.x, Value.y, Value.z, Value.w);
+	}
+
+	FVector InverseTransformPxPoint(const physx::PxTransform& Transform, const FVector& WorldPoint)
+	{
+		return ToFVector(Transform.transformInv(ToPxVec3(WorldPoint)));
 	}
 
 	bool AcceptRayHit(float T, float& InOutBestT)
@@ -1374,6 +1398,10 @@ void FPhysicsAssetEditorWidget::Open(UObject* Object)
 	SelectedConstraintIndex = -1;
 	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	SelectedPrimitiveIndex = -1;
+	ConstraintGraphFocusBodyIndex = -1;
+	bPreviewSimulating = false;
+	bPreviewWorldBegunPlay = false;
+	EndRagdollDrag();
 
 	ResolveEditingObjects(Object);
 	InitializeConstraintGraphEditor();
@@ -1394,6 +1422,10 @@ void FPhysicsAssetEditorWidget::Close()
 	SelectedConstraintIndex = -1;
 	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	SelectedPrimitiveIndex = -1;
+	ConstraintGraphFocusBodyIndex = -1;
+	bPreviewSimulating = false;
+	bPreviewWorldBegunPlay = false;
+	EndRagdollDrag();
 	bPendingClose = false;
 	bConstraintGraphLayoutDirty = true;
 	ConstraintGraphTopologyHash = 0;
@@ -1414,6 +1446,7 @@ void FPhysicsAssetEditorWidget::CollectPreviewViewports(TArray<IEditorPreviewVie
 {
 	if (IsOpen())
 	{
+		SyncPreviewSimulationPose();
 		OutClients.push_back(const_cast<FMeshEditorViewportClient*>(&ViewportClient));
 	}
 }
@@ -1536,6 +1569,7 @@ void FPhysicsAssetEditorWidget::CreatePreviewWorld()
 	AActor* Actor = WorldContext.World->SpawnActor<AActor>();
 	USkeletalMeshComponent* MeshComp = Actor->AddComponent<USkeletalMeshComponent>();
 	MeshComp->SetSkeletalMesh(EditingMesh);
+	MeshComp->SetPhysicsAsset(EditingPhysicsAsset);
 	Actor->SetRootComponent(MeshComp);
 	Actor->SetActorLocation(FVector(0.0f, 0.0f, 0.0f));
 
@@ -1552,6 +1586,12 @@ void FPhysicsAssetEditorWidget::CreatePreviewWorld()
 	FloorActor->InitDefaultComponents("Content/Data/BasicShape/Cube.OBJ");
 	FloorActor->SetActorLocation(FVector(0.0f, 0.0f, -0.05f));
 	FloorActor->SetActorScale(FVector(10.0f, 10.0f, 0.02f));
+	if (UStaticMeshComponent* FloorMeshComp = FloorActor->GetComponentByClass<UStaticMeshComponent>())
+	{
+		FloorMeshComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		FloorMeshComp->SetSimulatePhysics(false);
+		FloorMeshComp->SetEnableGravity(false);
+	}
 
 	const ImVec2 ViewportSize = ImGui::GetContentRegionAvail();
 	ViewportClient.Initialize(
@@ -1564,6 +1604,10 @@ void FPhysicsAssetEditorWidget::CreatePreviewWorld()
 	ViewportClient.SetPreviewPickHandler([this](const FRay& Ray)
 	{
 		return HandleViewportPick(Ray);
+	});
+	ViewportClient.SetPreviewRagdollInteractionHandler([this](const FRay& Ray, bool bPressed, bool bHeld, bool bReleased, float DeltaTime)
+	{
+		return HandleRagdollInteraction(Ray, bPressed, bHeld, bReleased, DeltaTime);
 	});
 	ViewportClient.CreatePreviewGizmo();
 	ViewportClient.CreateBoneDebugComponent();
@@ -1581,7 +1625,9 @@ void FPhysicsAssetEditorWidget::CreatePreviewWorld()
 
 void FPhysicsAssetEditorWidget::DestroyPreviewWorld()
 {
+	StopPreviewSimulation();
 	ViewportClient.SetPreviewPickHandler(nullptr);
+	ViewportClient.SetPreviewRagdollInteractionHandler(nullptr);
 	SolidPreviewComponent = nullptr;
 
 	if (UWorld* PreviewWorld = ViewportClient.GetPreviewWorld())
@@ -1725,6 +1771,18 @@ void FPhysicsAssetEditorWidget::Render(float DeltaTime)
 		SaveAsset();
 	}
 	ImGui::SameLine();
+	if (ImGui::Button(bPreviewSimulating ? "Stop" : "Simulate", ImVec2(96.0f, 0.0f)))
+	{
+		if (bPreviewSimulating)
+		{
+			StopPreviewSimulation();
+		}
+		else
+		{
+			StartPreviewSimulation();
+		}
+	}
+	ImGui::SameLine();
 	ImGui::TextDisabled("Ctrl+S");
 	ImGui::SameLine();
 	if (EditingPhysicsAsset)
@@ -1850,7 +1908,7 @@ void FPhysicsAssetEditorWidget::RenderTreePanel()
 	ImGui::Dummy(ImVec2(0.0f, 6.0f));
 	ImGui::Separator();
 	ImGui::TextUnformatted("Constraint Graph");
-	if (SelectedBodyIndex >= 0 || SelectedConstraintIndex >= 0)
+	if (ConstraintGraphFocusBodyIndex >= 0 || SelectedConstraintIndex >= 0)
 	{
 		RenderConstraintGraph();
 	}
@@ -2064,16 +2122,15 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 
 	const int32 BodySetupCount = EditingPhysicsAsset->GetBodySetupCount();
 	const int32 ConstraintSetupCount = EditingPhysicsAsset->GetConstraintSetupCount();
-	const bool bFocusSelectedBody = SelectionType == EPhysicsAssetEditorSelectionType::Body
-		&& SelectedBodyIndex >= 0
-		&& SelectedBodyIndex < BodySetupCount
-		&& EditingPhysicsAsset->GetBodySetup(SelectedBodyIndex);
+	const bool bFocusSelectedBody = ConstraintGraphFocusBodyIndex >= 0
+		&& ConstraintGraphFocusBodyIndex < BodySetupCount
+		&& EditingPhysicsAsset->GetBodySetup(ConstraintGraphFocusBodyIndex);
 
 	TArray<bool> VisibleBodies(static_cast<size_t>(BodySetupCount), !bFocusSelectedBody);
 	TArray<bool> VisibleConstraints(static_cast<size_t>(ConstraintSetupCount), !bFocusSelectedBody);
 	if (bFocusSelectedBody)
 	{
-		VisibleBodies[SelectedBodyIndex] = true;
+		VisibleBodies[ConstraintGraphFocusBodyIndex] = true;
 		for (int32 ConstraintIndex = 0; ConstraintIndex < ConstraintSetupCount; ++ConstraintIndex)
 		{
 			const UPhysicsConstraintTemplate* Constraint = EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex);
@@ -2084,7 +2141,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 
 			const int32 ParentBodyIndex = EditingPhysicsAsset->FindBodyIndex(Constraint->GetParentBoneName());
 			const int32 ChildBodyIndex = EditingPhysicsAsset->FindBodyIndex(Constraint->GetChildBoneName());
-			if (ParentBodyIndex == SelectedBodyIndex || ChildBodyIndex == SelectedBodyIndex)
+			if (ParentBodyIndex == ConstraintGraphFocusBodyIndex || ChildBodyIndex == ConstraintGraphFocusBodyIndex)
 			{
 				VisibleConstraints[ConstraintIndex] = true;
 				if (ParentBodyIndex >= 0 && ParentBodyIndex < BodySetupCount)
@@ -2102,7 +2159,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 	std::uint64_t TopologyHash = 0;
 	HashInt(TopologyHash, BodySetupCount);
 	HashInt(TopologyHash, ConstraintSetupCount);
-	HashInt(TopologyHash, bFocusSelectedBody ? SelectedBodyIndex : -1);
+	HashInt(TopologyHash, bFocusSelectedBody ? ConstraintGraphFocusBodyIndex : -1);
 	for (int32 ConstraintIndex = 0; ConstraintIndex < ConstraintSetupCount; ++ConstraintIndex)
 	{
 		if (const UPhysicsConstraintTemplate* Constraint = EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex))
@@ -2134,7 +2191,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 			}
 
 			const float X = bFocusSelectedBody
-				? (BodyIndex == SelectedBodyIndex ? 20.0f : 520.0f)
+				? (BodyIndex == ConstraintGraphFocusBodyIndex ? 20.0f : 520.0f)
 				: ((BodyIndex % 2 == 0) ? 20.0f : 520.0f);
 			const float Y = 30.0f + static_cast<float>(bFocusSelectedBody ? VisibleBodyOrdinal : BodyIndex / 2) * 110.0f;
 			ed::SetNodePosition(ToPhysicsNodeId(MakeBodyNodeId(BodyIndex)), ImVec2(X, Y));
@@ -2302,6 +2359,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 					const USkeletalBodySetup* ParentBody = EditingPhysicsAsset->GetBodySetup(ParentBodyIndex);
 					const USkeletalBodySetup* ChildBody = EditingPhysicsAsset->GetBodySetup(ChildBodyIndex);
 					const FName ConstraintName = MakeUniqueConstraintName(ParentBody->GetBoneName(), ChildBody->GetBoneName());
+					StopPreviewSimulation();
 					if (EditingPhysicsAsset->AddConstraintSetup(ConstraintName, ParentBody->GetBoneName(), ChildBody->GetBoneName()))
 					{
 						SelectConstraint(EditingPhysicsAsset->FindConstraintIndex(ConstraintName), false);
@@ -2373,6 +2431,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 
 	DeleteUniqueDescending(ConstraintIndicesToDelete, [&](int32 ConstraintIndex)
 	{
+		StopPreviewSimulation();
 		if (EditingPhysicsAsset->RemoveConstraintSetupAt(ConstraintIndex))
 		{
 			SelectionType = EPhysicsAssetEditorSelectionType::None;
@@ -2384,6 +2443,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 
 	DeleteUniqueDescending(BodyIndicesToDelete, [&](int32 BodyIndex)
 	{
+		StopPreviewSimulation();
 		if (EditingPhysicsAsset->RemoveBodySetupAt(BodyIndex))
 		{
 			SelectionType = EPhysicsAssetEditorSelectionType::None;
@@ -2391,6 +2451,7 @@ void FPhysicsAssetEditorWidget::RenderConstraintGraph()
 			SelectedConstraintIndex = -1;
 			SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 			SelectedPrimitiveIndex = -1;
+			ConstraintGraphFocusBodyIndex = -1;
 			MarkDirty();
 			bConstraintGraphLayoutDirty = true;
 		}
@@ -2595,11 +2656,6 @@ void FPhysicsAssetEditorWidget::RenderViewportPanel(ImVec2 Size)
 void FPhysicsAssetEditorWidget::RenderPreviewToolbar()
 {
 	ImGui::TextUnformatted("Physics Asset");
-	if (ImGui::Button(IsDirty() ? "Save *" : "Save"))
-	{
-		SaveAsset();
-	}
-	ImGui::SameLine();
 	if (ImGui::Button("Show All Bones"))
 	{
 		bShowBones = true;
@@ -2908,6 +2964,7 @@ void FPhysicsAssetEditorWidget::SelectBone(int32 BoneIndex, bool bClearGraphSele
 	SelectedConstraintIndex = -1;
 	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	SelectedPrimitiveIndex = -1;
+	ConstraintGraphFocusBodyIndex = -1;
 	if (bClearGraphSelection)
 	{
 		ClearConstraintGraphSelection();
@@ -2919,6 +2976,7 @@ void FPhysicsAssetEditorWidget::SelectBody(int32 BodyIndex, bool bClearGraphSele
 {
 	SelectionType = EPhysicsAssetEditorSelectionType::Body;
 	SelectedBodyIndex = BodyIndex;
+	ConstraintGraphFocusBodyIndex = BodyIndex;
 	SelectedConstraintIndex = -1;
 	SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	SelectedPrimitiveIndex = -1;
@@ -2988,6 +3046,7 @@ void FPhysicsAssetEditorWidget::AutoGenerateBodiesAndConstraints()
 		return;
 	}
 
+	StopPreviewSimulation();
 	LastAutoGenerateResult = FPhysicsAssetAutoGenerateResult();
 	bHasLastAutoGenerateResult = true;
 
@@ -3006,6 +3065,7 @@ void FPhysicsAssetEditorWidget::AutoGenerateBodiesAndConstraints()
 		SelectedConstraintIndex = -1;
 		SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 		SelectedPrimitiveIndex = -1;
+		ConstraintGraphFocusBodyIndex = -1;
 		bConstraintGraphLayoutDirty = true;
 		SyncPreviewSelection();
 		UpdateSolidPreview();
@@ -3026,6 +3086,7 @@ void FPhysicsAssetEditorWidget::AutoGenerateBodiesAndConstraints()
 	{
 		SelectionType = EPhysicsAssetEditorSelectionType::None;
 		SelectedBodyIndex = -1;
+		ConstraintGraphFocusBodyIndex = -1;
 	}
 
 	bConstraintGraphLayoutDirty = true;
@@ -3040,6 +3101,7 @@ void FPhysicsAssetEditorWidget::AddBodyForSelectedBone()
 		return;
 	}
 
+	StopPreviewSimulation();
 	FSkeletalMesh* MeshAsset = EditingMesh->GetSkeletalMeshAsset();
 	if (!MeshAsset || SelectedBoneIndex < 0 || SelectedBoneIndex >= static_cast<int32>(MeshAsset->Bones.size()))
 	{
@@ -3072,6 +3134,7 @@ void FPhysicsAssetEditorWidget::RemoveSelectedBody()
 		return;
 	}
 
+	StopPreviewSimulation();
 	if (EditingPhysicsAsset->RemoveBodySetupAt(SelectedBodyIndex))
 	{
 		SelectionType = EPhysicsAssetEditorSelectionType::None;
@@ -3079,6 +3142,7 @@ void FPhysicsAssetEditorWidget::RemoveSelectedBody()
 		SelectedConstraintIndex = -1;
 		SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 		SelectedPrimitiveIndex = -1;
+		ConstraintGraphFocusBodyIndex = -1;
 		MarkDirty();
 		bConstraintGraphLayoutDirty = true;
 		SyncPreviewSelection();
@@ -3117,6 +3181,7 @@ void FPhysicsAssetEditorWidget::AddConstraintBetweenBodies(int32 ParentBodyIndex
 		return;
 	}
 
+	StopPreviewSimulation();
 	USkeletalBodySetup* ParentBody = EditingPhysicsAsset->GetBodySetup(ParentBodyIndex);
 	USkeletalBodySetup* ChildBody = EditingPhysicsAsset->GetBodySetup(ChildBodyIndex);
 	if (!ParentBody || !ChildBody)
@@ -3163,6 +3228,7 @@ void FPhysicsAssetEditorWidget::RemoveSelectedConstraint()
 		return;
 	}
 
+	StopPreviewSimulation();
 	if (EditingPhysicsAsset->RemoveConstraintSetupAt(SelectedConstraintIndex))
 	{
 		SelectionType = EPhysicsAssetEditorSelectionType::None;
@@ -3383,6 +3449,326 @@ bool FPhysicsAssetEditorWidget::PickBodyPrimitive(
 	return OutBodyIndex >= 0;
 }
 
+bool FPhysicsAssetEditorWidget::PickSimulatedBodyPrimitive(
+	const FRay& Ray,
+	int32& OutBodyIndex,
+	EPhysicsAssetPrimitiveType& OutPrimitiveType,
+	int32& OutPrimitiveIndex,
+	float& OutDistance) const
+{
+	OutBodyIndex = -1;
+	OutPrimitiveType = EPhysicsAssetPrimitiveType::None;
+	OutPrimitiveIndex = -1;
+	OutDistance = 3.402823466e+38F;
+
+	USkeletalMeshComponent* MeshComp = ViewportClient.GetPreviewMeshComponent();
+	if (!bPreviewSimulating || !EditingPhysicsAsset || !MeshComp || !bShowBodies)
+	{
+		return false;
+	}
+
+	float BestT = 3.402823466e+38F;
+	for (int32 BodyIndex = 0; BodyIndex < EditingPhysicsAsset->GetBodySetupCount(); ++BodyIndex)
+	{
+		const USkeletalBodySetup* BodySetup = EditingPhysicsAsset->GetBodySetup(BodyIndex);
+		FBodyInstance* BodyInstance = MeshComp->GetBodyInstance(BodyIndex);
+		if (!BodySetup || !BodyInstance || !BodyInstance->Actor)
+		{
+			continue;
+		}
+
+		const physx::PxTransform BodyPose = BodyInstance->Actor->getGlobalPose();
+		if (!BodyPose.isValid())
+		{
+			continue;
+		}
+
+		const FVector BodyLocation = ToFVector(BodyPose.p);
+		const FQuat BodyRotation = ToFQuat(BodyPose.q).GetNormalized();
+		const FKAggregateGeom& AggGeom = BodySetup->GetAggGeom();
+
+		for (int32 Index = 0; Index < static_cast<int32>(AggGeom.BoxElems.size()); ++Index)
+		{
+			const FKBoxElem& Box = AggGeom.BoxElems[Index];
+			const FVector Center = BodyLocation + BodyRotation.RotateVector(Box.Center);
+			const FVector HalfExtent = FVector(Box.X, Box.Y, Box.Z) * 0.5f;
+			const FQuat Rotation = (BodyRotation * Box.Rotation.ToQuaternion()).GetNormalized();
+
+			float T = 0.0f;
+			if (IntersectRayBox(Ray, Center, HalfExtent, Rotation, T) && AcceptRayHit(T, BestT))
+			{
+				OutBodyIndex = BodyIndex;
+				OutPrimitiveType = EPhysicsAssetPrimitiveType::Box;
+				OutPrimitiveIndex = Index;
+			}
+		}
+
+		for (int32 Index = 0; Index < static_cast<int32>(AggGeom.SphereElems.size()); ++Index)
+		{
+			const FKSphereElem& Sphere = AggGeom.SphereElems[Index];
+			const FVector Center = BodyLocation + BodyRotation.RotateVector(Sphere.Center);
+
+			float T = 0.0f;
+			if (IntersectRaySphere(Ray, Center, Sphere.Radius, T) && AcceptRayHit(T, BestT))
+			{
+				OutBodyIndex = BodyIndex;
+				OutPrimitiveType = EPhysicsAssetPrimitiveType::Sphere;
+				OutPrimitiveIndex = Index;
+			}
+		}
+
+		for (int32 Index = 0; Index < static_cast<int32>(AggGeom.SphylElems.size()); ++Index)
+		{
+			const FKSphylElem& Capsule = AggGeom.SphylElems[Index];
+			const FVector Center = BodyLocation + BodyRotation.RotateVector(Capsule.Center);
+			const FQuat Rotation = (BodyRotation * Capsule.Rotation.ToQuaternion()).GetNormalized();
+
+			float T = 0.0f;
+			if (IntersectRayCapsuleX(Ray, Center, Capsule.Radius, Capsule.Length, Rotation, T) && AcceptRayHit(T, BestT))
+			{
+				OutBodyIndex = BodyIndex;
+				OutPrimitiveType = EPhysicsAssetPrimitiveType::Capsule;
+				OutPrimitiveIndex = Index;
+			}
+		}
+	}
+
+	OutDistance = BestT;
+	return OutBodyIndex >= 0;
+}
+
+void FPhysicsAssetEditorWidget::StartPreviewSimulation()
+{
+	if (bPreviewSimulating || !EditingPhysicsAsset)
+	{
+		return;
+	}
+
+	UWorld* PreviewWorld = ViewportClient.GetPreviewWorld();
+	USkeletalMeshComponent* MeshComp = ViewportClient.GetPreviewMeshComponent();
+	if (!PreviewWorld || !MeshComp || !PreviewWorld->GetPhysicsScene())
+	{
+		return;
+	}
+
+	PreviewSimulationStartLocalPose.clear();
+	PreviewSimulationStartComponentTransform = MeshComp->GetRelativeTransform();
+	if (USkeletalMesh* SkeletalMesh = MeshComp->GetSkeletalMesh())
+	{
+		if (FSkeletalMesh* MeshAsset = SkeletalMesh->GetSkeletalMeshAsset())
+		{
+			PreviewSimulationStartLocalPose.reserve(MeshAsset->Bones.size());
+			for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(MeshAsset->Bones.size()); ++BoneIndex)
+			{
+				PreviewSimulationStartLocalPose.push_back(MeshComp->GetBoneLocalTransformByIndex(BoneIndex));
+			}
+		}
+	}
+
+	MeshComp->SetPhysicsAsset(EditingPhysicsAsset);
+	MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	if (!bPreviewWorldBegunPlay)
+	{
+		PreviewWorld->BeginPlay();
+		bPreviewWorldBegunPlay = true;
+	}
+
+	MeshComp->StartRagdoll();
+	bPreviewSimulating = true;
+	EndRagdollDrag();
+}
+
+void FPhysicsAssetEditorWidget::StopPreviewSimulation()
+{
+	if (!bPreviewSimulating)
+	{
+		EndRagdollDrag();
+		return;
+	}
+
+	EndRagdollDrag();
+	if (USkeletalMeshComponent* MeshComp = ViewportClient.GetPreviewMeshComponent())
+	{
+		MeshComp->EndRagdoll();
+		MeshComp->SetRelativeTransform(PreviewSimulationStartComponentTransform);
+		if (!PreviewSimulationStartLocalPose.empty())
+		{
+			MeshComp->SetBoneLocalTransforms(PreviewSimulationStartLocalPose);
+		}
+	}
+	PreviewSimulationStartLocalPose.clear();
+	bPreviewSimulating = false;
+}
+
+void FPhysicsAssetEditorWidget::EndRagdollDrag()
+{
+	if (RagdollDragJoint)
+	{
+		RagdollDragJoint->release();
+		RagdollDragJoint = nullptr;
+	}
+	if (RagdollDragTargetActor)
+	{
+		RagdollDragTargetActor->release();
+		RagdollDragTargetActor = nullptr;
+	}
+	DraggedRagdollBodyIndex = -1;
+	RagdollDragLocalPoint = FVector::ZeroVector;
+	RagdollDragTargetWorldPoint = FVector::ZeroVector;
+	RagdollDragDistance = 0.0f;
+}
+
+void FPhysicsAssetEditorWidget::ApplyRagdollDrag(const FRay& Ray, float DeltaTime)
+{
+	USkeletalMeshComponent* MeshComp = ViewportClient.GetPreviewMeshComponent();
+	if (!bPreviewSimulating || !MeshComp || DraggedRagdollBodyIndex < 0)
+	{
+		EndRagdollDrag();
+		return;
+	}
+
+	FBodyInstance* BodyInstance = MeshComp->GetBodyInstance(DraggedRagdollBodyIndex);
+	if (!BodyInstance || !BodyInstance->Actor)
+	{
+		EndRagdollDrag();
+		return;
+	}
+
+	physx::PxRigidDynamic* DynamicActor = BodyInstance->Actor->is<physx::PxRigidDynamic>();
+	if (!DynamicActor)
+	{
+		EndRagdollDrag();
+		return;
+	}
+
+	const FVector RawTargetWorld = Ray.Origin + Ray.Direction * RagdollDragDistance;
+	FVector TargetWorld = RawTargetWorld;
+	if (RagdollDragTargetActor)
+	{
+		constexpr float MaxDragTargetSpeed = 4.0f;
+		const FVector Delta = RawTargetWorld - RagdollDragTargetWorldPoint;
+		const float Distance = Delta.Length();
+		const float MaxStep = MaxDragTargetSpeed * (std::max)(DeltaTime, 1.0f / 120.0f);
+		if (Distance > MaxStep && Distance > 1.0e-6f)
+		{
+			TargetWorld = RagdollDragTargetWorldPoint + Delta * (MaxStep / Distance);
+		}
+	}
+	RagdollDragTargetWorldPoint = TargetWorld;
+	const physx::PxTransform TargetPose(ToPxVec3(TargetWorld));
+	if (!RagdollDragTargetActor || !RagdollDragJoint)
+	{
+		physx::PxScene* Scene = DynamicActor->getScene();
+		if (!Scene)
+		{
+			EndRagdollDrag();
+			return;
+		}
+
+		physx::PxPhysics& Physics = PxGetPhysics();
+		RagdollDragTargetActor = Physics.createRigidDynamic(TargetPose);
+		if (!RagdollDragTargetActor)
+		{
+			EndRagdollDrag();
+			return;
+		}
+
+		RagdollDragTargetActor->setRigidBodyFlag(physx::PxRigidBodyFlag::eKINEMATIC, true);
+		RagdollDragTargetActor->setActorFlag(physx::PxActorFlag::eDISABLE_GRAVITY, true);
+		Scene->addActor(*RagdollDragTargetActor);
+
+		RagdollDragJoint = physx::PxD6JointCreate(
+			Physics,
+			RagdollDragTargetActor,
+			physx::PxTransform(physx::PxVec3(0.0f, 0.0f, 0.0f)),
+			DynamicActor,
+			physx::PxTransform(ToPxVec3(RagdollDragLocalPoint)));
+		if (!RagdollDragJoint)
+		{
+			EndRagdollDrag();
+			return;
+		}
+
+		RagdollDragJoint->setMotion(physx::PxD6Axis::eX, physx::PxD6Motion::eLOCKED);
+		RagdollDragJoint->setMotion(physx::PxD6Axis::eY, physx::PxD6Motion::eLOCKED);
+		RagdollDragJoint->setMotion(physx::PxD6Axis::eZ, physx::PxD6Motion::eLOCKED);
+		RagdollDragJoint->setMotion(physx::PxD6Axis::eTWIST, physx::PxD6Motion::eFREE);
+		RagdollDragJoint->setMotion(physx::PxD6Axis::eSWING1, physx::PxD6Motion::eFREE);
+		RagdollDragJoint->setMotion(physx::PxD6Axis::eSWING2, physx::PxD6Motion::eFREE);
+	}
+
+	RagdollDragTargetActor->setKinematicTarget(TargetPose);
+	DynamicActor->wakeUp();
+}
+
+void FPhysicsAssetEditorWidget::SyncPreviewSimulationPose() const
+{
+	if (!bPreviewSimulating)
+	{
+		return;
+	}
+
+	if (USkeletalMeshComponent* MeshComp = ViewportClient.GetPreviewMeshComponent())
+	{
+		MeshComp->SyncSkeletonPoseFromBodies();
+	}
+}
+
+bool FPhysicsAssetEditorWidget::HandleRagdollInteraction(const FRay& Ray, bool bPressed, bool bHeld, bool bReleased, float DeltaTime)
+{
+	if (!bPreviewSimulating)
+	{
+		return false;
+	}
+
+	if (bReleased)
+	{
+		EndRagdollDrag();
+		return true;
+	}
+
+	if (bPressed)
+	{
+		int32 BodyIndex = -1;
+		EPhysicsAssetPrimitiveType PrimitiveType = EPhysicsAssetPrimitiveType::None;
+		int32 PrimitiveIndex = -1;
+		float HitDistance = 0.0f;
+		if (!PickSimulatedBodyPrimitive(Ray, BodyIndex, PrimitiveType, PrimitiveIndex, HitDistance))
+		{
+			EndRagdollDrag();
+			return true;
+		}
+
+		SelectBody(BodyIndex);
+		SelectPrimitive(PrimitiveType, PrimitiveIndex);
+
+		if (USkeletalMeshComponent* MeshComp = ViewportClient.GetPreviewMeshComponent())
+		{
+			if (FBodyInstance* BodyInstance = MeshComp->GetBodyInstance(BodyIndex))
+			{
+				if (BodyInstance->Actor)
+				{
+					const FVector HitWorld = Ray.Origin + Ray.Direction * HitDistance;
+					RagdollDragLocalPoint = InverseTransformPxPoint(BodyInstance->Actor->getGlobalPose(), HitWorld);
+					RagdollDragTargetWorldPoint = HitWorld;
+					RagdollDragDistance = HitDistance;
+					DraggedRagdollBodyIndex = BodyIndex;
+					ApplyRagdollDrag(Ray, DeltaTime);
+				}
+			}
+		}
+		return true;
+	}
+
+	if (bHeld && DraggedRagdollBodyIndex >= 0)
+	{
+		ApplyRagdollDrag(Ray, DeltaTime);
+		return true;
+	}
+
+	return true;
+}
+
 void FPhysicsAssetEditorWidget::SyncPreviewSelection()
 {
 	if (!EditingMesh)
@@ -3416,6 +3802,12 @@ void FPhysicsAssetEditorWidget::SyncPrimitiveGizmo()
 		return;
 	}
 
+	if (bPreviewSimulating)
+	{
+		Gizmo->Deactivate();
+		return;
+	}
+
 	if (SelectionType == EPhysicsAssetEditorSelectionType::Body
 		&& PrimitiveGizmoTarget
 		&& PrimitiveGizmoTarget->IsValid())
@@ -3437,7 +3829,7 @@ void FPhysicsAssetEditorWidget::UpdateSolidPreview()
 		return;
 	}
 
-	const bool bEnabled = EditingPhysicsAsset && ViewportClient.GetPreviewWorld() && bShowBodies && bShowSolidBodies;
+	const bool bEnabled = EditingPhysicsAsset && ViewportClient.GetPreviewWorld() && bShowBodies && bShowSolidBodies && !bPreviewSimulating;
 	SolidPreviewComponent->RebuildFromEditor(*this, bEnabled);
 }
 
