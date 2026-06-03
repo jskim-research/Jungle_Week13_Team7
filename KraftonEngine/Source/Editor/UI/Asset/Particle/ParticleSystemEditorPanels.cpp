@@ -1529,9 +1529,10 @@ void FParticleSystemEditorWidget::RenderEmittersPanel(float Width, float Height)
                         UParticleModuleTypeDataBase* CurType   = LOD0Probe ? LOD0Probe->TypeDataModule : nullptr;
 
                         const bool bIsSprite = (CurType == nullptr);
-                        const bool bIsMesh   = (Cast<UParticleModuleTypeDataMesh>(CurType) != nullptr);
-                        const bool bIsRibbon = (Cast<UParticleModuleTypeDataRibbon>(CurType) != nullptr);
-                        const bool bIsBeam2  = (Cast<UParticleModuleTypeDataBeam2>(CurType) != nullptr);
+                        const bool bIsMesh      = (Cast<UParticleModuleTypeDataMesh>(CurType) != nullptr);
+                        const bool bIsAnimTrail = (Cast<UParticleModuleTypeDataAnimTrail>(CurType) != nullptr);
+                        const bool bIsRibbon    = (Cast<UParticleModuleTypeDataRibbon>(CurType) != nullptr) && !bIsAnimTrail;
+                        const bool bIsBeam2     = (Cast<UParticleModuleTypeDataBeam2>(CurType) != nullptr);
 
                         if (ImGui::MenuItem("Sprite", nullptr, bIsSprite))
                         {
@@ -1544,6 +1545,10 @@ void FParticleSystemEditorWidget::RenderEmittersPanel(float Width, float Height)
                         if (ImGui::MenuItem("Ribbon Data", nullptr, bIsRibbon))
                         {
                             SetEmitterTypeData(EmitterIndex, "UParticleModuleTypeDataRibbon");
+                        }
+                        if (ImGui::MenuItem("AnimTrail Data", nullptr, bIsAnimTrail))
+                        {
+                            SetEmitterTypeData(EmitterIndex, "UParticleModuleTypeDataAnimTrail");
                         }
                         if (ImGui::MenuItem("Beam Data", nullptr, bIsBeam2))
                         {
@@ -2524,6 +2529,37 @@ void FParticleSystemEditorWidget::RenderModuleProperties(UParticleModule* Module
 
             bool bOM = MeshT->bOverrideMaterial;   if (ImGui::Checkbox("Override Material", &bOM))   { MeshT->bOverrideMaterial  = bOM ? 1 : 0; bChanged = true; }
             ImGui::TextColored(PSE::DimTextV, "Resolved Mesh: %s", MeshT->Mesh ? "Yes" : "No");
+        }
+    }
+    else if (UParticleModuleTypeDataAnimTrail* AnimT = Cast<UParticleModuleTypeDataAnimTrail>(Module))
+    {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+        if (ImGui::CollapsingHeader("AnimTrail"))
+        {
+            char FirstSocketBuf[64] = {};
+            char SecondSocketBuf[64] = {};
+            std::snprintf(FirstSocketBuf, sizeof(FirstSocketBuf), "%s", AnimT->FirstSocketName.ToString().c_str());
+            std::snprintf(SecondSocketBuf, sizeof(SecondSocketBuf), "%s", AnimT->SecondSocketName.ToString().c_str());
+            if (ImGui::InputText("First Socket", FirstSocketBuf, sizeof(FirstSocketBuf)))
+            {
+                AnimT->FirstSocketName = FName(FirstSocketBuf);
+                bChanged = true;
+            }
+            if (ImGui::InputText("Second Socket", SecondSocketBuf, sizeof(SecondSocketBuf)))
+            {
+                AnimT->SecondSocketName = FName(SecondSocketBuf);
+                bChanged = true;
+            }
+            bChanged |= ImGui::DragFloat("Trail Life Time", &AnimT->TrailLifeTime, 0.005f, 0.01f, 5.0f);
+            bChanged |= ImGui::DragFloat("Sample Interval", &AnimT->SampleInterval, 0.001f, 0.0f, 0.2f);
+            bChanged |= ImGui::DragFloat("Min Sample Distance", &AnimT->MinSampleDistance, 0.05f, 0.0f, 100.0f);
+            bChanged |= ImGui::DragFloat("Width Scale", &AnimT->WidthScale, 0.01f, 0.0f, 10.0f);
+            bChanged |= ImGui::DragInt("Max Particles In Trail Count", &AnimT->MaxParticleInTrailCount, 1.0f, 2, 100000);
+            bChanged |= ImGui::DragFloat("Tiling Distance", &AnimT->TilingDistance, 0.1f, 0.0f, 10000.0f);
+            bool bA = AnimT->bRenderGeometry;
+            if (ImGui::Checkbox("Render Geometry", &bA)) { AnimT->bRenderGeometry = bA ? 1 : 0; bChanged = true; }
+            bA = AnimT->bEnablePreviousTangentRecalculation;
+            if (ImGui::Checkbox("Recalculate Previous Tangent", &bA)) { AnimT->bEnablePreviousTangentRecalculation = bA ? 1 : 0; bChanged = true; }
         }
     }
     else if (UParticleModuleTypeDataRibbon* RibT = Cast<UParticleModuleTypeDataRibbon>(Module))

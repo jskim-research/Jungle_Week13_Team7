@@ -1,4 +1,4 @@
-#include "AnimationTimelinePanel.h"
+﻿#include "AnimationTimelinePanel.h"
 #include "Editor/UI/Asset/Animation/AnimationTransportBar.h"
 
 #include "Animation/Sequence/AnimSequence.h"
@@ -111,6 +111,37 @@ namespace
 			}
 		}
 		return Event;
+	}
+
+	void PasteNotifyFromClipboard(UAnimSequence* Seq,
+	                              FAnimationTimelinePanel::FAnimNotifyClipboard& Clipboard,
+	                              float PasteTime,
+	                              int32& InOutSelectedNotifyIndex)
+	{
+		if (!Seq || !Clipboard.bValid)
+		{
+			return;
+		}
+
+		TArray<FAnimNotifyEvent>& Notifies = Seq->GetMutableModelNotifies();
+		UObject* NewOuter = Seq->GetDataModel();
+		FAnimNotifyEvent NewEvent = Clipboard.Event.DuplicateForOuter(NewOuter);
+
+		const float PlayLength = Seq->GetPlayLength();
+		NewEvent.TriggerTime = std::clamp(PasteTime, 0.0f, PlayLength);
+		if (NewEvent.NotifyState && NewEvent.Duration > 0.0f)
+		{
+			NewEvent.Duration = std::clamp(NewEvent.Duration, 0.0f, std::max(PlayLength - NewEvent.TriggerTime, 0.0f));
+		}
+		else
+		{
+			NewEvent.Duration = 0.0f;
+		}
+
+		Notifies.push_back(NewEvent);
+		InOutSelectedNotifyIndex = static_cast<int32>(Notifies.size()) - 1;
+		Seq->RefreshRuntimeNotifies();
+		FAnimationManager::Get().SaveAnimationPreservingMetadata(Seq);
 	}
 
 	// 가용 폭에 안 맞으면 끝에 "..." 을 붙여 잘라낸다. CalcTextSize 가 픽셀 단위 폭을 알려주므로
@@ -627,6 +658,7 @@ void FAnimationTimelinePanel::Render(UAnimSingleNodeInstance* NodeInst,
 	USkeletalMeshComponent*                                   Comp,
 	UAnimSequence*                                            Seq,
 	float                                                     PanelHeight,
+	FAnimNotifyClipboard&                                     NotifyClipboard,
 	int32&                                                    InOutSelectedNotifyIndex,
 	int32&                                                    InOutSelectedMorphCurveIndex,
 	int32&                                                    InOutSelectedMorphKeyIndex
@@ -742,6 +774,12 @@ void FAnimationTimelinePanel::Render(UAnimSingleNodeInstance* NodeInst,
 	if (ImGui::BeginPopup("##addNotifyCtx"))
 	{
 		ImGui::TextDisabled("%.3f s", sPendingNotifyTime);
+		ImGui::Separator();
+
+		if (ImGui::MenuItem("Paste Notify", nullptr, false, NotifyClipboard.bValid))
+		{
+			PasteNotifyFromClipboard(Seq, NotifyClipboard, sPendingNotifyTime, InOutSelectedNotifyIndex);
+		}
 		ImGui::Separator();
 
 		// 등록된 UAnimNotify 자손 (instant) 클래스 enum → 콤보 메뉴.
@@ -999,6 +1037,12 @@ void FAnimationTimelinePanel::Render(UAnimSingleNodeInstance* NodeInst,
 				if (ImGui::MenuItem("Rename"))
 				{
 					bOpenRename = true;
+				}
+				if (ImGui::MenuItem("Copy"))
+				{
+					NotifyClipboard.bValid = true;
+					NotifyClipboard.Event = N;
+					NotifyClipboard.SourceTriggerTime = N.TriggerTime;
 				}
 				if (ImGui::MenuItem("Delete"))
 				{

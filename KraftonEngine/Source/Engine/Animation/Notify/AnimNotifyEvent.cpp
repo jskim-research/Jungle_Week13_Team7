@@ -101,6 +101,32 @@ namespace
 			OutPtr->SerializeProperties(PayloadAr, PF_Save);
 		}
 	}
+
+	template<typename T>
+	T* DuplicateNotifyPointerForOuter(T* Source, UObject* NewOuter)
+	{
+		if (!IsValid(Source) || !NewOuter)
+		{
+			return nullptr;
+		}
+
+		UObject* Created = FObjectFactory::Get().Create(Source->GetClass()->GetName(), NewOuter);
+		T* Copy = Cast<T>(Created);
+		if (!Copy)
+		{
+			if (Created)
+			{
+				UObjectManager::Get().DestroyObject(Created);
+			}
+			return nullptr;
+		}
+
+		FMemoryArchive Saver(true /*bIsSaving*/);
+		Source->SerializeProperties(Saver, PF_Save);
+		FMemoryArchive Loader(Saver.GetBuffer(), false /*bIsSaving*/);
+		Copy->SerializeProperties(Loader, PF_Save);
+		return Copy;
+	}
 }
 
 void FAnimNotifyEvent::Serialize(FArchive& Ar, UObject* InOuter)
@@ -111,6 +137,17 @@ void FAnimNotifyEvent::Serialize(FArchive& Ar, UObject* InOuter)
 
 	SerializeNotifyPointer<UAnimNotify>(Ar, Notify, InOuter);
 	SerializeNotifyPointer<UAnimNotifyState>(Ar, NotifyState, InOuter);
+}
+
+FAnimNotifyEvent FAnimNotifyEvent::DuplicateForOuter(UObject* NewOuter) const
+{
+	FAnimNotifyEvent Copy;
+	Copy.NotifyName   = NotifyName;
+	Copy.TriggerTime  = TriggerTime;
+	Copy.Duration     = Duration;
+	Copy.Notify       = DuplicateNotifyPointerForOuter<UAnimNotify>(Notify, NewOuter);
+	Copy.NotifyState  = DuplicateNotifyPointerForOuter<UAnimNotifyState>(NotifyState, NewOuter);
+	return Copy;
 }
 
 void FAnimNotifyEvent::AddReferencedObjects(FReferenceCollector& Collector) const

@@ -6,6 +6,7 @@
 #include "Animation/StateMachine/AnimState.h"
 #include "Animation/PoseContext.h"
 #include "Animation/Nodes/AnimNode_BlendListByEnum.h"
+#include "Animation/Nodes/AnimNode_BlendSpace1D.h"
 #include "Animation/Nodes/AnimNode_LayeredBlendPerBone.h"
 #include "Animation/Nodes/AnimNode_RefPose.h"
 #include "Animation/Nodes/AnimNode_Slot.h"
@@ -664,6 +665,70 @@ void ULuaAnimInstance::InstallBindings()
 			Layer->PerBoneMask = BuildBoneMaskFromRoot(GetSkeletalMesh(), MaskRootBone);
 			Layer->BlendWeight = 1.0f;   // 자동 weight 는 Blend 노드의 GetEffectiveBlendWeight 로 결정.
 			return Layer;
+		});
+
+	// BlendSpace1D — StateMachine 없이 Speed 같은 float 입력 하나로 Idle/Walk/Run 을 연속 보간.
+	// 예:
+	//   local loco = Anim.create_blend_space_1d(0.0)
+	//   Anim.blend_space_1d_add_sample(loco, "Idle.anim", 0.0)
+	//   Anim.blend_space_1d_add_sample(loco, "Walk.anim", 250.0)
+	//   Anim.blend_space_1d_add_sample(loco, "Run.anim", 600.0)
+	//   Anim.set_root_node(loco)
+	//   update(self, dt) 에서 Anim.blend_space_1d_set_input(loco, Anim.get_owner_speed())
+	Anim.set_function("create_blend_space_1d",
+		[this](sol::object InitialValue) -> FAnimNode_BlendSpace1D*
+		{
+			FAnimNode_BlendSpace1D* B = MakeNode<FAnimNode_BlendSpace1D>();
+			if (InitialValue.is<float>())
+			{
+				B->SetInputValue(InitialValue.as<float>());
+			}
+			return B;
+		});
+
+	Anim.set_function("blend_space_1d_add_sample",
+		[](FAnimNode_BlendSpace1D* B, std::string Path, float Value, sol::object Rate, sol::object Loop) -> bool
+		{
+			if (!B || Path.empty() || Path == "None")
+			{
+				return false;
+			}
+
+			UAnimSequenceBase* Sequence = FAnimationManager::Get().LoadAnimation(Path);
+			if (!Sequence)
+			{
+				UE_LOG("[LuaAnim] blend_space_1d_add_sample — anim load failed: %s", Path.c_str());
+				return false;
+			}
+
+			const float PlayRate = Rate.is<float>() ? Rate.as<float>() : 1.0f;
+			const bool bLooping  = Loop.is<bool>()  ? Loop.as<bool>()  : true;
+			B->AddSample(Sequence, Value, PlayRate, bLooping);
+			return true;
+		});
+
+	Anim.set_function("blend_space_1d_clear_samples",
+		[](FAnimNode_BlendSpace1D* B)
+		{
+			if (B) B->ClearSamples();
+		});
+
+	Anim.set_function("blend_space_1d_set_input",
+		[](FAnimNode_BlendSpace1D* B, float Value)
+		{
+			if (B) B->SetInputValue(Value);
+		});
+
+	Anim.set_function("blend_space_1d_get_input",
+		[](FAnimNode_BlendSpace1D* B) -> float
+		{
+			return B ? B->GetInputValue() : 0.0f;
+		});
+
+	Anim.set_function("blend_space_1d_set_phase",
+		[](FAnimNode_BlendSpace1D* B, float Phase01)
+		{
+			if (B) B->SetNormalizedPhase(Phase01);
 		});
 
 	// BlendListByEnum — N 개의 입력 pose 중 enum 인덱스로 직접 선택. StateMachine 의 단순화

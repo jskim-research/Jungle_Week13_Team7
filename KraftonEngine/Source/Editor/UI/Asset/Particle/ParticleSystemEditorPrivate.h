@@ -23,6 +23,7 @@
 #include "Particles/TypeData/ParticleModuleTypeDataBase.h"
 #include "Particles/TypeData/ParticleModuleTypeDataMesh.h"
 #include "Particles/TypeData/ParticleModuleTypeDataRibbon.h"
+#include "Particles/TypeData/ParticleModuleTypeDataAnimTrail.h"
 #include "Particles/TypeData/ParticleModuleTypeDataBeam2.h"
 #include "Particles/Beam/ParticleModuleBeamSource.h"
 #include "Particles/Beam/ParticleModuleBeamTarget.h"

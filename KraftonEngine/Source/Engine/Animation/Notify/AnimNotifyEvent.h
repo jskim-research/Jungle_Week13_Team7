@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Core/Types/CoreTypes.h"
 #include "Object/FName.h"
@@ -44,5 +44,6 @@ struct FAnimNotifyEvent
 	// 로드 시 ObjectFactory::Create 로 클래스 이름으로 인스턴스 생성, Outer 로 InOuter 설정.
 	// InOuter 는 보통 UAnimDataModel — Notify 객체의 라이프타임은 DataModel 과 함께.
 	void Serialize(FArchive& Ar, UObject* InOuter);
+	FAnimNotifyEvent DuplicateForOuter(UObject* NewOuter) const;
 	void AddReferencedObjects(FReferenceCollector& Collector) const;
 };

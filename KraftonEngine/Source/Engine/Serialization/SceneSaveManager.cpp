@@ -61,6 +61,7 @@ namespace SceneKeys
 	static constexpr const char* NonSceneComponents = "NonSceneComponents";
 	static constexpr const char* Properties = "Properties";
 	static constexpr const char* Children = "Children";
+	static constexpr const char* AttachSocket = "AttachSocket";
 	static constexpr const char* HiddenInComponentTree = "bHiddenInComponentTree";
 	static constexpr const char* ObjectId = "ObjectId";
 }
@@ -380,6 +381,10 @@ json::JSON FSceneSaveManager::SerializeSceneComponentTree(USceneComponent* Comp,
 	c[SceneKeys::ObjectId] = static_cast<int>(Context.RegisterSceneObject(Comp));
 	c[SceneKeys::Properties] = SerializeProperties(Comp, Context);
 	SerializeComponentEditorMetadata(c, Comp);
+	if (Comp->GetAttachSocketName() != FName::None)
+	{
+		c[SceneKeys::AttachSocket] = Comp->GetAttachSocketName().ToString();
+	}
 
 	JSON Children = json::Array();
 	for (USceneComponent* Child : Comp->GetChildren()) {
@@ -625,7 +630,12 @@ USceneComponent* FSceneSaveManager::DeserializeSceneComponentTree(json::JSON& No
 		for (auto& ChildJSON : Node[SceneKeys::Children].ArrayRange()) {
 			USceneComponent* Child = DeserializeSceneComponentTree(ChildJSON, Owner, Context);
 			if (Child) {
-				Child->AttachToComponent(Comp);
+				FName AttachSocketName = FName::None;
+				if (ChildJSON.hasKey(SceneKeys::AttachSocket))
+				{
+					AttachSocketName = FName(ChildJSON[SceneKeys::AttachSocket].ToString());
+				}
+				Child->AttachToComponent(Comp, AttachSocketName);
 			}
 		}
 	}

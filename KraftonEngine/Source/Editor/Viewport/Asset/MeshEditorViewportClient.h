@@ -7,8 +7,10 @@
 #include "Editor/Slate/SWindow.h"
 #include "Core/Types/RayTypes.h"
 #include "Gizmo/BoneTransformGizmoTarget.h"
+#include "Gizmo/SocketTransformGizmoTarget.h"
 #include "Component/Debug/BoneDebugComponent.h"
 #include "Object/GarbageCollection.h"
+#include "Object/FName.h"
 
 #include <d3d11.h>
 #include <functional>
@@ -19,6 +21,7 @@ class FWindowsWindow;
 class UWorld;
 class AActor;
 class USkeletalMesh;
+class UStaticMeshComponent;
 
 class FMeshEditorViewportClient : public FViewportClient, public IEditorPreviewViewportClient, public FGCObject
 {
@@ -36,6 +39,11 @@ public:
 	void SetPreviewWorld(UWorld* InWorld) { PreviewWorld = InWorld; }
 	void SetPreviewActor(AActor* InActor) { PreviewActor = InActor; }
 	void SetPreviewMeshComponent(USkeletalMeshComponent* InComp) { PreviewMeshComponent = InComp; }
+	void SetSocketPreviewMesh(const FName& SocketName, const FString& StaticMeshPath);
+	void ClearSocketPreviewMesh(const FName& SocketName);
+	void ClearSocketPreviewMeshes();
+	void RefreshSocketPreviewMeshes(USkeletalMesh* Mesh);
+	UStaticMeshComponent* FindSocketPreviewMesh(const FName& SocketName) const;
 	void SetViewportRect(float X, float Y, float Width, float Height);
 	void SetPreviewPickHandler(std::function<bool(const FRay&)> InHandler) { PreviewPickHandler = std::move(InHandler); }
 
@@ -60,6 +68,8 @@ public:
 	void Tick(float DeltaTime);
 
 	void SetSelectedBone(USkeletalMesh* Mesh, int32 BoneIndex);
+	void SetSelectedSocket(USkeletalMesh* Mesh, const FName& SocketName);
+	bool ConsumeSocketTransformEdited();
 	const FBone* GetSelectedBone() const;
 
 	EBoneDebugDrawMode GetBoneDebugDrawMode() const;
@@ -81,15 +91,19 @@ private:
 private:
 	USkeletalMesh* SelectedMesh = nullptr;
 	int32 SelectedBoneIndex = -1;
+	FName SelectedSocketName = FName::None;
+	bool bSocketTransformEdited = false;
 
 	FViewport* Viewport = nullptr;
 	FWindowsWindow* Window = nullptr;
 	FViewportRenderOptions RenderOptions;
 
 	FBoneTransformGizmoTarget BoneTarget;
+	FSocketTransformGizmoTarget SocketTarget;
 	UGizmoComponent* Gizmo = nullptr;
 	USkeletalMeshComponent* PreviewMeshComponent = nullptr;
 	UBoneDebugComponent* BoneDebugComponent = nullptr;
+	TMap<FName, UStaticMeshComponent*> SocketPreviewMeshes;
 	std::function<bool(const FRay&)> PreviewPickHandler;
 
 	UWorld* PreviewWorld = nullptr;

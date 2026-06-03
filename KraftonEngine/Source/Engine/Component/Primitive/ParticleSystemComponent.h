@@ -10,6 +10,7 @@
 
 class UParticleSystem;
 class UMaterial;
+class USkinnedMeshComponent;
 struct FParticleEmitterInstance;
 struct FDynamicEmitterDataBase;
 
@@ -103,6 +104,9 @@ public:
     void             SetTemplate(UParticleSystem* InTemplate);
     UParticleSystem* GetTemplate() const { return Template.Get(); }
 
+    void Activate() override;
+    void Deactivate() override;
+
     void InitializeSystem();
     void ResetSystem();
 
@@ -111,6 +115,11 @@ public:
     void       SetMaterial(int32 ElementIndex, UMaterial* InMaterial);
     UMaterial* GetMaterial(int32 ElementIndex) const;
     TArray<UMaterial*> GetEmitterMaterials() const;
+
+    // AnimTrail TypeData가 blade_base/blade_tip 같은 소켓을 샘플링할 원본 스켈레탈 메시.
+	UFUNCTION(Callable)
+    void SetAnimTrailSourceComponent(USkinnedMeshComponent* InSourceComponent);
+    USkinnedMeshComponent* GetAnimTrailSourceComponent() const { return AnimTrailSourceComponent.Get(); }
 
     FPrimitiveSceneProxy* CreateSceneProxy() override;
     void                  UpdateWorldAABB() const override;
@@ -164,6 +173,9 @@ private:
     // Runtime loaded material references. EmitterMaterialSlots stores persistent asset identity.
     UPROPERTY(Transient, Category="Rendering")
     TArray<TObjectPtr<UMaterial>>     EmitterMaterials;
+
+    UPROPERTY(Transient, Category="Particle|AnimTrail")
+    TObjectPtr<USkinnedMeshComponent> AnimTrailSourceComponent = nullptr;
 
     bool bInitialized = false;
 	
