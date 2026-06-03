@@ -929,6 +929,9 @@
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_BlendListByEnum.cpp">
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_BlendSpace1D.cpp">
+      <Filter>Source\Engine\Animation\Nodes</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_LayeredBlendPerBone.cpp">
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClCompile>
@@ -2148,6 +2151,9 @@
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_BlendListByEnum.h">
+      <Filter>Source\Engine\Animation\Nodes</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_BlendSpace1D.h">
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_LayeredBlendPerBone.h">
