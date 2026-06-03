@@ -21,7 +21,7 @@ local ULTIMATE_CAMERA_BACK_DISTANCE = 7.0
 local ULTIMATE_CAMERA_HEIGHT = 10
 
 local ULTIMATE_MOVE_START_DISTANCE = 100.0
-local ULTIMATE_MOVE_END_DISTANCE = 20
+local ULTIMATE_MOVE_END_DISTANCE = 30
 local ULTIMATE_MOVE_SIDE_OFFSET = -10.0
 local ULTIMATE_MOVE_CONTROL_SIDE_OFFSET = 40.0
 local ULTIMATE_MOVE_CONTROL_HEIGHT = 1.2
@@ -203,6 +203,28 @@ function PlayerCharacter.Initialize(ctx, owner)
             ctx.MovementComp = owner:GetFloatingPawnMovement()
         end
     end
+end
+
+local function BuildGroundDecalAABBScale3(a, b, c, padding, minSize, projectionDepth)
+    padding = padding or 5.0
+    minSize = minSize or 8.0
+    projectionDepth = projectionDepth or 16.0
+
+    local minX = math.min(a.X, b.X, c.X)
+    local maxX = math.max(a.X, b.X, c.X)
+    local minY = math.min(a.Y, b.Y, c.Y)
+    local maxY = math.max(a.Y, b.Y, c.Y)
+
+    local sizeX = math.max((maxX - minX) + padding * 2.0, minSize)
+    local sizeY = math.max((maxY - minY) + padding * 2.0, minSize)
+
+    local center = Vector(
+        (minX + maxX) * 0.5,
+        (minY + maxY) * 0.5,
+        a.Z 
+    )
+
+    return center, Vector(sizeX, sizeY, projectionDepth)
 end
 
 function PlayerCharacter.SetMovementInputEnabled(ctx, enabled)
@@ -575,6 +597,15 @@ function PlayerCharacter.BeginUltimate()
 
     controlPos.Z = actorLocation.Z
 
+    local decalPos, decalScale = BuildGroundDecalAABBScale3(
+        startPos,
+        controlPos,
+        cinematicEndPos,
+        0.0,
+        0.0,
+        16.0
+    )
+
     Reflection.Call(owner, "SetActorLocation", startPos)
 
     local elapsed = 0.0
@@ -606,6 +637,18 @@ function PlayerCharacter.BeginUltimate()
         end
 
         prevPos = nextPos
+    end
+
+    local decal = VFX.SpawnGroundCrackDecal(
+        "Content/Material/VFX/GroundCrack.mat",
+        cinematicEndPos,
+        decalScale,
+        0.35,
+        0.45
+    )
+
+    if decal ~= nil then
+        decal:SetColorRGBA(1.0, 0.05, 0.02, 1.0)
     end
 
     -- 연출상 도착 지점은 기존처럼 카메라 앞쪽

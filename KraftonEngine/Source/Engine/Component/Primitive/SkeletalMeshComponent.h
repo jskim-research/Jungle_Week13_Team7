@@ -124,6 +124,8 @@ public:
 	FConstraintInstance* GetConstraintInstance(int32 ConstraintIndex) const;
 
 	void UpdateWorldAABB() const override;
+	
+	ECollisionPropertyExposure GetCollisionPropertyExposure() const override;
 
 protected:
     // 매 프레임 AnimInstance 평가 → 결과 포즈를 SetBoneLocalTransforms 로 푸시.

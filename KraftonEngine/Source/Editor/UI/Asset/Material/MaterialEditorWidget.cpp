@@ -62,11 +62,15 @@ namespace
 		{
 			return EMaterialEditorBlendMode::Opaque;
 		}
-		if (Pass == ERenderPass::AlphaBlend && Blend == EBlendState::Additive && Depth == EDepthStencilState::DepthReadOnly)
+		if ((Pass == ERenderPass::AlphaBlend || Pass == ERenderPass::AdditiveDecal)
+			&& Blend == EBlendState::Additive
+			&& Depth == EDepthStencilState::DepthReadOnly)
 		{
 			return EMaterialEditorBlendMode::Additive;
 		}
-		if (Pass == ERenderPass::AlphaBlend && Blend == EBlendState::AlphaBlend && Depth == EDepthStencilState::DepthReadOnly)
+		if ((Pass == ERenderPass::AlphaBlend || Pass == ERenderPass::Decal)
+			&& Blend == EBlendState::AlphaBlend
+			&& Depth == EDepthStencilState::DepthReadOnly)
 		{
 			return EMaterialEditorBlendMode::Translucent;
 		}
@@ -75,6 +79,31 @@ namespace
 
 	void ApplyMaterialEditorBlendMode(UMaterial* Material, EMaterialEditorBlendMode Mode)
 	{
+		const bool bDecalDomain = Material && Material->GetDomain() == EMaterialDomain::Decal;
+
+		if (bDecalDomain)
+		{
+			switch (Mode)
+			{
+			case EMaterialEditorBlendMode::Translucent:
+				Material->SetRenderPass(ERenderPass::Decal);
+				Material->SetBlendState(EBlendState::AlphaBlend);
+				Material->SetDepthStencilState(EDepthStencilState::DepthReadOnly);
+				Material->SetRasterizerState(ERasterizerState::SolidNoCull);
+				break;
+			case EMaterialEditorBlendMode::Additive:
+				Material->SetRenderPass(ERenderPass::AdditiveDecal);
+				Material->SetBlendState(EBlendState::Additive);
+				Material->SetDepthStencilState(EDepthStencilState::DepthReadOnly);
+				Material->SetRasterizerState(ERasterizerState::SolidNoCull);
+				break;
+			case EMaterialEditorBlendMode::Opaque:
+			case EMaterialEditorBlendMode::Custom:
+				break;
+			}
+			return;
+		}
+
 		switch (Mode)
 		{
 		case EMaterialEditorBlendMode::Opaque:
@@ -107,8 +136,8 @@ namespace
 		case EMaterialDomain::Surface:
 		case EMaterialDomain::ParticleSprite:
 		case EMaterialDomain::ParticleMesh:
-			return true;
 		case EMaterialDomain::Decal:
+			return true;
 		case EMaterialDomain::PostProcess:
 		default:
 			return false;
@@ -130,6 +159,8 @@ namespace
 				|| Mode == EMaterialEditorBlendMode::Translucent
 				|| Mode == EMaterialEditorBlendMode::Additive;
 		case EMaterialDomain::Decal:
+			return Mode == EMaterialEditorBlendMode::Translucent
+				|| Mode == EMaterialEditorBlendMode::Additive;
 		case EMaterialDomain::PostProcess:
 		default:
 			return false;
@@ -141,6 +172,7 @@ namespace
 		switch (Domain)
 		{
 		case EMaterialDomain::ParticleSprite:
+		case EMaterialDomain::Decal:
 			return EMaterialEditorBlendMode::Translucent;
 		case EMaterialDomain::Surface:
 		case EMaterialDomain::ParticleMesh:
@@ -445,7 +477,8 @@ void FMaterialEditorWidget::RenderToolbar(UMaterial* Material)
 		{
 			EMaterialDomain::Surface,
 			EMaterialDomain::ParticleSprite,
-			EMaterialDomain::ParticleMesh
+			EMaterialDomain::ParticleMesh,
+			EMaterialDomain::Decal
 		};
 		for (EMaterialDomain Candidate : Domains)
 		{

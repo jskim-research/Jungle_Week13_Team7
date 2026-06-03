@@ -60,8 +60,8 @@ namespace
 		case EMaterialDomain::Surface:
 		case EMaterialDomain::ParticleSprite:
 		case EMaterialDomain::ParticleMesh:
-			return true;
 		case EMaterialDomain::Decal:
+			return true;
 		case EMaterialDomain::PostProcess:
 		default:
 			return false;
@@ -73,6 +73,7 @@ namespace
 		switch (Domain)
 		{
 		case EMaterialDomain::ParticleSprite:
+		case EMaterialDomain::Decal:
 			return ESupportedGraphMaterialMode::Translucent;
 		case EMaterialDomain::Surface:
 		case EMaterialDomain::ParticleMesh:
@@ -81,13 +82,13 @@ namespace
 		}
 	}
 
-	ESupportedGraphMaterialMode ResolveGraphMaterialMode(ERenderPass Pass, EBlendState Blend)
+	ESupportedGraphMaterialMode ResolveGraphMaterialMode(ERenderPass /*Pass*/, EBlendState Blend)
 	{
-		if (Pass == ERenderPass::AlphaBlend && Blend == EBlendState::Additive)
+		if (Blend == EBlendState::Additive)
 		{
 			return ESupportedGraphMaterialMode::Additive;
 		}
-		if (Pass == ERenderPass::AlphaBlend && Blend == EBlendState::AlphaBlend)
+		if (Blend == EBlendState::AlphaBlend)
 		{
 			return ESupportedGraphMaterialMode::Translucent;
 		}
@@ -109,14 +110,25 @@ namespace
 				|| Mode == ESupportedGraphMaterialMode::Translucent
 				|| Mode == ESupportedGraphMaterialMode::Additive;
 		case EMaterialDomain::Decal:
+			return Mode == ESupportedGraphMaterialMode::Translucent
+				|| Mode == ESupportedGraphMaterialMode::Additive;
 		case EMaterialDomain::PostProcess:
 		default:
 			return false;
 		}
 	}
 
-	void WriteGraphMaterialMode(json::JSON& JsonData, ESupportedGraphMaterialMode Mode)
+	void WriteGraphMaterialMode(json::JSON& JsonData, EMaterialDomain Domain, ESupportedGraphMaterialMode Mode)
 	{
+		if (Domain == EMaterialDomain::Decal)
+		{
+			JsonData[MatKeys::RenderPass] = (Mode == ESupportedGraphMaterialMode::Additive) ? "AdditiveDecal" : "Decal";
+			JsonData[MatKeys::BlendState] = (Mode == ESupportedGraphMaterialMode::Additive) ? "Additive" : "AlphaBlend";
+			JsonData[MatKeys::DepthStencilState] = "DepthReadOnly";
+			JsonData[MatKeys::RasterizerState] = "SolidNoCull";
+			return;
+		}
+
 		switch (Mode)
 		{
 		case ESupportedGraphMaterialMode::Opaque:
@@ -140,7 +152,7 @@ namespace
 		}
 	}
 
-    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedMaterialPass_v3";
+    constexpr const char* MaterialGraphGeneratorVersion = "GeneratedMaterialPass_v4_Decal";
 }
 
 void FMaterialManager::ScanMaterialAssets()
@@ -956,12 +968,12 @@ bool FMaterialManager::EnsureGraphMaterialJsonDefaults(const FString& MatFilePat
 	if (!IsSupportedGraphMaterialMode(Domain, Mode))
 	{
 		Mode = GetDefaultGraphMaterialMode(Domain);
-		WriteGraphMaterialMode(JsonData, Mode);
+		WriteGraphMaterialMode(JsonData, Domain, Mode);
 		bChanged = true;
 	}
 	else
 	{
-		WriteGraphMaterialMode(JsonData, Mode);
+		WriteGraphMaterialMode(JsonData, Domain, Mode);
 	}
 
     if (!JsonData.hasKey(MatKeys::Compiled))

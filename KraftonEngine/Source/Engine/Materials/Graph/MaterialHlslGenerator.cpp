@@ -868,6 +868,15 @@ namespace
 			return SS.str();
 		}
 
+		if (Domain == EMaterialDomain::Decal)
+		{
+			SS << "cbuffer DecalConstants : register(b2)\n";
+			SS << "{\n";
+			SS << "    float4x4 WorldToDecal;\n";
+			SS << "    float4 DecalColor;\n";
+			SS << "};\n\n";
+		}
+
 		// AlphaBlend 도메인에서는 per-pixel fog 적용
 		if (Domain == EMaterialDomain::ParticleSprite || Domain == EMaterialDomain::ParticleMesh)
 		{
@@ -1107,6 +1116,54 @@ MaterialSurfacePSOutput PS(MaterialSurfaceVSOutput input)
 		return SS.str();
 	}
 
+	FString BuildDecalMain()
+	{
+		return R"(
+struct MaterialDecalVSOutput
+{
+    float4 position : SV_POSITION;
+    float3 worldPos : TEXCOORD0;
+    float3 normal : NORMAL;
+    float4 color : COLOR0;
+};
+
+MaterialDecalVSOutput VS(VS_Input_PNCTT input)
+{
+    MaterialDecalVSOutput output;
+    float4 worldPos = mul(float4(input.position, 1.0f), Model);
+    output.position = mul(mul(worldPos, View), Projection);
+    output.worldPos = worldPos.xyz / worldPos.w;
+    output.normal = normalize(mul(input.normal, (float3x3)NormalMatrix));
+    output.color = input.color;
+    return output;
+}
+
+float4 PS(MaterialDecalVSOutput input) : SV_TARGET
+{
+    float3 decalPos = mul(float4(input.worldPos, 1.0f), WorldToDecal).xyz;
+
+    clip(0.5f - abs(decalPos.x));
+    clip(0.5f - abs(decalPos.y));
+    clip(0.5f - abs(decalPos.z));
+
+    FMaterialPixelInput MaterialInput;
+    MaterialInput.UV0           = decalPos.xy + 0.5f;
+    MaterialInput.UV1           = float2(0, 0);
+    MaterialInput.UV2           = float2(0, 0);
+    MaterialInput.ParticleColor = float4(1, 1, 1, 1);
+    MaterialInput.VertexColor   = input.color;
+    MaterialInput.Time          = Time;
+    MaterialInput.SubImageIndex = 0.0f;
+    MaterialInput.DynamicParam  = float4(0, 0, 0, 0);
+
+    FMaterialResult Result = EvaluateMaterial(MaterialInput);
+    float4 FinalColor = float4(Result.BaseColor + Result.Emissive, Result.Opacity) * DecalColor;
+    clip(FinalColor.a - 0.01f);
+    return FinalColor;
+}
+)";
+	}
+
 	FString BuildLegacySurfaceMain()
 	{
 		return R"(
@@ -1190,8 +1247,10 @@ bool FMaterialHlslGenerator::Generate(const FMaterialGraph& Graph, const FMateri
 	FString Guid = Options.MaterialGuid.empty() ? "Material" : SanitizeIdentifier(Options.MaterialGuid);
 	OutResult.GeneratedShaderPath = "Shaders/Generated/Materials/" + Guid + "_" + ToString(Options.Domain) + ".hlsl";
 
-	// ParticleSprite는 ParticleFrameCB가 b2를 점유하므로 PerMaterial은 b3로 밀어야 충돌이 없음.
-	const uint32 PerMaterialSlot = (Options.Domain == EMaterialDomain::ParticleSprite)
+	// ParticleSprite는 ParticleFrameCB, Decal은 DecalConstants가 b2를 점유하므로
+	// graph material parameter cbuffer는 b3로 밀어야 충돌이 없음.
+	const uint32 PerMaterialSlot = (Options.Domain == EMaterialDomain::ParticleSprite
+		|| Options.Domain == EMaterialDomain::Decal)
 		? ECBSlot::PerShader1   // b3
 		: ECBSlot::PerShader0;  // b2
 
@@ -1226,6 +1285,8 @@ bool FMaterialHlslGenerator::Generate(const FMaterialGraph& Graph, const FMateri
 		SS << BuildSurfaceMain(Options.RenderPass == ERenderPass::AlphaBlend);
 		break;
 	case EMaterialDomain::Decal:
+		SS << BuildDecalMain();
+		break;
 	default:
 		SS << BuildLegacySurfaceMain();
 		break;

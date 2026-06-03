@@ -46,7 +46,16 @@ public:
 
 	// --- Material ---
 	void SetMaterial(class UMaterial* InMaterial);
+	void SetMaterialPath(const FString& MaterialPath);
+	const FString& GetMaterialPath() const { return MaterialSlot; }
 	class UMaterial* GetMaterial() const { return Material.Get(); }
+
+	// Runtime VFX control. Lua ultimate effects use these to spawn short-lived decals.
+	void SetFadeIn(float Delay, float Duration);
+	void SetFadeOut(float Delay, float Duration);
+	void ResetFade();
+	bool IsFadeFinished() const;
+	void SetAutoDestroyOwnerOnFadeFinished(bool bInAutoDestroy) { bAutoDestroyOwnerOnFadeFinished = bInAutoDestroy; }
 
 	void AddReferencedObjects(FReferenceCollector& Collector) override;
 
@@ -86,4 +95,5 @@ private:
 	float FadeOutDuration = 0;
 	float FadeTimer = 0;
 	float FadeOpacity = 1.0f;		// 페이드 효과 사용 시 Color.A에 곱함
+	bool bAutoDestroyOwnerOnFadeFinished = false;
 };

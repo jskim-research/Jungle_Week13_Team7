@@ -1,12 +1,16 @@
 {
   "BlendState" : "AlphaBlend",
   "Compiled" : {
-    "GeneratorVersion" : "ParticleMeshLighting_v4",
+    "BlendState" : "AlphaBlend",
+    "Domain" : "ParticleSprite",
+    "GeneratorVersion" : "GeneratedMaterialPass_v4_Decal",
     "GraphHash" : "79DB30325CEB3A5E",
+    "GraphShaderMode" : "Generated",
     "Parameters" : {
 
     },
     "ReceiveLighting" : false,
+    "RenderPass" : "AlphaBlend",
     "Textures" : {
       "DiffuseTexture" : {
         "Path" : "Content/Particle/BubleParticle.png",
@@ -148,6 +152,7 @@
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
       }]
   },
+  "GraphShaderMode" : "Generated",
   "MaterialGuid" : "AE6B9452D810D233000000DBA79CC8BC",
   "PathFileName" : "Content/Material/Material_Emitter0_3.mat",
   "RasterizerState" : "SolidNoCull",
