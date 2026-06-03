@@ -1,4 +1,4 @@
-#include "ParticleSystemEditorWidget.h"
+﻿#include "ParticleSystemEditorWidget.h"
 #include "ParticleSystemEditorPrivate.h"
 
 // =============================================================================
@@ -1185,6 +1185,7 @@ void FParticleSystemEditorWidget::RenderEmittersPanel(float Width, float Height)
                     {
                         UParticleLODLevel* LOD0 = Emitter ? Emitter->GetLODLevel(0) : nullptr;
                         UParticleModuleTypeDataBase* TypeData = LOD0 ? LOD0->TypeDataModule : nullptr;
+                        const bool bSpriteType = TypeData == nullptr;
                         const bool bMeshType   = Cast<UParticleModuleTypeDataMesh>(TypeData) != nullptr;
                         const bool bRibbonType = Cast<UParticleModuleTypeDataRibbon>(TypeData) != nullptr;
                         const bool bBeamType   = Cast<UParticleModuleTypeDataBeam2>(TypeData) != nullptr;
@@ -1370,8 +1371,8 @@ void FParticleSystemEditorWidget::RenderEmittersPanel(float Width, float Height)
                             }
                         );
                         AddItem(
-                            "Mesh Rotation",
-                            bMeshType,
+                            "Rotation",
+                            bSpriteType || bMeshType,
                             HasModuleOfType<UParticleModuleMeshRotation>(LOD0),
                             [](UParticleLODLevel* L)
                             {
@@ -1384,8 +1385,8 @@ void FParticleSystemEditorWidget::RenderEmittersPanel(float Width, float Height)
                             }
                         );
                         AddItem(
-                            "Mesh Rotation Rate",
-                            bMeshType,
+                            "Rotation Rate",
+                            bSpriteType || bMeshType,
                             HasModuleOfType<UParticleModuleMeshRotationRate>(LOD0),
                             [](UParticleLODLevel* L)
                             {
@@ -2658,9 +2659,10 @@ void FParticleSystemEditorWidget::RenderBurstList(TArray<FParticleBurst>& Bursts
     constexpr ImGuiTableFlags TableFlags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
     ImGuiTableFlags_SizingStretchSame;
 
-    if (ImGui::BeginTable("##Bursts", 3, TableFlags))
+    if (ImGui::BeginTable("##Bursts", 4, TableFlags))
     {
-        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("Count Low", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 24.0f);
         ImGui::TableHeadersRow();
@@ -2674,6 +2676,18 @@ void FParticleSystemEditorWidget::RenderBurstList(TArray<FParticleBurst>& Bursts
             ImGui::TableNextColumn();
             ImGui::SetNextItemWidth(-1.0f);
             bChanged |= ImGui::DragFloat("##t", &B.Time, 0.005f, 0.0f, 1.0f);
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Normalized emitter lifetime. 0.0 = start, 1.0 = end.");
+            }
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1.0f);
+            bChanged |= ImGui::DragInt("##cl", &B.CountLow, 1.0f, -1, 100000);
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("-1 disables random range. Otherwise random [Count Low..Count].");
+            }
 
             ImGui::TableNextColumn();
             ImGui::SetNextItemWidth(-1.0f);
@@ -2689,6 +2703,23 @@ void FParticleSystemEditorWidget::RenderBurstList(TArray<FParticleBurst>& Bursts
         ImGui::EndTable();
     }
 
+    if (bChanged)
+    {
+        for (FParticleBurst& B : Bursts)
+        {
+            B.Time = std::max<float>(0.0f, std::min<float>(B.Time, 1.0f));
+            B.Count = std::max<float>(0, B.Count);
+            if (B.CountLow < 0)
+            {
+                B.CountLow = -1;
+            }
+            else
+            {
+                B.CountLow = std::max<float>(0, B.CountLow);
+            }
+        }
+    }
+
     if (ToRemove >= 0)
     {
         Bursts.erase(Bursts.begin() + ToRemove);
@@ -2699,7 +2730,7 @@ void FParticleSystemEditorWidget::RenderBurstList(TArray<FParticleBurst>& Bursts
     {
         FParticleBurst NewBurst;
         NewBurst.Time     = 0.0f;
-        NewBurst.Count    = 0;
+        NewBurst.Count    = 20;
         NewBurst.CountLow = -1;
         Bursts.push_back(NewBurst);
         bChanged = true;

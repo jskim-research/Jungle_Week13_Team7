@@ -12,6 +12,12 @@ public:
 	uint8 bProcessSpawnRate : 1;
 	uint8 bProcessBurstList : 1;
 
+	UParticleModuleSpawnBase()
+	{
+		bProcessSpawnRate = true;
+		bProcessBurstList = true;
+	}
+
 	virtual EModuleType	GetModuleType() const override { return EPMT_Spawn; }
 
 	virtual bool GetSpawnAmount(

@@ -99,6 +99,10 @@ struct FParticleEmitterInstance
 
     TArray<FLODBurstFired> BurstFired;
 
+    // Burst CountLow 랜덤 선택용 per-emitter stream.
+    // Particle별 랜덤 payload가 없어도 Burst 개수는 인스턴스 단위로 안정적으로 뽑는다.
+    FRandomStream BurstRandomStream;
+
     int32 LoopCount = 0;
     int32 IsRenderDataDirty = 0;
 

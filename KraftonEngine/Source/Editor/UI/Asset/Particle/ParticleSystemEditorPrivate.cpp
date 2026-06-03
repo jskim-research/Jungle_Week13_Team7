@@ -178,8 +178,8 @@
         if (Cast<UParticleModuleCollision>(Module)) return "Collision";
         if (Cast<UParticleModuleColor>(Module)) return "Color";
         if (Cast<UParticleModuleMeshMaterial>(Module)) return "Mesh Material";
-        if (Cast<UParticleModuleMeshRotation>(Module)) return "Mesh Rotation";
-        if (Cast<UParticleModuleMeshRotationRate>(Module)) return "Mesh Rotation Rate";
+        if (Cast<UParticleModuleMeshRotation>(Module)) return "Rotation";
+        if (Cast<UParticleModuleMeshRotationRate>(Module)) return "Rotation Rate";
         if (Cast<UParticleModuleSpawnPerUnit>(Module)) return "Spawn Per Unit";
         if (Cast<UParticleModuleTrailSource>(Module)) return "Trail Source";
         if (Cast<UParticleModuleBeamSource>(Module)) return "Beam Source";

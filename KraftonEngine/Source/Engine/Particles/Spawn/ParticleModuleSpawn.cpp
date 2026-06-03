@@ -2,6 +2,9 @@
 
 #include "Serialization/Archive.h"
 
+#include <algorithm>
+#include <cmath>
+
 bool UParticleModuleSpawn::GetSpawnAmount(const FSpawnContext& Context, int32 Offset, float OldLeftover, float DeltaTime, int32& OutNumber, float& OutRate)
 {
 	OutRate = SpawnRate * SpawnRateScale;
@@ -11,8 +14,15 @@ bool UParticleModuleSpawn::GetSpawnAmount(const FSpawnContext& Context, int32 Of
 
 bool UParticleModuleSpawn::GetBurstCount(const FSpawnContext& Context, int32 Offset, float OldLeftover, float DeltaTime, int32& OutBurstCount)
 {
+	(void)Context;
+	(void)Offset;
+	(void)OldLeftover;
+	(void)DeltaTime;
+
+	// 실제 Burst firing은 FParticleEmitterInstance가 BurstFired 상태를 보면서 처리한다.
+	// 이 함수는 SpawnModuleBase 인터페이스의 capability 응답만 담당한다.
 	OutBurstCount = 0;
-	return true;
+	return bProcessBurstList != 0;
 }
 
 float UParticleModuleSpawn::GetMaximumSpawnRate()
@@ -30,12 +40,14 @@ float UParticleModuleSpawn::GetEstimatedSpawnRate()
 int32 UParticleModuleSpawn::GetMaximumBurstCount()
 {
 	int32 MaxBurst = 0;
-	for (int32 i = 0; i < BurstList.size(); i++)
+	for (int32 i = 0; i < static_cast<int32>(BurstList.size()); i++)
 	{
-		MaxBurst += BurstList[i].Count;
+		const int32 CountHigh = std::max(BurstList[i].Count, BurstList[i].CountLow);
+		MaxBurst += std::max(0, CountHigh);
 	}
 
-	return MaxBurst;
+	const float SafeScale = std::max(0.0f, BurstScale);
+	return static_cast<int32>(std::ceil(static_cast<float>(MaxBurst) * SafeScale));
 }
 
 #if WITH_EDITOR

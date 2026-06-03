@@ -33,6 +33,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <cstdint>
 
 namespace
 {
@@ -107,6 +108,63 @@ namespace
 	bool IsReplayType(const FDynamicEmitterReplayDataBase& Data, EDynamicEmitterType ExpectedType)
 	{
 		return Data.eEmitterType == ExpectedType;
+	}
+
+	float GetActiveEmitterDurationForBurst(const FParticleEmitterInstance& Instance)
+	{
+		// Tick_EmitterTimeSetup()은 EmitterTime에 delay를 뺀 값을 사용한다.
+		// 따라서 Burst.Time(0..1)은 delay가 빠진 실제 emitter lifetime에 매핑해야 한다.
+		float ActiveDuration = Instance.EmitterDuration;
+		if (Instance.CurrentDelay > 0.0f)
+		{
+			ActiveDuration = std::max(0.0f, ActiveDuration - Instance.CurrentDelay);
+		}
+		return ActiveDuration;
+	}
+
+	float ResolveBurstTriggerTime(const FParticleEmitterInstance& Instance, const FParticleBurst& Burst)
+	{
+		const float ConfiguredTime = std::max(0.0f, Burst.Time);
+
+		// FParticleBurst::Time은 기본적으로 0..1 lifetime ratio다.
+		// 기존 실험 asset이 1보다 큰 초 단위 값을 갖고 있을 가능성은 보존한다.
+		if (ConfiguredTime <= 1.0f)
+		{
+			return ConfiguredTime * GetActiveEmitterDurationForBurst(Instance);
+		}
+
+		return ConfiguredTime;
+	}
+
+	int32 ResolveBurstCount(FParticleEmitterInstance& Instance, const FParticleBurst& Burst, float BurstScale)
+	{
+		const int32 CountA = std::max(0, Burst.Count);
+		int32 RawCount = CountA;
+
+		if (Burst.CountLow >= 0)
+		{
+			const int32 CountB = std::max(0, Burst.CountLow);
+			const int32 Low = std::min(CountA, CountB);
+			const int32 High = std::max(CountA, CountB);
+			RawCount = (Low == High) ? Low : Instance.BurstRandomStream.RandRange(Low, High);
+		}
+
+		const float SafeScale = std::max(0.0f, BurstScale);
+		return std::max(0, static_cast<int32>(std::ceil(static_cast<float>(RawCount) * SafeScale)));
+	}
+
+	uint32 MakeBurstRandomSeed(const UParticleEmitter* Template, const UParticleSystemComponent* Component)
+	{
+		uint32 Seed = 0x9E3779B9u;
+		if (Template)
+		{
+			Seed ^= Template->GetUUID() + 0x85EBCA6Bu + (Seed << 6) + (Seed >> 2);
+		}
+		if (Component)
+		{
+			Seed ^= Component->GetUUID() + 0xC2B2AE35u + (Seed << 6) + (Seed >> 2);
+		}
+		return Seed;
 	}
 
 	void TrailsBase_CalculateTangent(
@@ -238,6 +296,7 @@ void FParticleEmitterInstance::Init()
 
 	ParticleCounter = 0;
 	LoopCount = 0;
+	BurstRandomStream.Initialize(MakeBurstRandomSeed(SpriteTemplate, Component));
 
 	bEmitterIsDone = false;
 	bHaltSpawning = false;
@@ -726,7 +785,8 @@ void FParticleEmitterInstance::SetCurrentLODIndex(int32 InLODIndex, bool bInFull
 		// LOD 전환 시 이미 시간이 지난 burst는 다시 터지면 안 되므로 fired 처리한다.
 		for (int32 BurstIndex = 0; BurstIndex < SpawnModule->BurstList.size(); BurstIndex++)
 		{
-			if (CurrentLODLevel->RequiredModule->EmitterDelay + SpawnModule->BurstList[BurstIndex].Time < EmitterTime)
+			const float TriggerTime = ResolveBurstTriggerTime(*this, SpawnModule->BurstList[BurstIndex]);
+			if (TriggerTime < EmitterTime)
 			{
 				LocalBurstFired.Fired[BurstIndex] = true;
 			}
@@ -747,6 +807,7 @@ void FParticleEmitterInstance::Rewind()
 	EmitterTime = 0;
 	LoopCount = 0;
 	ParticleCounter = 0;
+	BurstRandomStream.Initialize(MakeBurstRandomSeed(SpriteTemplate, Component));
 	bEnabled = 1;
 	ResetBurstList();
 }
@@ -781,7 +842,7 @@ void FParticleEmitterInstance::FakeBursts()
 		}
 
 		const FParticleBurst& Burst = CurrentLODLevel->SpawnModule->BurstList[BurstIndex];
-		if (EmitterTime >= Burst.Time)
+		if (EmitterTime >= ResolveBurstTriggerTime(*this, Burst))
 		{
 			LocalBurstFired.Fired[BurstIndex] = true;
 		}
@@ -1092,45 +1153,55 @@ float FParticleEmitterInstance::GetCurrentBurstRateOffset(float& DeltaTime, int3
 {
 	float SpawnRateInc = 0.0f;
 
-	// Grab the current LOD level
 	UParticleLODLevel* LODLevel = GetCurrentLODLevelChecked();
-	if (LODLevel->SpawnModule->BurstList.size() > 0)
+	if (!LODLevel || !LODLevel->SpawnModule || LODLevel->SpawnModule->BurstList.empty())
 	{
-		// For each burst in the list
-		for (int32 BurstIdx = 0; BurstIdx < LODLevel->SpawnModule->BurstList.size(); BurstIdx++)
+		return SpawnRateInc;
+	}
+
+	const int32 BurstLODIndex =
+		(CurrentLODLevelIndex >= 0 && CurrentLODLevelIndex < static_cast<int32>(BurstFired.size()))
+		? CurrentLODLevelIndex
+		: LODLevel->Level;
+
+	if (BurstLODIndex < 0 || BurstLODIndex >= static_cast<int32>(BurstFired.size()))
+	{
+		return SpawnRateInc;
+	}
+
+	FLODBurstFired& LocalBurstFired = BurstFired[BurstLODIndex];
+	if (LocalBurstFired.Fired.size() < LODLevel->SpawnModule->BurstList.size())
+	{
+		LocalBurstFired.Fired.resize(LODLevel->SpawnModule->BurstList.size(), false);
+	}
+
+	for (int32 BurstIdx = 0; BurstIdx < static_cast<int32>(LODLevel->SpawnModule->BurstList.size()); ++BurstIdx)
+	{
+		if (BurstIdx >= static_cast<int32>(LocalBurstFired.Fired.size()) || LocalBurstFired.Fired[BurstIdx])
 		{
-			FParticleBurst* BurstEntry = &(LODLevel->SpawnModule->BurstList[BurstIdx]);
-			// If it hasn't been fired
-			if (BurstEntry && LODLevel->Level < BurstFired.size())
-			{
-				FLODBurstFired& LocalBurstFired = BurstFired[LODLevel->Level];
-				if (BurstIdx < LocalBurstFired.Fired.size())
-				{
-					if (LocalBurstFired.Fired[BurstIdx] == false)
-					{
-						// If it is time to fire it
-						if (EmitterTime >= BurstEntry->Time)
-						{
-							// Make sure there is a valid time slice
-							if (DeltaTime < 0.00001f)
-							{
-								DeltaTime = 0.00001f;
-							}
-							// Calculate the increase time slice
-							int32 Count = BurstEntry->Count;
-							// KraftonEngine does not expose Cascade's per-emitter random stream yet.
-							// CountLow and distribution BurstScale therefore cannot match UE exactly.
-							// Take in to account scale.
-							float Scale = LODLevel->SpawnModule->BurstScale;
-							Count = static_cast<int32>(std::ceil(static_cast<float>(Count) * LODLevel->SpawnModule->BurstScale));
-							SpawnRateInc += Count / DeltaTime;
-							Burst += Count;
-							LocalBurstFired.Fired[BurstIdx] = true;
-						}
-					}
-				}
-			}
+			continue;
 		}
+
+		const FParticleBurst& BurstEntry = LODLevel->SpawnModule->BurstList[BurstIdx];
+		const float TriggerTime = ResolveBurstTriggerTime(*this, BurstEntry);
+		if (EmitterTime < TriggerTime)
+		{
+			continue;
+		}
+
+		if (DeltaTime < 0.00001f)
+		{
+			DeltaTime = 0.00001f;
+		}
+
+		const int32 Count = ResolveBurstCount(*this, BurstEntry, LODLevel->SpawnModule->BurstScale);
+		if (Count > 0)
+		{
+			SpawnRateInc += static_cast<float>(Count) / DeltaTime;
+			Burst += Count;
+		}
+
+		LocalBurstFired.Fired[BurstIdx] = true;
 	}
 
 	return SpawnRateInc;
