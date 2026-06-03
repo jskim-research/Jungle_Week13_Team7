@@ -15,6 +15,7 @@ class USkeletalBodySetup;
 class UPhysicsConstraintTemplate;
 class FPhysicsAssetPrimitiveGizmoTarget;
 class FPhysicsAssetSolidPreviewComponent;
+class FPhysicsAssetConstraintLimitPreviewComponent;
 struct FSkeletalMesh;
 struct ImVec2;
 
@@ -51,6 +52,7 @@ class FPhysicsAssetEditorWidget : public FAssetEditorWidget
 {
 	friend class FPhysicsAssetPrimitiveGizmoTarget;
 	friend class FPhysicsAssetSolidPreviewComponent;
+	friend class FPhysicsAssetConstraintLimitPreviewComponent;
 
 public:
 	FPhysicsAssetEditorWidget();
@@ -129,6 +131,7 @@ private:
 	void SyncPreviewSelection();
 	void SyncPrimitiveGizmo();
 	void UpdateSolidPreview();
+	void UpdateConstraintLimitPreview();
 	void RenderPhysicsDebug();
 	void DrawBodySetupDebug(const USkeletalBodySetup* BodySetup, bool bSelected);
 	void DrawConstraintDebug(const UPhysicsConstraintTemplate* Constraint, bool bSelected);
@@ -138,6 +141,7 @@ private:
 	ax::NodeEditor::EditorContext* ConstraintGraphContext = nullptr;
 	std::unique_ptr<FPhysicsAssetPrimitiveGizmoTarget> PrimitiveGizmoTarget;
 	FPhysicsAssetSolidPreviewComponent* SolidPreviewComponent = nullptr;
+	FPhysicsAssetConstraintLimitPreviewComponent* ConstraintLimitPreviewComponent = nullptr;
 
 	USkeletalMesh* EditingMesh = nullptr;
 	UPhysicsAsset* EditingPhysicsAsset = nullptr;

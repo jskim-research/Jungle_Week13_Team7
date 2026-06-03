@@ -486,6 +486,32 @@ namespace
 		DrawDebugCircle(World, B, Right, Up, Radius, Color);
 	}
 
+	void DrawDebugThickLine(UWorld* World, const FVector& Start, const FVector& End, const FColor& Color, float Radius)
+	{
+		DrawDebugLine(World, Start, End, Color, 0.0f);
+		if (Radius <= 0.0f)
+		{
+			return;
+		}
+
+		const FVector Direction = (End - Start).GetSafeNormal(1.0e-6f, FVector::ForwardVector);
+		const FVector Side = Direction.Cross(FVector::UpVector).GetSafeNormal(1.0e-6f, FVector::RightVector);
+		const FVector Up = Direction.Cross(Side).GetSafeNormal(1.0e-6f, FVector::UpVector);
+
+		DrawDebugLine(World, Start + Side * Radius, End + Side * Radius, Color, 0.0f);
+		DrawDebugLine(World, Start - Side * Radius, End - Side * Radius, Color, 0.0f);
+		DrawDebugLine(World, Start + Up * Radius, End + Up * Radius, Color, 0.0f);
+		DrawDebugLine(World, Start - Up * Radius, End - Up * Radius, Color, 0.0f);
+	}
+
+	void DrawConstraintFrameDebug(UWorld* World, const FVector& Origin, const FQuat& Rotation, float AxisLength, bool bSelected)
+	{
+		const float AxisRadius = bSelected ? 0.01f : 0.0f;
+		DrawDebugThickLine(World, Origin, Origin + Rotation.RotateVector(FVector::ForwardVector) * AxisLength, FColor(255, 80, 80), AxisRadius);
+		DrawDebugThickLine(World, Origin, Origin + Rotation.RotateVector(FVector::RightVector) * AxisLength, FColor(80, 255, 120), AxisRadius);
+		DrawDebugThickLine(World, Origin, Origin + Rotation.RotateVector(FVector::UpVector) * AxisLength, FColor(80, 160, 255), AxisRadius);
+	}
+
 	void HashCombine(std::uint64_t& Seed, std::uint64_t Value)
 	{
 		Seed ^= Value + 0x9e3779b97f4a7c15ull + (Seed << 6) + (Seed >> 2);
@@ -522,11 +548,11 @@ namespace
 	{
 		if (bSelectedPrimitive)
 		{
-			return FVector4(1.0f, 0.86f, 0.18f, 0.42f);
+			return FVector4(1.0f, 0.92f, 0.22f, 0.56f);
 		}
 		if (bSelectedBody)
 		{
-			return FVector4(1.0f, 0.62f, 0.16f, 0.34f);
+			return FVector4(1.0f, 0.76f, 0.22f, 0.50f);
 		}
 		return FVector4(0.12f, 0.68f, 1.0f, 0.24f);
 	}
@@ -1096,6 +1122,245 @@ private:
 	std::uint64_t LastMeshHash = ~std::uint64_t{0};
 };
 
+class FPhysicsAssetConstraintLimitPreviewComponent final : public UPrimitiveComponent
+{
+public:
+	FPhysicsAssetConstraintLimitPreviewComponent()
+	{
+		SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		SetCastShadow(false);
+	}
+
+	FMeshBuffer* GetMeshBuffer() const override
+	{
+		return const_cast<FMeshBuffer*>(&MeshBuffer);
+	}
+
+	FPrimitiveSceneProxy* CreateSceneProxy() override
+	{
+		return new FPhysicsAssetSolidPreviewSceneProxy(this);
+	}
+
+	bool SupportsOutline() const override
+	{
+		return false;
+	}
+
+	void RebuildFromEditor(const FPhysicsAssetEditorWidget& Editor, bool bEnabled)
+	{
+		SetVisibility(bEnabled);
+		if (!bEnabled)
+		{
+			return;
+		}
+
+		const std::uint64_t NewHash = BuildMeshData(Editor, nullptr);
+		if (NewHash == LastMeshHash)
+		{
+			return;
+		}
+
+		LastMeshHash = NewHash;
+
+		FMeshData MeshData;
+		BuildMeshData(Editor, &MeshData);
+		if (MeshData.Vertices.empty() || MeshData.Indices.empty() || !GEngine)
+		{
+			MeshBuffer.Release();
+			MarkRenderStateDirty();
+			return;
+		}
+
+		ID3D11Device* Device = GEngine->GetRenderer().GetFD3DDevice().GetDevice();
+		if (!Device)
+		{
+			return;
+		}
+
+		MeshBuffer.Create(Device, MeshData);
+		MarkRenderStateDirty();
+	}
+
+private:
+	static void AddSwingLimitMesh(
+		FMeshData& MeshData,
+		const FVector& Origin,
+		const FQuat& Rotation,
+		float Swing1Degrees,
+		float Swing2Degrees,
+		float Length,
+		const FVector4& Color)
+	{
+		constexpr int32 Segments = 48;
+		constexpr float DegToRad = FMath::Pi / 180.0f;
+		const float Swing1 = (std::max)(0.1f, (std::min)(Swing1Degrees, 120.0f)) * DegToRad;
+		const float Swing2 = (std::max)(0.1f, (std::min)(Swing2Degrees, 120.0f)) * DegToRad;
+		const float RadiusY = std::tan(Swing1) * Length;
+		const float RadiusZ = std::tan(Swing2) * Length;
+
+		const uint32 Apex = AddSolidVertex(MeshData, Origin, Color);
+		uint32 First = 0;
+		uint32 Prev = 0;
+		for (int32 Segment = 0; Segment <= Segments; ++Segment)
+		{
+			const float T = static_cast<float>(Segment) / static_cast<float>(Segments);
+			const float Angle = T * FMath::Pi * 2.0f;
+			const FVector Local(Length, std::cos(Angle) * RadiusY, std::sin(Angle) * RadiusZ);
+			const uint32 Current = AddSolidVertex(MeshData, TransformSolidPoint(Origin, Rotation, Local), Color);
+			if (Segment == 0)
+			{
+				First = Current;
+			}
+			else
+			{
+				AddSolidTriangle(MeshData, Apex, Prev, Current);
+			}
+			Prev = Current;
+		}
+		AddSolidTriangle(MeshData, Apex, Prev, First);
+	}
+
+	static void AddTwistLimitMesh(
+		FMeshData& MeshData,
+		const FVector& Origin,
+		const FQuat& Rotation,
+		float TwistMinDegrees,
+		float TwistMaxDegrees,
+		float Offset,
+		float InnerRadius,
+		float OuterRadius,
+		const FVector4& Color)
+	{
+		constexpr float DegToRad = FMath::Pi / 180.0f;
+		float MinRadians = (std::max)(-180.0f, (std::min)(TwistMinDegrees, 180.0f)) * DegToRad;
+		float MaxRadians = (std::max)(-180.0f, (std::min)(TwistMaxDegrees, 180.0f)) * DegToRad;
+		if (MaxRadians < MinRadians)
+		{
+			std::swap(MinRadians, MaxRadians);
+		}
+
+		const float Range = (std::max)(MaxRadians - MinRadians, DegToRad);
+		const int32 Segments = (std::max)(6, static_cast<int32>(std::ceil(Range / (FMath::Pi * 2.0f) * 48.0f)));
+
+		uint32 PrevInner = 0;
+		uint32 PrevOuter = 0;
+		for (int32 Segment = 0; Segment <= Segments; ++Segment)
+		{
+			const float T = static_cast<float>(Segment) / static_cast<float>(Segments);
+			const float Angle = MinRadians + Range * T;
+			const FVector InnerLocal(Offset, std::cos(Angle) * InnerRadius, std::sin(Angle) * InnerRadius);
+			const FVector OuterLocal(Offset, std::cos(Angle) * OuterRadius, std::sin(Angle) * OuterRadius);
+			const uint32 Inner = AddSolidVertex(MeshData, TransformSolidPoint(Origin, Rotation, InnerLocal), Color);
+			const uint32 Outer = AddSolidVertex(MeshData, TransformSolidPoint(Origin, Rotation, OuterLocal), Color);
+			if (Segment > 0)
+			{
+				AddSolidTriangle(MeshData, PrevInner, PrevOuter, Inner);
+				AddSolidTriangle(MeshData, Inner, PrevOuter, Outer);
+			}
+			PrevInner = Inner;
+			PrevOuter = Outer;
+		}
+	}
+
+	std::uint64_t BuildMeshData(const FPhysicsAssetEditorWidget& Editor, FMeshData* OutMeshData) const
+	{
+		std::uint64_t Hash = 0;
+		HashInt(Hash, Editor.SelectedBodyIndex);
+		HashInt(Hash, Editor.SelectedConstraintIndex);
+		HashInt(Hash, static_cast<int32>(Editor.SelectionType));
+		HashInt(Hash, Editor.SelectionType == EPhysicsAssetEditorSelectionType::Constraint ? 1 : 0);
+		HashInt(Hash, Editor.EditingPhysicsAsset ? Editor.EditingPhysicsAsset->GetConstraintSetupCount() : 0);
+
+		if (!Editor.EditingPhysicsAsset)
+		{
+			return Hash;
+		}
+
+		for (int32 ConstraintIndex = 0; ConstraintIndex < Editor.EditingPhysicsAsset->GetConstraintSetupCount(); ++ConstraintIndex)
+		{
+			const UPhysicsConstraintTemplate* Constraint = Editor.EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex);
+			if (!Constraint)
+			{
+				continue;
+			}
+
+			const USkeletalBodySetup* ParentBody = Editor.EditingPhysicsAsset->FindBodySetup(Constraint->GetParentBoneName());
+			if (!ParentBody)
+			{
+				continue;
+			}
+
+			const FConstraintInstance& Instance = Constraint->GetDefaultInstance();
+			const int32 ParentBodyIndex = Editor.EditingPhysicsAsset->FindBodyIndex(Constraint->GetParentBoneName());
+			const int32 ChildBodyIndex = Editor.EditingPhysicsAsset->FindBodyIndex(Constraint->GetChildBoneName());
+			const bool bSelectedConstraint = Editor.SelectionType == EPhysicsAssetEditorSelectionType::Constraint
+				&& Editor.SelectedConstraintIndex == ConstraintIndex;
+			const bool bConnectedToSelectedBody = Editor.SelectionType == EPhysicsAssetEditorSelectionType::Body
+				&& Editor.SelectedBodyIndex >= 0
+				&& (ParentBodyIndex == Editor.SelectedBodyIndex || ChildBodyIndex == Editor.SelectedBodyIndex);
+			const bool bHighlighted = bSelectedConstraint || bConnectedToSelectedBody;
+			const FVector Origin = Editor.GetBodyWorldLocation(ParentBody)
+				+ Editor.GetBodyWorldRotation(ParentBody).RotateVector(Instance.ParentFrame.Position);
+			const FQuat Rotation = (Editor.GetBodyWorldRotation(ParentBody) * Instance.ParentFrame.Rotation.ToQuaternion()).GetNormalized();
+			const float Scale = bSelectedConstraint ? 1.20f : (bConnectedToSelectedBody ? 1.14f : 1.0f);
+			const float Length = 0.05f * Scale;
+			const FVector4 SwingColor = bHighlighted
+				? FVector4(1.0f, 0.48f, 0.12f, bSelectedConstraint ? 0.36f : 0.30f)
+				: FVector4(0.95f, 0.42f, 1.0f, 0.14f);
+			const FVector4 TwistColor = bHighlighted
+				? FVector4(0.32f, 0.84f, 1.0f, bSelectedConstraint ? 0.34f : 0.28f)
+				: FVector4(0.32f, 0.65f, 1.0f, 0.12f);
+
+			HashInt(Hash, ConstraintIndex);
+			HashInt(Hash, ParentBodyIndex);
+			HashInt(Hash, ChildBodyIndex);
+			HashVector(Hash, Origin);
+			HashQuat(Hash, Rotation);
+			HashInt(Hash, static_cast<int32>(Instance.Swing1Motion));
+			HashInt(Hash, static_cast<int32>(Instance.Swing2Motion));
+			HashInt(Hash, static_cast<int32>(Instance.TwistMotion));
+			HashFloat(Hash, Instance.Swing1LimitDegrees);
+			HashFloat(Hash, Instance.Swing2LimitDegrees);
+			HashFloat(Hash, Instance.TwistLimitMinDegrees);
+			HashFloat(Hash, Instance.TwistLimitMaxDegrees);
+
+			if (OutMeshData)
+			{
+				if (Instance.Swing1Motion == EConstraintMotion::Limited || Instance.Swing2Motion == EConstraintMotion::Limited)
+				{
+					AddSwingLimitMesh(
+						*OutMeshData,
+						Origin,
+						Rotation,
+						Instance.Swing1Motion == EConstraintMotion::Locked ? 0.1f : Instance.Swing1LimitDegrees,
+						Instance.Swing2Motion == EConstraintMotion::Locked ? 0.1f : Instance.Swing2LimitDegrees,
+						Length,
+						SwingColor);
+				}
+				if (Instance.TwistMotion == EConstraintMotion::Limited)
+				{
+					AddTwistLimitMesh(
+						*OutMeshData,
+						Origin,
+						Rotation,
+						Instance.TwistLimitMinDegrees,
+						Instance.TwistLimitMaxDegrees,
+						Length * 1.05f,
+						Length * 0.48f,
+						Length * 0.72f,
+						TwistColor);
+				}
+			}
+		}
+
+		return Hash;
+	}
+
+private:
+	mutable FMeshBuffer MeshBuffer;
+	std::uint64_t LastMeshHash = ~std::uint64_t{0};
+};
+
 class FPhysicsAssetPrimitiveGizmoTarget final : public IGizmoTransformTarget
 {
 public:
@@ -1437,6 +1702,7 @@ void FPhysicsAssetEditorWidget::Tick(float DeltaTime)
 	{
 		ViewportClient.Tick(DeltaTime);
 		UpdateSolidPreview();
+		UpdateConstraintLimitPreview();
 		RenderPhysicsDebug();
 		SyncPrimitiveGizmo();
 	}
@@ -1457,6 +1723,7 @@ void FPhysicsAssetEditorWidget::AddReferencedObjects(FReferenceCollector& Collec
 	Collector.AddReferencedObject(EditingMesh, "PhysicsAssetEditor.EditingMesh");
 	Collector.AddReferencedObject(EditingPhysicsAsset, "PhysicsAssetEditor.EditingPhysicsAsset");
 	Collector.AddReferencedObject(SolidPreviewComponent, "PhysicsAssetEditor.SolidPreviewComponent");
+	Collector.AddReferencedObject(ConstraintLimitPreviewComponent, "PhysicsAssetEditor.ConstraintLimitPreviewComponent");
 	ViewportClient.AddReferencedObjects(Collector);
 }
 
@@ -1616,6 +1883,10 @@ void FPhysicsAssetEditorWidget::CreatePreviewWorld()
 	Actor->RegisterComponent(SolidPreviewComponent);
 	UpdateSolidPreview();
 
+	ConstraintLimitPreviewComponent = new FPhysicsAssetConstraintLimitPreviewComponent();
+	Actor->RegisterComponent(ConstraintLimitPreviewComponent);
+	UpdateConstraintLimitPreview();
+
 	ViewportClient.ResetCameraToPreviousBounds();
 	ViewportClient.ApplyTransformSettingsToGizmo();
 
@@ -1629,6 +1900,7 @@ void FPhysicsAssetEditorWidget::DestroyPreviewWorld()
 	ViewportClient.SetPreviewPickHandler(nullptr);
 	ViewportClient.SetPreviewRagdollInteractionHandler(nullptr);
 	SolidPreviewComponent = nullptr;
+	ConstraintLimitPreviewComponent = nullptr;
 
 	if (UWorld* PreviewWorld = ViewportClient.GetPreviewWorld())
 	{
@@ -3776,18 +4048,12 @@ void FPhysicsAssetEditorWidget::SyncPreviewSelection()
 		return;
 	}
 
-	int32 BoneIndexForPreview = bShowBones ? SelectedBoneIndex : -1;
+	int32 BoneIndexForPreview = (bShowBones && SelectionType == EPhysicsAssetEditorSelectionType::Bone)
+		? SelectedBoneIndex
+		: -1;
 	if (!bShowBones)
 	{
 		ViewportClient.SetBoneDebugDrawMode(EBoneDebugDrawMode::SelectedOnly);
-	}
-
-	if (bShowBones && SelectionType == EPhysicsAssetEditorSelectionType::Constraint && EditingPhysicsAsset)
-	{
-		if (UPhysicsConstraintTemplate* Constraint = EditingPhysicsAsset->GetConstraintSetup(SelectedConstraintIndex))
-		{
-			BoneIndexForPreview = FindBoneIndexByName(EditingMesh->GetSkeletalMeshAsset(), Constraint->GetChildBoneName());
-		}
 	}
 
 	ViewportClient.SetSelectedBone(EditingMesh, BoneIndexForPreview);
@@ -3833,6 +4099,17 @@ void FPhysicsAssetEditorWidget::UpdateSolidPreview()
 	SolidPreviewComponent->RebuildFromEditor(*this, bEnabled);
 }
 
+void FPhysicsAssetEditorWidget::UpdateConstraintLimitPreview()
+{
+	if (!ConstraintLimitPreviewComponent)
+	{
+		return;
+	}
+
+	const bool bEnabled = EditingPhysicsAsset && ViewportClient.GetPreviewWorld() && bShowConstraints;
+	ConstraintLimitPreviewComponent->RebuildFromEditor(*this, bEnabled);
+}
+
 void FPhysicsAssetEditorWidget::RenderPhysicsDebug()
 {
 	if (!EditingPhysicsAsset || !ViewportClient.GetPreviewWorld())
@@ -3855,15 +4132,6 @@ void FPhysicsAssetEditorWidget::RenderPhysicsDebug()
 		}
 	}
 
-	if (bShowConstraints)
-	{
-		for (int32 ConstraintIndex = 0; ConstraintIndex < EditingPhysicsAsset->GetConstraintSetupCount(); ++ConstraintIndex)
-		{
-			DrawConstraintDebug(
-				EditingPhysicsAsset->GetConstraintSetup(ConstraintIndex),
-				SelectionType == EPhysicsAssetEditorSelectionType::Constraint && SelectedConstraintIndex == ConstraintIndex);
-		}
-	}
 }
 
 void FPhysicsAssetEditorWidget::DrawBodySetupDebug(const USkeletalBodySetup* BodySetup, bool bSelected)
@@ -3935,10 +4203,36 @@ void FPhysicsAssetEditorWidget::DrawConstraintDebug(const UPhysicsConstraintTemp
 		return;
 	}
 
-	const FVector ParentLocation = GetBodyWorldLocation(ParentBody);
-	const FVector ChildLocation = GetBodyWorldLocation(ChildBody);
-	const FColor Color = bSelected ? FColor(255, 120, 80) : FColor(200, 150, 255);
-	DrawDebugLine(World, ParentLocation, ChildLocation, Color, 0.0f);
-	DrawDebugPoint(World, ParentLocation, bSelected ? 0.08f : 0.05f, Color, 0.0f);
-	DrawDebugPoint(World, ChildLocation, bSelected ? 0.08f : 0.05f, Color, 0.0f);
+	const FConstraintInstance& Instance = Constraint->GetDefaultInstance();
+	const FVector ParentBodyLocation = GetBodyWorldLocation(ParentBody);
+	const FVector ChildBodyLocation = GetBodyWorldLocation(ChildBody);
+	const FQuat ParentBodyRotation = GetBodyWorldRotation(ParentBody);
+	const FQuat ChildBodyRotation = GetBodyWorldRotation(ChildBody);
+
+	const FVector ParentAnchor = ParentBodyLocation + ParentBodyRotation.RotateVector(Instance.ParentFrame.Position);
+	const FVector ChildAnchor = ChildBodyLocation + ChildBodyRotation.RotateVector(Instance.ChildFrame.Position);
+	const FQuat ParentFrameRotation = (ParentBodyRotation * Instance.ParentFrame.Rotation.ToQuaternion()).GetNormalized();
+	const FQuat ChildFrameRotation = (ChildBodyRotation * Instance.ChildFrame.Rotation.ToQuaternion()).GetNormalized();
+
+	const FColor ConstraintColor = bSelected ? FColor(255, 95, 45) : FColor(190, 135, 255);
+	const FColor BodyLinkColor = bSelected ? FColor(255, 180, 90) : FColor(140, 105, 190);
+	const float ConnectorRadius = bSelected ? 0.018f : 0.0f;
+	const float AnchorSize = bSelected ? 0.13f : 0.055f;
+	const float AnchorSphereRadius = bSelected ? 0.055f : 0.025f;
+	const float AxisLength = bSelected ? 0.28f : 0.13f;
+
+	DrawDebugThickLine(World, ParentAnchor, ChildAnchor, ConstraintColor, ConnectorRadius);
+	DrawDebugPoint(World, ParentAnchor, AnchorSize, ConstraintColor, 0.0f);
+	DrawDebugPoint(World, ChildAnchor, AnchorSize, ConstraintColor, 0.0f);
+	DrawDebugSphere(World, ParentAnchor, AnchorSphereRadius, bSelected ? 20 : 10, ConstraintColor, 0.0f);
+	DrawDebugSphere(World, ChildAnchor, AnchorSphereRadius, bSelected ? 20 : 10, ConstraintColor, 0.0f);
+
+	DrawConstraintFrameDebug(World, ParentAnchor, ParentFrameRotation, AxisLength, bSelected);
+	DrawConstraintFrameDebug(World, ChildAnchor, ChildFrameRotation, AxisLength, bSelected);
+
+	if (bSelected)
+	{
+		DrawDebugThickLine(World, ParentBodyLocation, ParentAnchor, BodyLinkColor, 0.01f);
+		DrawDebugThickLine(World, ChildBodyLocation, ChildAnchor, BodyLinkColor, 0.01f);
+	}
 }
