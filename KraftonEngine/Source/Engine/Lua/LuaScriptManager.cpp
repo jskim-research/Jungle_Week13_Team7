@@ -14,6 +14,7 @@
 #include "Component/SceneComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
 #include "Component/Primitive/StaticMeshComponent.h"
+#include "Component/Primitive/ParticleSystemComponent.h"
 #include "Core/Types/CollisionTypes.h"
 #include "Runtime/Engine.h"
 #include "Viewport/GameViewportClient.h"
@@ -30,6 +31,7 @@
 #include "Object/Reflection/UClass.h"
 #include "Object/Reflection/UStruct.h"
 #include "Object/Object.h"
+#include "Particles/ParticleSystemManager.h"
 #include "Component/ActorComponent.h"
 #include "Core/Property/ArrayProperty.h"
 #include "Core/Property/BoolProperty.h"
@@ -2510,6 +2512,17 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		C.SetStaticMesh(Mesh);
 	});
 
+	Lua.new_usertype<UParticleSystemComponent>("ParticleSystemComponent",
+		sol::base_classes,
+		sol::bases<UPrimitiveComponent, USceneComponent, UActorComponent, UObject>(),
+		"SetTemplatePath", [](UParticleSystemComponent& C, const FString& TemplatePath)
+	{
+		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
+			? nullptr
+			: FParticleSystemManager::Get().Load(TemplatePath);
+		C.SetTemplate(Template);
+	});
+
 	Lua.new_usertype<FHitResult>("HitResult",
 		"HitComponent", &FHitResult::HitComponent,
 		"HitActor", &FHitResult::HitActor,
@@ -2632,7 +2645,10 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 	{
 		return Actor.AddComponent<UStaticMeshComponent>();
 	},
-
+		"AddParticleSystemComponent", [](AActor& Actor) -> UParticleSystemComponent*
+	{
+		return Actor.AddComponent<UParticleSystemComponent>();
+	},
 		"GetRootPrimitiveComponent", [](AActor& Actor) -> UPrimitiveComponent*
 	{
 		return Cast<UPrimitiveComponent>(Actor.GetRootComponent());

@@ -13,6 +13,7 @@ local DASH_SLASH_DURATION = 0.2
 
 local KATANA_MESH_PATH = "Content/Mesh/Katana/source/red cyber katana_StaticMesh.uasset"
 local KATANA_SOCKET_NAME = "WeaponR"
+local KATANA_PS_PATH = "Content/Data/SwordTrail.uasset"
 
 local ULTIMATE_CAMERA_BACK_DISTANCE = 7.0
 local ULTIMATE_CAMERA_HEIGHT = 10
@@ -109,6 +110,39 @@ function PlayerCharacter.AttachKatanaToWeaponSocket(ctx)
     katana:SetRelativeScale(Vector(1.0, 1.0, 1.0))
 
     PlayerCharacter.KatanaComponent = katana
+end
+
+-- Katana 에 Particle System Component 부착
+function PlayerCharacter.AttachPSCToWeaponSocket(ctx)
+    local owner = GetOwner(ctx)
+    if owner == nil then 
+        return
+    end
+
+    if PlayerCharacter.KatanaPSC ~= nil and PlayerCharacter.KatanaPSC:IsValid() then
+        return 
+    end
+
+    local meshComp = owner:GetSkeletalMeshComponent()
+    if meshComp == nil then 
+        print("Player skeletal mesh component not found")
+        return
+    end
+
+    local PSC = owner:AddParticleSystemComponent()
+    if PSC == nil then
+        print("Failed to create PSC")
+        return
+    end
+
+    PSC:SetTemplatePath(KATANA_PS_PATH)
+    PSC:AttachToComponentWithSocket(meshComp, KATANA_SOCKET_NAME)
+    PSC.RelativeLocation = Vector(0.0, 0.0, 0.0)
+    PSC:SetRotation(Vector(0.0, 0.0, 0.0))
+    PSC:SetRelativeScale(Vector(1.0, 1.0, 1.0))
+
+    PlayerCharacter.KatanaPSC = PSC
+
 end
 
 local function SetMovementInputEnabled(ctx, enabled)
@@ -539,6 +573,7 @@ function BeginPlay()
     PlayerCharacter.IsUltimateRunning = false
     PlayerCharacter.IsInUltimateMode = false
     PlayerCharacter.AttachKatanaToWeaponSocket(PlayerCharacter)
+    PlayerCharacter.AttachPSCToWeaponSocket(PlayerCharacter)
     print("[BeginPlay] " .. obj.UUID)
 end
 
