@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Types/CoreTypes.h"
+#include "Animation/Notify/AnimNotifyEvent.h"
 
 class UAnimSingleNodeInstance;
 class USkeletalMeshComponent;
@@ -15,10 +16,18 @@ class USkeletalMesh;
 // 좌상단 AssetDetails 패널이 같은 인덱스를 읽어 RenderNotifyDetails 로 UPROPERTY 편집.
 namespace FAnimationTimelinePanel
 {
+	struct FAnimNotifyClipboard
+	{
+		bool bValid = false;
+		FAnimNotifyEvent Event;
+		float SourceTriggerTime = 0.0f;
+	};
+
 	void Render(UAnimSingleNodeInstance* NodeInst,
 	            USkeletalMeshComponent*  Comp,
 	            UAnimSequence*           Seq,
 	            float                    PanelHeight,
+	            FAnimNotifyClipboard&    NotifyClipboard,
 	            int32&                   InOutSelectedNotifyIndex,
 	            int32&                   InOutSelectedMorphCurveIndex,
 	            int32&                   InOutSelectedMorphKeyIndex

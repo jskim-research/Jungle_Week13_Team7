@@ -932,6 +932,9 @@
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_BlendListByEnum.cpp">
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_BlendSpace1D.cpp">
+      <Filter>Source\Engine\Animation\Nodes</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_LayeredBlendPerBone.cpp">
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClCompile>
@@ -1322,6 +1325,9 @@
     <ClCompile Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.cpp">
       <Filter>Source\Engine\Gizmo</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.cpp">
+      <Filter>Source\Engine\Gizmo</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Gizmo\ComponentGizmoTarget.cpp">
       <Filter>Source\Engine\Gizmo</Filter>
     </ClCompile>
@@ -1530,6 +1536,9 @@
       <Filter>Source\Engine\Particles\TypeData</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataRibbon.cpp">
+      <Filter>Source\Engine\Particles\TypeData</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataAnimTrail.cpp">
       <Filter>Source\Engine\Particles\TypeData</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.cpp">
@@ -2165,6 +2174,9 @@
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_BlendListByEnum.h">
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_BlendSpace1D.h">
+      <Filter>Source\Engine\Animation\Nodes</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_LayeredBlendPerBone.h">
       <Filter>Source\Engine\Animation\Nodes</Filter>
     </ClInclude>
@@ -2606,6 +2618,9 @@
     <ClInclude Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.h">
       <Filter>Source\Engine\Gizmo</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.h">
+      <Filter>Source\Engine\Gizmo</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Gizmo\ComponentGizmoTarget.h">
       <Filter>Source\Engine\Gizmo</Filter>
     </ClInclude>
@@ -2907,6 +2922,9 @@
       <Filter>Source\Engine\Particles\TypeData</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataRibbon.h">
+      <Filter>Source\Engine\Particles\TypeData</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataAnimTrail.h">
       <Filter>Source\Engine\Particles\TypeData</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.h">

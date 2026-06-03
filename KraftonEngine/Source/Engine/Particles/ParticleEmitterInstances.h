@@ -18,6 +18,7 @@ class UMaterial;
 class UParticleModuleTypeDataMesh;
 class UParticleModuleTypeDataBeam2;
 class UParticleModuleTypeDataRibbon;
+class UParticleModuleTypeDataAnimTrail;
 class UParticleModuleBeamSource;
 class UParticleModuleBeamTarget;
 class UParticleModuleBeamNoise;
@@ -456,4 +457,22 @@ struct FParticleRibbonEmitterInstance : public FParticleTrailsEmitterInstance_Ba
     FDynamicEmitterDataBase* GetDynamicData(bool bSelected) override;
     void ApplyWorldOffset(FVector InOffset, bool bWorldShift) override;
     bool FillReplayData(FDynamicEmitterReplayDataBase& OutData) override;
+};
+
+struct FParticleAnimTrailEmitterInstance : public FParticleRibbonEmitterInstance
+{
+    UParticleModuleTypeDataAnimTrail* AnimTrailTypeData = nullptr;
+    float SampleTimeAccumulator = 0.0f;
+    FVector LastSamplePosition = FVector::ZeroVector;
+    bool bHasLastSamplePosition = false;
+    bool bCurrentAnimTrailSourceValid = false;
+
+    void InitParameters(UParticleEmitter* InTemplate, UParticleSystemComponent* InComponent) override;
+    void AddReferencedObjects(FReferenceCollector& Collector) override;
+    void UpdateSourceData(float DeltaTime, bool bFirstTime) override;
+    float Spawn(float DeltaTime) override;
+
+private:
+    bool ResolveAnimTrailSourcePoint(FVector& OutPosition, FVector& OutUp, float& OutHalfWidth) const;
+    bool ShouldSpawnAnimTrailSample(float DeltaTime) const;
 };

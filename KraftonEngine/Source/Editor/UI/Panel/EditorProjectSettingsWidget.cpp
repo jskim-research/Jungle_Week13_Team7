@@ -1,9 +1,13 @@
 #include "Editor/UI/Panel/EditorProjectSettingsWidget.h"
 #include "Core/ProjectSettings.h"
+#include "Engine/Runtime/Engine.h"
+#include "Profiling/Time/Timer.h"
 #include "Serialization/SceneSaveManager.h"
 #include "GameFramework/GameMode/GameModeBase.h"
 #include "Object/Reflection/UClass.h"
 #include "ImGui/imgui.h"
+
+#include <algorithm>
 
 void EditorProjectSettingsWidget::Render()
 {
@@ -96,7 +100,30 @@ void EditorProjectSettingsWidget::Render()
 		{
 			PS.Physics.Backend = static_cast<EPhysicsBackend>(CurrentBackend);
 		}
-		ImGui::TextDisabled("Requires scene reload to take effect.");
+		ImGui::Checkbox("Fixed Physics Step", &PS.Physics.bUseFixedPhysicsStep);
+		ImGui::BeginDisabled(!PS.Physics.bUseFixedPhysicsStep);
+		ImGui::DragFloat("Fixed Physics FPS", &PS.Physics.FixedPhysicsFPS, 1.0f, 1.0f, 1000.0f, "%.0f");
+		ImGui::EndDisabled();
+		PS.Physics.FixedPhysicsFPS = (std::max)(1.0f, (std::min)(PS.Physics.FixedPhysicsFPS, 1000.0f));
+		ImGui::Checkbox("Pending Physics Forces", &PS.Physics.bUsePendingForces);
+		ImGui::TextDisabled("Backend requires scene reload. Step, FPS, and force toggles apply immediately.");
+	}
+
+	if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		bool bFrameLimitChanged = false;
+		bFrameLimitChanged |= ImGui::Checkbox("Fixed Viewport FPS", &PS.Viewport.bUseFixedFrameRate);
+		ImGui::BeginDisabled(!PS.Viewport.bUseFixedFrameRate);
+		bFrameLimitChanged |= ImGui::DragFloat("Target FPS", &PS.Viewport.FixedFrameRate, 1.0f, 1.0f, 1000.0f, "%.0f");
+		ImGui::EndDisabled();
+		PS.Viewport.FixedFrameRate = (std::max)(1.0f, (std::min)(PS.Viewport.FixedFrameRate, 1000.0f));
+
+		if (bFrameLimitChanged && GEngine && GEngine->GetTimer())
+		{
+			GEngine->GetTimer()->SetMaxFPS(PS.Viewport.bUseFixedFrameRate
+				? PS.Viewport.FixedFrameRate
+				: 0.0f);
+		}
 	}
 
 	if (ImGui::CollapsingHeader("Shadow", ImGuiTreeNodeFlags_DefaultOpen))

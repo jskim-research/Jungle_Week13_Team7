@@ -432,6 +432,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\NvCloth\bin\DxSolverKernel.cso" "$(OutDir)"</C
     <ClCompile Include="Source\Engine\Animation\Montage\AnimMontage.cpp" />
     <ClCompile Include="Source\Engine\Animation\Montage\AnimMontageInstance.cpp" />
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_BlendListByEnum.cpp" />
+    <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_BlendSpace1D.cpp" />
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_LayeredBlendPerBone.cpp" />
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_Root.cpp" />
     <ClCompile Include="Source\Engine\Animation\Nodes\AnimNode_SequencePlayer.cpp" />
@@ -562,6 +563,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\NvCloth\bin\DxSolverKernel.cso" "$(OutDir)"</C
     <ClCompile Include="Source\Engine\GameFramework\Pawn\LuaCharacter.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Pawn\Pawn.cpp" />
     <ClCompile Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.cpp" />
+    <ClCompile Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.cpp" />
     <ClCompile Include="Source\Engine\Gizmo\ComponentGizmoTarget.cpp" />
     <ClCompile Include="Source\Engine\Input\InputSystem.cpp" />
     <ClCompile Include="Source\Engine\Lua\LuaScriptManager.cpp" />
@@ -632,6 +634,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\NvCloth\bin\DxSolverKernel.cso" "$(OutDir)"</C
     <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataBeam2.cpp" />
     <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataMesh.cpp" />
     <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataRibbon.cpp" />
+    <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataAnimTrail.cpp" />
     <ClCompile Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.cpp" />
     <ClCompile Include="Source\Engine\Physics\BodyInstance.cpp" />
     <ClCompile Include="Source\Engine\Physics\CollisionDebugDraw.cpp" />
@@ -845,6 +848,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\NvCloth\bin\DxSolverKernel.cso" "$(OutDir)"</C
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNodeContexts.h" />
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_Base.h" />
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_BlendListByEnum.h" />
+    <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_BlendSpace1D.h" />
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_LayeredBlendPerBone.h" />
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_RefPose.h" />
     <ClInclude Include="Source\Engine\Animation\Nodes\AnimNode_Root.h" />
@@ -992,6 +996,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\NvCloth\bin\DxSolverKernel.cso" "$(OutDir)"</C
     <ClInclude Include="Source\Engine\GameFramework\Pawn\LuaCharacter.h" />
     <ClInclude Include="Source\Engine\GameFramework\Pawn\Pawn.h" />
     <ClInclude Include="Source\Engine\Gizmo\BoneTransformGizmoTarget.h" />
+    <ClInclude Include="Source\Engine\Gizmo\SocketTransformGizmoTarget.h" />
     <ClInclude Include="Source\Engine\Gizmo\ComponentGizmoTarget.h" />
     <ClInclude Include="Source\Engine\Gizmo\GizmoTransformTarget.h" />
     <ClInclude Include="Source\Engine\Input\InputSystem.h" />
@@ -1093,6 +1098,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\NvCloth\bin\DxSolverKernel.cso" "$(OutDir)"</C
     <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataBeam2.h" />
     <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataMesh.h" />
     <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataRibbon.h" />
+    <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataAnimTrail.h" />
     <ClInclude Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.h" />
     <ClInclude Include="Source\Engine\Particles\Velocity\ParticleModuleVelocityBase.h" />
     <ClInclude Include="Source\Engine\Physics\BodyInstance.h" />

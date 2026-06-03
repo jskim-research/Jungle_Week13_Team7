@@ -5,12 +5,14 @@
 #include "Particles/ParticleModuleRequired.h"
 #include "Particles/ParticleEmitter.h"
 #include "Component/Primitive/ParticleSystemComponent.h"
+#include "Component/Primitive/SkinnedMeshComponent.h"
 #include "Particles/Spawn/ParticleModuleSpawn.h"
 #include "Particles/Spawn/ParticleModuleSpawnPerUnit.h"
 #include "Particles/TypeData/ParticleModuleTypeDataBase.h"
 #include "Particles/TypeData/ParticleModuleTypeDataMesh.h"
 #include "Particles/TypeData/ParticleModuleTypeDataBeam2.h"
 #include "Particles/TypeData/ParticleModuleTypeDataRibbon.h"
+#include "Particles/TypeData/ParticleModuleTypeDataAnimTrail.h"
 #include "Particles/Beam/ParticleModuleBeamSource.h"
 #include "Particles/Beam/ParticleModuleBeamTarget.h"
 #include "Particles/Beam/ParticleModuleBeamNoise.h"
@@ -4995,4 +4997,296 @@ bool FParticleRibbonEmitterInstance::FillReplayData(FDynamicEmitterReplayDataBas
 	RibbonData.Sheets = TrailTypeData ? std::max(1, TrailTypeData->SheetsPerTrail) : 1;
 	RibbonData.MaxTessellationBetweenParticles = TrailTypeData ? TrailTypeData->MaxTessellationBetweenParticles : 0;
 	return true;
+}
+
+
+void FParticleAnimTrailEmitterInstance::InitParameters(UParticleEmitter* InTemplate, UParticleSystemComponent* InComponent)
+{
+	FParticleRibbonEmitterInstance::InitParameters(InTemplate, InComponent);
+	AnimTrailTypeData = CurrentLODLevel ? Cast<UParticleModuleTypeDataAnimTrail>(CurrentLODLevel->TypeDataModule) : nullptr;
+	TrailTypeData = AnimTrailTypeData;
+	MaxTrailCount = 1;
+	SampleTimeAccumulator = 0.0f;
+	bHasLastSamplePosition = false;
+	bCurrentAnimTrailSourceValid = false;
+}
+
+void FParticleAnimTrailEmitterInstance::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	FParticleRibbonEmitterInstance::AddReferencedObjects(Collector);
+	Collector.AddReferencedObject(AnimTrailTypeData, "FParticleAnimTrailEmitterInstance.AnimTrailTypeData");
+}
+
+bool FParticleAnimTrailEmitterInstance::ResolveAnimTrailSourcePoint(FVector& OutPosition, FVector& OutUp, float& OutHalfWidth) const
+{
+	OutPosition = FVector::ZeroVector;
+	OutUp = FVector::ZAxisVector;
+	OutHalfWidth = 0.0f;
+
+	if (!Component || !AnimTrailTypeData)
+	{
+		return false;
+	}
+
+	USkinnedMeshComponent* SourceMesh = Component->GetAnimTrailSourceComponent();
+	if (!SourceMesh)
+	{
+		SourceMesh = Cast<USkinnedMeshComponent>(Component->GetParent());
+	}
+
+	if (!SourceMesh)
+	{
+		return false;
+	}
+
+	const FName& FirstSocket = AnimTrailTypeData->FirstSocketName;
+	const FName& SecondSocket = AnimTrailTypeData->SecondSocketName;
+	if (FirstSocket == FName::None || SecondSocket == FName::None)
+	{
+		return false;
+	}
+	if (!SourceMesh->HasSocket(FirstSocket) || !SourceMesh->HasSocket(SecondSocket))
+	{
+		return false;
+	}
+
+	const FVector FirstPos = SourceMesh->GetSocketTransform(FirstSocket).Location;
+	const FVector SecondPos = SourceMesh->GetSocketTransform(SecondSocket).Location;
+	const FVector BladeVector = FirstPos - SecondPos;
+	const float BladeLength = BladeVector.Length();
+	if (BladeLength <= 1.0e-4f)
+	{
+		return false;
+	}
+
+	OutPosition = (FirstPos + SecondPos) * 0.5f;
+	OutUp = BladeVector / BladeLength;
+	OutHalfWidth = BladeLength * 0.5f * std::max(0.0f, AnimTrailTypeData->WidthScale);
+	return OutHalfWidth > 1.0e-4f;
+}
+
+void FParticleAnimTrailEmitterInstance::UpdateSourceData(float DeltaTime, bool bFirstTime)
+{
+	FVector Position;
+	FVector Up;
+	float HalfWidth = 0.0f;
+	bCurrentAnimTrailSourceValid = ResolveAnimTrailSourcePoint(Position, Up, HalfWidth);
+	if (!bCurrentAnimTrailSourceValid)
+	{
+		return;
+	}
+
+	if (CurrentSourcePosition.empty())
+	{
+		CurrentSourcePosition.resize(1, Position);
+		LastSourcePosition.resize(1, Position);
+		CurrentSourceRotation.resize(1, FQuat::Identity);
+		LastSourceRotation.resize(1, FQuat::Identity);
+		CurrentSourceUp.resize(1, Up);
+		LastSourceUp.resize(1, Up);
+		CurrentSourceTangent.resize(1, FVector::ZeroVector);
+		LastSourceTangent.resize(1, FVector::ZeroVector);
+		CurrentSourceTangentStrength.resize(1, 0.0f);
+		LastSourceTangentStrength.resize(1, 0.0f);
+		SourceDistanceTraveled.resize(1, 0.0f);
+		TiledUDistanceTraveled.resize(1, 0.0f);
+		TrailSpawnTimes.resize(1, 0.0f);
+		LastSpawnTime.resize(1, 0.0f);
+		SourceIndices.resize(1, INDEX_NONE);
+		SourceTimes.resize(1, 0.0f);
+		LastSourceTimes.resize(1, 0.0f);
+		CurrentLifetimes.resize(1, 0.0f);
+		CurrentSizes.resize(1, 0.0f);
+	}
+
+	const float LifeTime = AnimTrailTypeData ? std::max(AnimTrailTypeData->TrailLifeTime, 1.0e-4f) : 0.16f;
+	const float OneOverLifeTime = 1.0f / LifeTime;
+
+	if (bFirstTime || !bHasLastSamplePosition)
+	{
+		LastSourcePosition[0] = Position;
+		LastSourceUp[0] = Up;
+		LastSourceTangent[0] = FVector::ZeroVector;
+		LastSourceRotation[0] = FQuat::Identity;
+		TrailSpawnTimes[0] = RunningTime;
+	}
+	else
+	{
+		LastSourcePosition[0] = CurrentSourcePosition[0];
+		LastSourceUp[0] = CurrentSourceUp[0];
+		LastSourceTangent[0] = CurrentSourceTangent[0];
+		LastSourceRotation[0] = CurrentSourceRotation[0];
+	}
+
+	CurrentSourcePosition[0] = Position;
+	CurrentSourceUp[0] = Up;
+	CurrentSourceRotation[0] = FQuat::Identity;
+	CurrentSourceTangent[0] = DeltaTime > 1.0e-6f
+		? (CurrentSourcePosition[0] - LastSourcePosition[0]) / DeltaTime
+		: FVector::ZeroVector;
+	CurrentSourceTangentStrength[0] = CurrentSourceTangent[0].Dot(CurrentSourceTangent[0]);
+	CurrentLifetimes[0] = OneOverLifeTime;
+	CurrentSizes[0] = HalfWidth;
+	SourceIndices[0] = 0;
+	LastSourceTimes[0] = SourceTimes[0];
+	SourceTimes[0] = RunningTime + DeltaTime;
+}
+
+bool FParticleAnimTrailEmitterInstance::ShouldSpawnAnimTrailSample(float DeltaTime) const
+{
+	if (!AnimTrailTypeData || !bCurrentAnimTrailSourceValid || CurrentSourcePosition.empty())
+	{
+		return false;
+	}
+
+	if (!bHasLastSamplePosition)
+	{
+		return true;
+	}
+
+	const float SampleInterval = AnimTrailTypeData->SampleInterval;
+	if (SampleInterval > 0.0f && (SampleTimeAccumulator + DeltaTime) < SampleInterval)
+	{
+		return false;
+	}
+
+	const float MinDistance = std::max(0.0f, AnimTrailTypeData->MinSampleDistance);
+	if (MinDistance > 0.0f && FVector::Distance(CurrentSourcePosition[0], LastSamplePosition) < MinDistance)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+float FParticleAnimTrailEmitterInstance::Spawn(float DeltaTime)
+{
+	if (!ShouldSpawnAnimTrailSample(DeltaTime))
+	{
+		SampleTimeAccumulator += DeltaTime;
+		return SpawnFraction;
+	}
+
+	UParticleLODLevel* LODLevel = GetCurrentLODLevelChecked();
+	if (!LODLevel || !AnimTrailTypeData)
+	{
+		return SpawnFraction;
+	}
+
+	const int32 TrailIdx = 0;
+	const int32 LocalMaxParticleInTrailCount = AnimTrailTypeData->MaxParticleInTrailCount;
+	if (LocalMaxParticleInTrailCount > 0 && (ActiveParticles + 1) > LocalMaxParticleInTrailCount)
+	{
+		KillParticles(TrailIdx, (ActiveParticles + 1) - LocalMaxParticleInTrailCount);
+	}
+
+	if ((ActiveParticles + 1) >= MaxActiveParticles)
+	{
+		const int32 NewCount = ActiveParticles + 1;
+		const int32 Slack = static_cast<int32>(std::sqrt(static_cast<float>(std::max(NewCount, 1)))) + 1;
+		if (!Resize(NewCount + Slack, DeltaTime < PeakActiveParticleUpdateDelta))
+		{
+			return SpawnFraction;
+		}
+	}
+
+	FBaseParticle* StartParticle = nullptr;
+	int32 StartIndex = INDEX_NONE;
+	FRibbonTypeDataPayload* StartTrailData = nullptr;
+	GetTrailStart<FRibbonTypeDataPayload>(TrailIdx, StartIndex, StartTrailData, StartParticle);
+
+	const bool bNoLivingParticles = (StartParticle == nullptr);
+	const int32 ParticleIndex = ParticleIndices[ActiveParticles];
+	FBaseParticle* Particle = GetParticleDirect(ParticleIndex);
+	if (!Particle)
+	{
+		return SpawnFraction;
+	}
+
+	const FVector SpawnPosition = CurrentSourcePosition[0];
+	const FVector SpawnUp = CurrentSourceUp[0].GetSafeNormal(1.0e-6f, FVector::ZAxisVector);
+	const FVector SpawnTangent = CurrentSourceTangent[0];
+	const float SpawnSize = CurrentSizes[0];
+	const float OneOverLifeTime = CurrentLifetimes[0] > 0.0f ? CurrentLifetimes[0] : 1.0f;
+
+	PreSpawn(Particle, SpawnPosition, FVector::ZeroVector);
+	FRibbonTypeDataPayload* TrailData = reinterpret_cast<FRibbonTypeDataPayload*>(reinterpret_cast<uint8*>(Particle) + TypeDataOffset);
+	SetDeadIndex(TrailData->TrailIndex, ParticleIndex);
+
+	if (LODLevel->TypeDataModule)
+	{
+		LODLevel->TypeDataModule->Spawn({ *this, TypeDataOffset, 0.0f, Particle });
+	}
+	for (UParticleModule* SpawnModule : LODLevel->SpawnModules)
+	{
+		if (SpawnModule && SpawnModule->bEnabled)
+		{
+			SpawnModule->Spawn({ *this, static_cast<int32>(GetModuleDataOffset(SpawnModule)), 0.0f, Particle });
+		}
+	}
+
+	FParticleEmitterInstance::PostSpawn(Particle, 0.0f, 0.0f);
+	// AnimTrail 샘플은 PSC 이동 보정이나 velocity가 아니라 socket 위치 자체가 정답이다.
+	Particle->Location = SpawnPosition;
+	Particle->OldLocation = SpawnPosition;
+	Particle->Velocity = FVector::ZeroVector;
+	Particle->BaseVelocity = FVector::ZeroVector;
+	Particle->OneOverMaxLifetime = OneOverLifeTime;
+	Particle->RelativeTime = 0.0f;
+	Particle->Size.X = SpawnSize;
+	Particle->Size.Y = SpawnSize;
+	Particle->Size.Z = SpawnSize;
+	Particle->BaseSize = Particle->Size;
+
+	TrailData->Flags = TRAIL_EMITTER_SET_NEXT(TrailData->Flags, TRAIL_EMITTER_NULL_NEXT);
+	TrailData->Flags = TRAIL_EMITTER_SET_PREV(TrailData->Flags, TRAIL_EMITTER_NULL_PREV);
+	TrailData->TrailIndex = TrailIdx;
+	TrailData->Tangent = SpawnTangent * std::max(DeltaTime, 1.0e-4f);
+	TrailData->SpawnTime = RunningTime;
+	TrailData->SpawnDelta = DeltaTime;
+	TrailData->Up = SpawnUp;
+	TrailData->SourceIndex = 0;
+	TrailData->bMovementSpawned = true;
+	TrailData->bInterpolatedSpawn = false;
+	TrailData->SpawnedTessellationPoints = 1;
+
+	bool bAddedParticle = false;
+	if (bNoLivingParticles)
+	{
+		TrailData->Flags = TRAIL_EMITTER_SET_ONLY(TrailData->Flags);
+		if (!TiledUDistanceTraveled.empty())
+		{
+			TiledUDistanceTraveled[TrailIdx] = 0.0f;
+		}
+		TrailData->TiledU = 0.0f;
+		bAddedParticle = true;
+		SetStartIndex(TrailData->TrailIndex, ParticleIndex);
+	}
+	else if (StartParticle && StartTrailData)
+	{
+		bAddedParticle = AddParticleHelper(TrailIdx, StartIndex, StartTrailData, ParticleIndex, TrailData);
+	}
+
+	if (bAddedParticle)
+	{
+		if (AnimTrailTypeData && std::fabs(AnimTrailTypeData->TilingDistance) >= 1.0e-6f)
+		{
+			if (!bNoLivingParticles && !TiledUDistanceTraveled.empty())
+			{
+				TiledUDistanceTraveled[TrailIdx] += FVector::Distance(Particle->Location, StartParticle->Location);
+				TrailData->TiledU = TiledUDistanceTraveled[TrailIdx] / AnimTrailTypeData->TilingDistance;
+			}
+		}
+
+		++ActiveParticles;
+		LastSamplePosition = SpawnPosition;
+		bHasLastSamplePosition = true;
+		SampleTimeAccumulator = 0.0f;
+		if (!TrailSpawnTimes.empty())
+		{
+			TrailSpawnTimes[TrailIdx] = TrailData->SpawnTime;
+		}
+	}
+
+	return SpawnFraction;
 }

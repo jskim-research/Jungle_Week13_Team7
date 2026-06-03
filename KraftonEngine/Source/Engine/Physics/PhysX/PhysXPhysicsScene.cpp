@@ -13,9 +13,11 @@
 #include "Math/Quat.h"
 #include "Object/Object.h"  // IsAliveObject
 #include "Core/Logging/Log.h"
+#include "Core/ProjectSettings.h"
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 // PhysX headers
 #include <PxPhysicsAPI.h>
@@ -605,6 +607,7 @@ void FPhysXPhysicsScene::Initialize(UWorld* InWorld)
 
 	World = InWorld;
 	bShutdownComplete = false;
+	PhysicsAccumulator = 0.0f;
 
 	// Foundation / Physics — 프로세스 싱글턴 공유
 	if (!AcquireSharedPhysX(Foundation, Physics))
@@ -683,6 +686,8 @@ void FPhysXPhysicsScene::Shutdown()
 	{
 		EventCallback->ClearPendingEvents();
 	}
+	PhysicsAccumulator = 0.0f;
+	PendingBodyForces.clear();
 
 	if (Scene)
 	{
@@ -793,6 +798,68 @@ PxRigidDynamic* FPhysXPhysicsScene::GetDynamicActorForComponent(UPrimitiveCompon
 	return BodyInstance->Actor->is<PxRigidDynamic>();
 }
 
+FPhysXPhysicsScene::FPendingBodyForces* FPhysXPhysicsScene::FindOrAddPendingBodyForces(UPrimitiveComponent* Comp)
+{
+	if (!IsValid(Comp))
+	{
+		return nullptr;
+	}
+
+	for (FPendingBodyForces& Pending : PendingBodyForces)
+	{
+		if (Pending.Comp == Comp)
+		{
+			return &Pending;
+		}
+	}
+
+	FPendingBodyForces& Pending = PendingBodyForces.emplace_back();
+	Pending.Comp = Comp;
+	return &Pending;
+}
+
+void FPhysXPhysicsScene::ClearPendingForcesForComponent(UPrimitiveComponent* Comp)
+{
+	PendingBodyForces.erase(
+		std::remove_if(PendingBodyForces.begin(), PendingBodyForces.end(),
+			[Comp](const FPendingBodyForces& Pending)
+			{
+				return Pending.Comp == Comp;
+			}),
+		PendingBodyForces.end());
+}
+
+void FPhysXPhysicsScene::ApplyPendingForces()
+{
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		return;
+	}
+
+	for (const FPendingBodyForces& Pending : PendingBodyForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Pending.Comp);
+		if (!Dyn)
+		{
+			continue;
+		}
+		if (Dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)
+		{
+			continue;
+		}
+
+		Dyn->addForce(ToPxVec3(Pending.Force));
+		Dyn->addTorque(ToPxVec3(Pending.Torque));
+		for (const FPendingForceAtLocation& ForceAtLocation : Pending.ForcesAtLocation)
+		{
+			PxRigidBodyExt::addForceAtPos(
+				*Dyn,
+				ToPxVec3(ForceAtLocation.Force),
+				ToPxVec3(ForceAtLocation.WorldLocation));
+		}
+	}
+}
+
 namespace
 {
 	PxQueryHitType::Enum VehicleWheelRaycastPreFilter(
@@ -858,7 +925,7 @@ namespace
 		const float AxleBias = bFrontAxle ? 1.05f : 0.95f;
 		TireData.mLatStiffY = BaseLatStiffY * GripScale * AxleBias;
 		TireData.mLatStiffX = 1.8f;
-		TireData.mLongitudinalStiffnessPerUnitGravity = 1200.0f;
+		TireData.mLongitudinalStiffnessPerUnitGravity = 2200.0f;
 
 		TireData.mFrictionVsSlipGraph[0][0] = 0.0f;
 		TireData.mFrictionVsSlipGraph[0][1] = 1.0f;
@@ -940,31 +1007,35 @@ namespace
 		const float MaxRPM = std::max(Params.EngineMaxRPM, 1000.0f);
 		EngineData.mPeakTorque = std::max(Params.EnginePeakTorque, 1.0f);
 		EngineData.mMaxOmega = MaxRPM * PxPi * 2.0f / 60.0f;
+		EngineData.mMOI = 1.2f;
+		EngineData.mDampingRateFullThrottle = 0.35f;
+		EngineData.mDampingRateZeroThrottleClutchEngaged = 2.0f;
+		EngineData.mDampingRateZeroThrottleClutchDisengaged = 0.35f;
 		EngineData.mTorqueCurve.clear();
-		EngineData.mTorqueCurve.addPair(0.0f, 0.50f);
-		EngineData.mTorqueCurve.addPair(0.30f, 0.88f);
-		EngineData.mTorqueCurve.addPair(0.55f, 1.00f);
-		EngineData.mTorqueCurve.addPair(0.78f, 0.98f);
-		EngineData.mTorqueCurve.addPair(1.00f, 0.90f);
+		EngineData.mTorqueCurve.addPair(0.0f, 0.35f);
+		EngineData.mTorqueCurve.addPair(0.25f, 0.78f);
+		EngineData.mTorqueCurve.addPair(0.50f, 0.96f);
+		EngineData.mTorqueCurve.addPair(0.78f, 1.00f);
+		EngineData.mTorqueCurve.addPair(1.00f, 0.92f);
 		DriveData.setEngineData(EngineData);
 
 		PxVehicleGearsData GearsData;
 		GearsData.mNbRatios = PxVehicleGearsData::eNINTH;
-		GearsData.mFinalRatio = 2.55f;
-		GearsData.mSwitchTime = 0.06f;
-		GearsData.mRatios[PxVehicleGearsData::eREVERSE] = -3.20f;
-		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 2.95f;
-		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 2.35f;
-		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 1.88f;
-		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 1.52f;
-		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.26f;
-		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.08f;
-		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 0.92f;
-		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 0.78f;
+		GearsData.mFinalRatio = 3.60f;
+		GearsData.mSwitchTime = 0.04f;
+		GearsData.mRatios[PxVehicleGearsData::eREVERSE] = -3.40f;
+		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 3.90f;
+		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 3.15f;
+		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 2.62f;
+		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 2.25f;
+		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.98f;
+		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.78f;
+		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 1.63f;
+		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 1.52f;
 		DriveData.setGearsData(GearsData);
 
 		PxVehicleClutchData ClutchData;
-		ClutchData.mStrength = 10.0f;
+		ClutchData.mStrength = 150.0f;
 		DriveData.setClutchData(ClutchData);
 
 		// PxVehicle basis: forward = -Y (see PxVehicleSetBasisVectors). Axle separation is along Y, track width along X.
@@ -976,6 +1047,52 @@ namespace
 		DriveData.setAckermannGeometryData(AckermannData);
 
 		return DriveData;
+	}
+
+	bool ReplaceWithVehicleChassisShape(
+		PxRigidDynamic* ChassisActor,
+		UPrimitiveComponent* ChassisComp,
+		PxMaterial* Material,
+		const FFourWheeledVehicleRuntimeParams& Params)
+	{
+		if (!ChassisActor || !ChassisComp || !Material)
+		{
+			return false;
+		}
+
+		const PxU32 NumShapes = ChassisActor->getNbShapes();
+		if (NumShapes > 0)
+		{
+			std::vector<PxShape*> Shapes(NumShapes);
+			const PxU32 Fetched = ChassisActor->getShapes(Shapes.data(), NumShapes);
+			for (PxU32 ShapeIndex = 0; ShapeIndex < Fetched; ++ShapeIndex)
+			{
+				if (Shapes[ShapeIndex])
+				{
+					ChassisActor->detachShape(*Shapes[ShapeIndex]);
+				}
+			}
+		}
+
+		const float TrackWidth = std::abs(Params.WheelCenterOffsets[1].X - Params.WheelCenterOffsets[0].X);
+		const float AxleSeparation = std::abs(Params.WheelCenterOffsets[2].Y - Params.WheelCenterOffsets[0].Y);
+		const float HalfWidth = std::max(0.45f, TrackWidth * 0.35f);
+		const float HalfLength = std::max(0.75f, AxleSeparation * 0.52f);
+		const float HalfHeight = 0.22f;
+		const float LocalZ = std::max(Params.WheelRadius + 0.32f, HalfHeight + 0.30f);
+
+		PxShape* ChassisShape = PxRigidActorExt::createExclusiveShape(
+			*ChassisActor,
+			PxBoxGeometry(HalfWidth, HalfLength, HalfHeight),
+			*Material);
+		if (!ChassisShape)
+		{
+			return false;
+		}
+
+		ChassisShape->setLocalPose(PxTransform(PxVec3(0.0f, 0.0f, LocalZ)));
+		PhysXShapeUtils::FinalizeShape(ChassisShape, ChassisComp);
+		return true;
 	}
 
 	FString GearIndexToDisplay(uint32_t GearIndex)
@@ -1069,7 +1186,7 @@ namespace
 			return true;
 		}
 
-		constexpr float MinUpshiftRevRatio = 0.72f;
+		constexpr float MinUpshiftRevRatio = 0.55f;
 		return ComputeGearShiftRevRatio(Vehicle, EffectiveGear, DisplayEngineOmega) >= MinUpshiftRevRatio;
 	}
 
@@ -1177,6 +1294,12 @@ void FPhysXPhysicsScene::RegisterVehicle(UFourWheeledVehicleMovementComponent* V
 	if (!ChassisActor)
 	{
 		UE_LOG("[PhysXVehicle] Failed to create vehicle: chassis has no PxRigidDynamic");
+		return;
+	}
+
+	if (!ReplaceWithVehicleChassisShape(ChassisActor, ChassisComp, DefaultMaterial, Params))
+	{
+		UE_LOG("[PhysXVehicle] Failed to create vehicle chassis collision shape");
 		return;
 	}
 
@@ -1635,6 +1758,8 @@ void FPhysXPhysicsScene::UnregisterComponent(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene) return;
 
+	ClearPendingForcesForComponent(Comp);
+
 	if (!Comp->GetBodyInstance()->IsValidBodyInstance())
 	{
 		return;
@@ -1650,6 +1775,7 @@ void FPhysXPhysicsScene::RebuildBody(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene) return;
 
+	ClearPendingForcesForComponent(Comp);
 	UnregisterComponent(Comp);
 	if (ShouldUseBodyInstancePath(Comp))
 	{
@@ -1665,15 +1791,11 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 {
 	if (bShutdownComplete || !Scene || DeltaTime <= 0.0f) return;
 
-	// 어떤 이유로든 frame hitch (씬 로드 / 큰 OBJ 동기 로딩 / Alt-Tab / OS 스파이크) 가
-	// 발생해도 PhysX 가 큰 dt 한 번에 적분해 차량·메테오가 콜리전을 뚫는 tunneling 사고를
-	// 막기 위한 클램프. 0.1s 는 60 m/s 차량이 한 step 에 6m 이동 — 충돌 박스 내에서 풀림
-	// 가능한 수준이고, 그 이상 hitch 면 게임을 느리게 진행시키더라도 안전이 우선.
-	constexpr float MaxPhysicsDeltaTime = 0.1f;
-	if (DeltaTime > MaxPhysicsDeltaTime)
-	{
-		DeltaTime = MaxPhysicsDeltaTime;
-	}
+	const float FixedPhysicsFPS = (std::max)(1.0f, (std::min)(FProjectSettings::Get().Physics.FixedPhysicsFPS, 1000.0f));
+	const float FixedPhysicsStep = 1.0f / FixedPhysicsFPS;
+	constexpr int32 MaxSubsteps = 6;
+	const float MaxAccumulatedTime = FixedPhysicsStep * MaxSubsteps;
+	constexpr float MaxClampedPhysicsDeltaTime = 0.1f;
 
 	PruneInvalidBodyInstanceComponents();
 
@@ -1731,13 +1853,47 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 		}
 	}
 
-	RunVehicleSuspensionRaycasts();
+	bool bRanSimulationStep = false;
+	if (FProjectSettings::Get().Physics.bUseFixedPhysicsStep)
+	{
+		PhysicsAccumulator = (std::min)(PhysicsAccumulator + DeltaTime, MaxAccumulatedTime);
 
-	// ── Simulate ──
-	Scene->simulate(DeltaTime);
-	Scene->fetchResults(true);
+		int32 SubstepCount = 0;
+		while (PhysicsAccumulator >= FixedPhysicsStep && SubstepCount < MaxSubsteps)
+		{
+			RunVehicleSuspensionRaycasts();
+			ApplyPendingForces();
 
-	RunVehicleUpdates(DeltaTime);
+			// ── Simulate ──
+			Scene->simulate(FixedPhysicsStep);
+			Scene->fetchResults(true);
+
+			RunVehicleUpdates(FixedPhysicsStep);
+
+			PhysicsAccumulator -= FixedPhysicsStep;
+			++SubstepCount;
+			bRanSimulationStep = true;
+		}
+	}
+	else
+	{
+		PhysicsAccumulator = 0.0f;
+		const float ClampedDeltaTime = (std::min)(DeltaTime, MaxClampedPhysicsDeltaTime);
+
+		RunVehicleSuspensionRaycasts();
+		ApplyPendingForces();
+
+		// ── Simulate ──
+		Scene->simulate(ClampedDeltaTime);
+		Scene->fetchResults(true);
+
+		RunVehicleUpdates(ClampedDeltaTime);
+		bRanSimulationStep = true;
+	}
+	if (bRanSimulationStep)
+	{
+		PendingBodyForces.clear();
+	}
 
 	// ── Post-simulate: PhysX → Engine Transform 동기화 (per-component) ──
 	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
@@ -1890,23 +2046,47 @@ bool FPhysXPhysicsScene::Sweep(const FVector& Start, const FVector& Dir, float M
 
 void FPhysXPhysicsScene::AddForce(UPrimitiveComponent* Comp, const FVector& Force)
 {
-	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
-	if (!Dyn) return;
-	Dyn->addForce(ToPxVec3(Force));
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
+		if (!Dyn) return;
+		Dyn->addForce(ToPxVec3(Force));
+		return;
+	}
+
+	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
+	if (!Pending) return;
+	Pending->Force = Pending->Force + Force;
 }
 
 void FPhysXPhysicsScene::AddForceAtLocation(UPrimitiveComponent* Comp, const FVector& Force, const FVector& WorldLocation)
 {
-	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
-	if (!Dyn) return;
-	PxRigidBodyExt::addForceAtPos(*Dyn, ToPxVec3(Force), ToPxVec3(WorldLocation));
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
+		if (!Dyn) return;
+		PxRigidBodyExt::addForceAtPos(*Dyn, ToPxVec3(Force), ToPxVec3(WorldLocation));
+		return;
+	}
+
+	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
+	if (!Pending) return;
+	Pending->ForcesAtLocation.push_back(FPendingForceAtLocation{ Force, WorldLocation });
 }
 
 void FPhysXPhysicsScene::AddTorque(UPrimitiveComponent* Comp, const FVector& Torque)
 {
-	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
-	if (!Dyn) return;
-	Dyn->addTorque(ToPxVec3(Torque));
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
+		if (!Dyn) return;
+		Dyn->addTorque(ToPxVec3(Torque));
+		return;
+	}
+
+	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
+	if (!Pending) return;
+	Pending->Torque = Pending->Torque + Torque;
 }
 
 // ============================================================

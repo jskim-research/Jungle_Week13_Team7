@@ -68,10 +68,19 @@ public:
 
     int32 FindBoneIndex(const FString& BoneName) const;
 
+    const TArray<FSkeletonSocket>& GetSockets() const { return Sockets; }
+    TArray<FSkeletonSocket>& GetMutableSockets() { return Sockets; }
+    int32 FindSocketIndex(const FName& SocketName) const;
+    const FSkeletonSocket* FindSocket(const FName& SocketName) const;
+    FSkeletonSocket* FindSocket(const FName& SocketName);
+    bool HasSocket(const FName& SocketName) const;
+    int32 ResolveSocketBoneIndex(const FSkeletonSocket& Socket) const;
+
 private:
     FString            AssetPathFileName = "None";
     FString            SkeletonAssetGuid;
     FString            CompatibilitySignature;
     FReferenceSkeleton ReferenceSkeleton;
+    TArray<FSkeletonSocket> Sockets;
     TMap<FString, int32> BoneNameToIndex;
 };

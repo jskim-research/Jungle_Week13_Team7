@@ -57,6 +57,9 @@ public:
 	FTransform GetBoneLocalTransformByIndex(int32 BoneIndex) const;
 	FTransform GetBoneEditBaseLocalTransformByIndex(int32 BoneIndex) const;
 
+	bool HasSocket(const FName& SocketName) const override;
+	FTransform GetSocketTransform(const FName& SocketName) const override;
+
 	void SetBoneLocationByIndex(int32 BoneIndex, const FVector& NewLocation);
 	void SetBoneRotationByIndex(int32 BoneIndex, const FRotator& NewRotation);
 	void SetBoneRotationByIndex(int32 BoneIndex, const FQuat& NewQuat);
@@ -108,6 +111,8 @@ protected:
 	void EnsureBoneEditBasePose();
 	void BuildBoneEditGlobalTransforms(TArray<FTransform>& OutGlobals) const;
 	void BuildBoneEditGlobalMatrices(TArray<FMatrix>& OutGlobals) const;
+	int32 FindBoneIndexByName(const FString& BoneName) const;
+	void MarkSocketAttachedChildrenDirty();
 
     void AddReferencedObjects(FReferenceCollector& Collector) override;
 

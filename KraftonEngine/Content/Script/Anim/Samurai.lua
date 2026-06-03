@@ -19,6 +19,8 @@ local ULTIMATE_ATTACK_PATH = "Content/Animation/Samurai_UE4/SamuraiAttackUltimat
 
 local WALK_THRESHOLD = 0.1
 local RUN_THRESHOLD  = 8.0
+local RUN_SAMPLE_SPEED = 10.0
+local LOCOMOTION_SPEED_RESPONSE = 12.0
 local JUMP_LOOP = false
 
 local ATTACK_BLEND_IN  = 0.08
@@ -41,6 +43,8 @@ local function ResetAttack(self, unlockMovement)
     if unlockMovement ~= false then
         PlayerCharacter.SetMovementInputEnabled(self, true)
     end
+
+    PlayerCharacter.SetKatanaTrailActive(false)
 end
 
 local function BeginAttack(self, index)
@@ -49,6 +53,8 @@ local function BeginAttack(self, index)
     self.ComboQueued = false
     self.AttackEnd = false
     PlayerCharacter.StopMovementImmediately(self)
+    PlayerCharacter.StepAttackForward(self)
+    PlayerCharacter.SetKatanaTrailActive(true)
 end
 
 local function BeginDashSlash(self)
@@ -62,6 +68,7 @@ end
 
 function init(self)
     self.Speed = 0.0
+    self.BlendSpeed = 0.0
 
     self.AttackPressed = false
     self.DashSlashPressed = false
@@ -73,72 +80,28 @@ function init(self)
     PlayerCharacter.Initialize(self, obj)
     ResetAttack(self)
 
-    local loco = Anim.create_state_machine("Locomotion")
-
-    Anim.sm_add_state(loco, "Idle", Anim.create_sequence_player(IDLE_PATH, 1.0, true))
-    Anim.sm_add_state(loco, "Walk", Anim.create_sequence_player(WALK_PATH, 1.0, true))
-    Anim.sm_add_state(loco, "Run",  Anim.create_sequence_player(RUN_PATH,  1.0, true))
-
-    Anim.sm_add_transition(loco, "Idle", "Walk",
-        function()
-            return self.Speed > WALK_THRESHOLD and self.Speed < RUN_THRESHOLD
-        end,
-        0.2
-    )
-
-    Anim.sm_add_transition(loco, "Idle", "Run",
-        function()
-            return self.Speed >= RUN_THRESHOLD
-        end,
-        0.2
-    )
-
-    Anim.sm_add_transition(loco, "Walk", "Idle",
-        function()
-            return self.Speed <= WALK_THRESHOLD
-        end,
-        0.2
-    )
-
-    Anim.sm_add_transition(loco, "Walk", "Run",
-        function()
-            return self.Speed >= RUN_THRESHOLD
-        end,
-        0.2
-    )
-
-    Anim.sm_add_transition(loco, "Run", "Walk",
-        function()
-            return self.Speed > WALK_THRESHOLD and self.Speed < RUN_THRESHOLD
-        end,
-        0.2
-    )
-
-    Anim.sm_add_transition(loco, "Run", "Idle",
-        function()
-            return self.Speed <= WALK_THRESHOLD
-        end,
-        0.2
-    )
-
-    Anim.sm_set_initial_state(loco, "Idle")
+    local loco = Anim.create_blend_space_1d(0.0)
+    Anim.blend_space_1d_add_sample(loco, IDLE_PATH, 0.0, 1.0, true)
+    Anim.blend_space_1d_add_sample(loco, WALK_PATH, RUN_THRESHOLD, 1.0, true)
+    Anim.blend_space_1d_add_sample(loco, RUN_PATH, RUN_SAMPLE_SPEED, 1.0, true)
+    self.LocomotionBlendSpace = loco
 
     local top = Anim.create_state_machine("Top")
 
     Anim.sm_add_state(top, "Locomotion", loco)
     Anim.sm_add_state(top, "Jump", Anim.create_sequence_player(JUMP_PATH, 1.0, JUMP_LOOP))
 
-    Anim.sm_add_state(top, "Attack1", Anim.create_sequence_player(ATTACK1_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack2", Anim.create_sequence_player(ATTACK2_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack3", Anim.create_sequence_player(ATTACK3_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack4", Anim.create_sequence_player(ATTACK4_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack5", Anim.create_sequence_player(ATTACK5_PATH, 1.0, false))
+    Anim.sm_add_state(top, "Attack1", Anim.create_sequence_player(ATTACK1_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack2", Anim.create_sequence_player(ATTACK2_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack3", Anim.create_sequence_player(ATTACK3_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack4", Anim.create_sequence_player(ATTACK4_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack5", Anim.create_sequence_player(ATTACK5_PATH, 1.5, false))
 
     Anim.sm_add_state(top, "DashSlash", Anim.create_sequence_player(DASH_SLASH_PATH, 3.0, false))
 
     Anim.sm_add_transition(top, "AnyState", "DashSlash",
         function()
-            if self.DashSlashPressed and not self.DashSlashActive and not Anim.is_owner_falling() then
+            if self.DashSlashPressed and not self.DashSlashActive and not Anim.is_owner_falling() and not PlayerCharacter.IsUltimateRunning then
                 BeginDashSlash(self)
                 return true
             end
@@ -147,7 +110,7 @@ function init(self)
         DASH_SLASH_BLEND_IN
     )
 
-    Anim.sm_add_state(top, "UltimateAttack", Anim.create_sequence_player(ULTIMATE_ATTACK_PATH, 1.0, false))
+    Anim.sm_add_state(top, "UltimateAttack", Anim.create_sequence_player(ULTIMATE_ATTACK_PATH, 1.2, false))
 
     Anim.sm_add_transition(top, "AnyState", "UltimateAttack",
         function()
@@ -306,6 +269,9 @@ end
 
 function update(self, dt)
     self.Speed = Anim.get_owner_speed()
+    local blendAlpha = math.min(dt * LOCOMOTION_SPEED_RESPONSE, 1.0)
+    self.BlendSpeed = self.BlendSpeed + (self.Speed - self.BlendSpeed) * blendAlpha
+    Anim.blend_space_1d_set_input(self.LocomotionBlendSpace, self.BlendSpeed)
 
     self.AttackPressed = Anim.is_left_mouse_pressed()
     self.DashSlashPressed = Anim.is_key_pressed(VK_SHIFT)
@@ -318,6 +284,11 @@ function update(self, dt)
         PlayerCharacter.UpdateDashSlash(self, dt)
     elseif self.AttackIndex == 0 then
         PlayerCharacter.ApplyMoveInput(self)
+    else
+        local dir = PlayerCharacter.GetMoveInputWorldDirection(self)
+        if dir ~= nil then
+            PlayerCharacter.SmoothFaceOwnerToDirection(self, dir, dt)
+        end
     end
 end
 

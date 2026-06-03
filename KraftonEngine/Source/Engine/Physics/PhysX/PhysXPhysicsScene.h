@@ -76,6 +76,19 @@ public:
 private:
 	struct FPhysXVehicleInstance;
 	struct FVehicleSceneQueryResources;
+	struct FPendingForceAtLocation
+	{
+		FVector Force = FVector(0.0f, 0.0f, 0.0f);
+		FVector WorldLocation = FVector(0.0f, 0.0f, 0.0f);
+	};
+
+	struct FPendingBodyForces
+	{
+		UPrimitiveComponent* Comp = nullptr;
+		FVector Force = FVector(0.0f, 0.0f, 0.0f);
+		FVector Torque = FVector(0.0f, 0.0f, 0.0f);
+		TArray<FPendingForceAtLocation> ForcesAtLocation;
+	};
 
 	static constexpr uint32 MaxVehicles = 8;
 	static constexpr uint32 WheelsPerVehicle = 4;
@@ -91,18 +104,23 @@ private:
 
 	TArray<UPrimitiveComponent*> BodyInstanceComponents;
 	TArray<FPhysXVehicleInstance*> Vehicles;
+	TArray<FPendingBodyForces> PendingBodyForces;
 
 	FVehicleSceneQueryResources* VehicleSceneQuery = nullptr;
 	physx::PxVehicleDrivableSurfaceToTireFrictionPairs* VehicleFrictionPairs = nullptr;
 
 	bool bSharedPhysXAcquired = false;
 	bool bShutdownComplete = true;
+	float PhysicsAccumulator = 0.0f;
 
 	struct FBodyInstanceInitParams MakeBodyInstanceInitParams() const;
 	void ReleaseBodyInstances();
 	void PruneInvalidBodyInstanceComponents();
 	bool ShouldIgnoreActorForQuery(const physx::PxRigidActor* Actor, const AActor* IgnoreActor) const;
 	physx::PxRigidDynamic* GetDynamicActorForComponent(UPrimitiveComponent* Comp) const;
+	FPendingBodyForces* FindOrAddPendingBodyForces(UPrimitiveComponent* Comp);
+	void ClearPendingForcesForComponent(UPrimitiveComponent* Comp);
+	void ApplyPendingForces();
 	FPhysXVehicleInstance* FindVehicle(UFourWheeledVehicleMovementComponent* VehicleComp) const;
 	bool IsVehicleChassisComponent(const UPrimitiveComponent* Comp) const;
 	void EnsureVehicleFrictionPairs();
