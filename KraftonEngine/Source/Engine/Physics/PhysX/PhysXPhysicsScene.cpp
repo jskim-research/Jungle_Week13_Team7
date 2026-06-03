@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 // PhysX headers
 #include <PxPhysicsAPI.h>
@@ -924,7 +925,7 @@ namespace
 		const float AxleBias = bFrontAxle ? 1.05f : 0.95f;
 		TireData.mLatStiffY = BaseLatStiffY * GripScale * AxleBias;
 		TireData.mLatStiffX = 1.8f;
-		TireData.mLongitudinalStiffnessPerUnitGravity = 1200.0f;
+		TireData.mLongitudinalStiffnessPerUnitGravity = 2200.0f;
 
 		TireData.mFrictionVsSlipGraph[0][0] = 0.0f;
 		TireData.mFrictionVsSlipGraph[0][1] = 1.0f;
@@ -1003,26 +1004,39 @@ namespace
 		DriveData.setDiffData(DiffData);
 
 		PxVehicleEngineData EngineData;
-		EngineData.mPeakTorque = std::max(Params.EnginePeakTorque, 0.0f);
-		EngineData.mMaxOmega = 900.0f;
+		const float MaxRPM = std::max(Params.EngineMaxRPM, 1000.0f);
+		EngineData.mPeakTorque = std::max(Params.EnginePeakTorque, 1.0f);
+		EngineData.mMaxOmega = MaxRPM * PxPi * 2.0f / 60.0f;
+		EngineData.mMOI = 1.2f;
+		EngineData.mDampingRateFullThrottle = 0.35f;
+		EngineData.mDampingRateZeroThrottleClutchEngaged = 2.0f;
+		EngineData.mDampingRateZeroThrottleClutchDisengaged = 0.35f;
+		EngineData.mTorqueCurve.clear();
+		EngineData.mTorqueCurve.addPair(0.0f, 0.20f);
+		EngineData.mTorqueCurve.addPair(0.25f, 0.45f);
+		EngineData.mTorqueCurve.addPair(0.45f, 0.70f);
+		EngineData.mTorqueCurve.addPair(0.65f, 0.90f);
+		EngineData.mTorqueCurve.addPair(0.82f, 1.00f);
+		EngineData.mTorqueCurve.addPair(1.00f, 0.88f);
 		DriveData.setEngineData(EngineData);
 
 		PxVehicleGearsData GearsData;
 		GearsData.mNbRatios = PxVehicleGearsData::eNINTH;
-		GearsData.mFinalRatio = 3.20f;
-		GearsData.mSwitchTime = 0.08f;
-		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 3.10f;
-		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 2.40f;
-		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 1.90f;
-		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 1.55f;
-		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.30f;
-		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.12f;
-		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 0.96f;
-		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 0.84f;
+		GearsData.mFinalRatio = 3.60f;
+		GearsData.mSwitchTime = 0.04f;
+		GearsData.mRatios[PxVehicleGearsData::eREVERSE] = -3.40f;
+		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 4.58f;
+		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 3.44f;
+		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 2.68f;
+		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 2.20f;
+		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.90f;
+		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.72f;
+		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 1.59f;
+		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 1.51f;
 		DriveData.setGearsData(GearsData);
 
 		PxVehicleClutchData ClutchData;
-		ClutchData.mStrength = 10.0f;
+		ClutchData.mStrength = 150.0f;
 		DriveData.setClutchData(ClutchData);
 
 		// PxVehicle basis: forward = -Y (see PxVehicleSetBasisVectors). Axle separation is along Y, track width along X.
@@ -1034,6 +1048,52 @@ namespace
 		DriveData.setAckermannGeometryData(AckermannData);
 
 		return DriveData;
+	}
+
+	bool ReplaceWithVehicleChassisShape(
+		PxRigidDynamic* ChassisActor,
+		UPrimitiveComponent* ChassisComp,
+		PxMaterial* Material,
+		const FFourWheeledVehicleRuntimeParams& Params)
+	{
+		if (!ChassisActor || !ChassisComp || !Material)
+		{
+			return false;
+		}
+
+		const PxU32 NumShapes = ChassisActor->getNbShapes();
+		if (NumShapes > 0)
+		{
+			std::vector<PxShape*> Shapes(NumShapes);
+			const PxU32 Fetched = ChassisActor->getShapes(Shapes.data(), NumShapes);
+			for (PxU32 ShapeIndex = 0; ShapeIndex < Fetched; ++ShapeIndex)
+			{
+				if (Shapes[ShapeIndex])
+				{
+					ChassisActor->detachShape(*Shapes[ShapeIndex]);
+				}
+			}
+		}
+
+		const float TrackWidth = std::abs(Params.WheelCenterOffsets[1].X - Params.WheelCenterOffsets[0].X);
+		const float AxleSeparation = std::abs(Params.WheelCenterOffsets[2].Y - Params.WheelCenterOffsets[0].Y);
+		const float HalfWidth = std::max(0.45f, TrackWidth * 0.35f);
+		const float HalfLength = std::max(0.75f, AxleSeparation * 0.52f);
+		const float HalfHeight = 0.22f;
+		const float LocalZ = std::max(Params.WheelRadius + 0.32f, HalfHeight + 0.30f);
+
+		PxShape* ChassisShape = PxRigidActorExt::createExclusiveShape(
+			*ChassisActor,
+			PxBoxGeometry(HalfWidth, HalfLength, HalfHeight),
+			*Material);
+		if (!ChassisShape)
+		{
+			return false;
+		}
+
+		ChassisShape->setLocalPose(PxTransform(PxVec3(0.0f, 0.0f, LocalZ)));
+		PhysXShapeUtils::FinalizeShape(ChassisShape, ChassisComp);
+		return true;
 	}
 
 	FString GearIndexToDisplay(uint32_t GearIndex)
@@ -1072,7 +1132,7 @@ namespace
 
 	float ComputeWheelDrivenEngineOmega(const PxVehicleDrive4W* Vehicle, uint32_t GearIndex)
 	{
-		if (!Vehicle || GearIndex <= PxVehicleGearsData::eNEUTRAL)
+		if (!Vehicle || GearIndex == PxVehicleGearsData::eNEUTRAL)
 		{
 			return 0.0f;
 		}
@@ -1084,14 +1144,14 @@ namespace
 		}
 
 		const float GearRatio = GearsData.mRatios[GearIndex] * GearsData.mFinalRatio;
-		if (GearRatio <= 0.0f)
+		if (FMath::IsNearlyZero(GearRatio))
 		{
 			return 0.0f;
 		}
 
 		const float WheelRadius = std::max(Vehicle->mWheelsSimData.getWheelData(0).mRadius, 0.01f);
 		const float WheelOmega = std::abs(Vehicle->computeForwardSpeed()) / WheelRadius;
-		return WheelOmega * GearRatio;
+		return WheelOmega * std::abs(GearRatio);
 	}
 
 	float ComputeGearShiftRevRatio(const PxVehicleDrive4W* Vehicle, uint32_t GearIndex, float DisplayEngineOmega)
@@ -1165,7 +1225,7 @@ namespace
 			DisplayEngineOmega = IdleOmega;
 		}
 
-		if (EffectiveGear <= PxVehicleGearsData::eNEUTRAL)
+		if (EffectiveGear == PxVehicleGearsData::eNEUTRAL)
 		{
 			const float TargetOmega = IdleOmega + FMath::Clamp(ThrottleInput, 0.0f, 1.0f) * (MaxOmega - IdleOmega);
 			const float RiseRate = MaxOmega * 8.0f;
@@ -1235,6 +1295,12 @@ void FPhysXPhysicsScene::RegisterVehicle(UFourWheeledVehicleMovementComponent* V
 	if (!ChassisActor)
 	{
 		UE_LOG("[PhysXVehicle] Failed to create vehicle: chassis has no PxRigidDynamic");
+		return;
+	}
+
+	if (!ReplaceWithVehicleChassisShape(ChassisActor, ChassisComp, DefaultMaterial, Params))
+	{
+		UE_LOG("[PhysXVehicle] Failed to create vehicle chassis collision shape");
 		return;
 	}
 
