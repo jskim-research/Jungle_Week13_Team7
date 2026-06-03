@@ -11,6 +11,9 @@ local VK_SPACE = 0x20
 local DASH_SLASH_DISTANCE = 8.0
 local DASH_SLASH_DURATION = 0.2
 
+local KATANA_MESH_PATH = "Content/Mesh/Katana/source/red cyber katana_StaticMesh.uasset"
+local KATANA_SOCKET_NAME = "WeaponR"
+
 local ULTIMATE_CAMERA_BACK_DISTANCE = 7.0
 local ULTIMATE_CAMERA_HEIGHT = 10
 
@@ -70,6 +73,42 @@ local function GetOwner(ctx)
     end
 
     return obj
+end
+
+function PlayerCharacter.AttachKatanaToWeaponSocket(ctx)
+    local owner = GetOwner(ctx)
+    if owner == nil then
+        return
+    end
+
+    if PlayerCharacter.KatanaComponent ~= nil and PlayerCharacter.KatanaComponent:IsValid() then
+        return
+    end
+
+    if owner.GetSkeletalMeshComponent == nil or owner.AddStaticMeshComponent == nil then
+        print("Katana attach API not available")
+        return
+    end
+
+    local meshComp = owner:GetSkeletalMeshComponent()
+    if meshComp == nil then
+        print("Player skeletal mesh component not found")
+        return
+    end
+
+    local katana = owner:AddStaticMeshComponent()
+    if katana == nil then
+        print("Failed to create Katana static mesh component")
+        return
+    end
+
+    katana:SetMeshPath(KATANA_MESH_PATH)
+    katana:AttachToComponentWithSocket(meshComp, KATANA_SOCKET_NAME)
+    katana.RelativeLocation = Vector(0.0, 0.0, 0.0)
+    katana:SetRotation(Vector(0.0, 0.0, 0.0))
+    katana:SetRelativeScale(Vector(1.0, 1.0, 1.0))
+
+    PlayerCharacter.KatanaComponent = katana
 end
 
 local function SetMovementInputEnabled(ctx, enabled)
@@ -499,6 +538,7 @@ end
 function BeginPlay()
     PlayerCharacter.IsUltimateRunning = false
     PlayerCharacter.IsInUltimateMode = false
+    PlayerCharacter.AttachKatanaToWeaponSocket(PlayerCharacter)
     print("[BeginPlay] " .. obj.UUID)
 end
 
