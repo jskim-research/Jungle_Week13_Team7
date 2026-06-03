@@ -1012,11 +1012,12 @@ namespace
 		EngineData.mDampingRateZeroThrottleClutchEngaged = 2.0f;
 		EngineData.mDampingRateZeroThrottleClutchDisengaged = 0.35f;
 		EngineData.mTorqueCurve.clear();
-		EngineData.mTorqueCurve.addPair(0.0f, 0.35f);
-		EngineData.mTorqueCurve.addPair(0.25f, 0.78f);
-		EngineData.mTorqueCurve.addPair(0.50f, 0.96f);
-		EngineData.mTorqueCurve.addPair(0.78f, 1.00f);
-		EngineData.mTorqueCurve.addPair(1.00f, 0.92f);
+		EngineData.mTorqueCurve.addPair(0.0f, 0.20f);
+		EngineData.mTorqueCurve.addPair(0.25f, 0.45f);
+		EngineData.mTorqueCurve.addPair(0.45f, 0.70f);
+		EngineData.mTorqueCurve.addPair(0.65f, 0.90f);
+		EngineData.mTorqueCurve.addPair(0.82f, 1.00f);
+		EngineData.mTorqueCurve.addPair(1.00f, 0.88f);
 		DriveData.setEngineData(EngineData);
 
 		PxVehicleGearsData GearsData;
@@ -1024,14 +1025,14 @@ namespace
 		GearsData.mFinalRatio = 3.60f;
 		GearsData.mSwitchTime = 0.04f;
 		GearsData.mRatios[PxVehicleGearsData::eREVERSE] = -3.40f;
-		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 3.90f;
-		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 3.15f;
-		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 2.62f;
-		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 2.25f;
-		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.98f;
-		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.78f;
-		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 1.63f;
-		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 1.52f;
+		GearsData.mRatios[PxVehicleGearsData::eFIRST] = 4.58f;
+		GearsData.mRatios[PxVehicleGearsData::eSECOND] = 3.44f;
+		GearsData.mRatios[PxVehicleGearsData::eTHIRD] = 2.68f;
+		GearsData.mRatios[PxVehicleGearsData::eFOURTH] = 2.20f;
+		GearsData.mRatios[PxVehicleGearsData::eFIFTH] = 1.90f;
+		GearsData.mRatios[PxVehicleGearsData::eSIXTH] = 1.72f;
+		GearsData.mRatios[PxVehicleGearsData::eSEVENTH] = 1.59f;
+		GearsData.mRatios[PxVehicleGearsData::eEIGHTH] = 1.51f;
 		DriveData.setGearsData(GearsData);
 
 		PxVehicleClutchData ClutchData;
@@ -1186,7 +1187,7 @@ namespace
 			return true;
 		}
 
-		constexpr float MinUpshiftRevRatio = 0.55f;
+		constexpr float MinUpshiftRevRatio = 0.72f;
 		return ComputeGearShiftRevRatio(Vehicle, EffectiveGear, DisplayEngineOmega) >= MinUpshiftRevRatio;
 	}
 

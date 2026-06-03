@@ -34,10 +34,10 @@
           "Properties" : {
             "BrakeTorque" : 9000.000000,
             "CenterOfMassOffset" : [0.000000, 0.000000, -0.350000],
-            "ChassisMass" : 798.000000,
+            "ChassisMass" : 800.000000,
             "ChassisMeshToken" : "mcl39-chassis",
             "DownforceCoeff" : 12.000000,
-            "EnginePeakTorque" : 1050.000000,
+            "EnginePeakTorque" : 900.000000,
             "EngineMaxRPM" : 15000.000000,
             "MaxDownforceMultiplier" : 5.000000,
             "MaxSteerAngleDeg" : 28.000000,
