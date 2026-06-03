@@ -1586,6 +1586,7 @@ void FMeshEditorWidget::RenderAnimationLayout(float TotalHeight)
 	}
 
 	FAnimationTimelinePanel::Render(NodeInst, Comp, AnimTabState.CurrentSequence, TimelineHeight,
+		AnimTabState.NotifyClipboard,
 		AnimTabState.SelectedNotifyIndex,
 		AnimTabState.SelectedMorphCurveIndex,
 		AnimTabState.SelectedMorphKeyIndex
