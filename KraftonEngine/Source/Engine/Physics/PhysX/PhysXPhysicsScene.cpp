@@ -245,6 +245,30 @@ static bool AcquireSharedPhysX(PxFoundation*& OutFoundation, PxPhysics*& OutPhys
 			return false;
 		}
 
+		if (!PxInitExtensions(*GSharedPhysics, GSharedPvd))
+		{
+			UE_LOG("[PhysX] Failed to initialize PhysX extensions");
+			GSharedPhysics->release();
+			GSharedPhysics = nullptr;
+			if (GSharedPvd && GSharedPvd->isConnected())
+			{
+				GSharedPvd->disconnect();
+			}
+			if (GSharedPvdTransport)
+			{
+				GSharedPvdTransport->release();
+				GSharedPvdTransport = nullptr;
+			}
+			if (GSharedPvd)
+			{
+				GSharedPvd->release();
+				GSharedPvd = nullptr;
+			}
+			GSharedFoundation->release();
+			GSharedFoundation = nullptr;
+			return false;
+		}
+
 		if (PxInitVehicleSDK(*GSharedPhysics))
 		{
 			GVehicleSDKInitialized = true;
@@ -281,6 +305,7 @@ static void ReleaseSharedPhysX()
 			PxCloseVehicleSDK();
 			GVehicleSDKInitialized = false;
 		}
+		PxCloseExtensions();
 		if (GSharedPhysics) { GSharedPhysics->release(); GSharedPhysics = nullptr; }
 		FlushSharedPvdTransport();
 		if (GSharedPvd && GSharedPvd->isConnected()) { GSharedPvd->disconnect(); }

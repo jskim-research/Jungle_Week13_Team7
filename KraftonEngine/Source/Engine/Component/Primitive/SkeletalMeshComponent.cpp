@@ -218,6 +218,10 @@ void USkeletalMeshComponent::BeginPlay()
 	{
 		StartRagdoll();
 	}
+	else if (ShouldInstantiatePhysicsAsset())
+	{
+		InstantiatePhysicsAsset();
+	}
 }
 
 void USkeletalMeshComponent::EndPlay()
@@ -704,6 +708,8 @@ void USkeletalMeshComponent::PostEditProperty(const char* PropertyName)
 
 void USkeletalMeshComponent::PostDuplicate()
 {
+	bComponentHasBegunPlay = false;
+
     Super::PostDuplicate();
 
     // USkinnedMeshComponent::PostDuplicate() 의 SetSkeletalMesh() 경로가 이미 virtual override 를 통해
@@ -807,7 +813,7 @@ void USkeletalMeshComponent::SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset)
 
 bool USkeletalMeshComponent::ShouldInstantiatePhysicsAsset() const
 {
-	return GetPhysicsAsset() && GetWorld() && GetWorld()->GetPhysicsScene() && (GetSimulatePhysics() || bRagdollActive);
+	return bComponentHasBegunPlay && GetPhysicsAsset() && GetWorld() && GetWorld()->GetPhysicsScene() && (GetSimulatePhysics() || bRagdollActive);
 }
 
 void USkeletalMeshComponent::InstantiatePhysicsAsset()
