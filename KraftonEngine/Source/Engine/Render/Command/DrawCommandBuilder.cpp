@@ -635,7 +635,7 @@ void FDrawCommandBuilder::BuildEditorLineCommands(EViewMode ViewMode)
 }
 
 // ============================================================
-// BuildPostProcessCommands — Outline, SceneDepth, WorldNormal, FXAA
+// BuildPostProcessCommands — scene 기반 post-process + DOF + overlay post-process + FXAA
 // HeightFog는 FogPass(ERenderPass::Fog)로 분리 — AlphaBlend 이전에 실행됨
 // ============================================================
 void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, const FScene* CollectScene)
@@ -643,6 +643,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 	ID3D11DeviceContext* Ctx = CachedContext;
 	EViewMode ViewMode = Frame.RenderOptions.ViewMode;
 	const FDrawCommandRenderState PPRS = PassRenderStateTable->ToDrawCommandState(ERenderPass::PostProcess, ViewMode);
+	const FDrawCommandRenderState OverlayPPRS = PassRenderStateTable->ToDrawCommandState(ERenderPass::PostProcessOverlay, ViewMode);
 
 	// HeightFog — ERenderPass::Fog 패스로 제출 (FogPass::BeginPass에서 depth copy/bind 처리)
 	// FogBuffer(b7)는 UpdateFogBuffer에서 전역 바인딩됨 — 커맨드별 CB 세팅 불필요
@@ -658,7 +659,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 		}
 	}
 
-	// Outline (UserBits=1)
+	// Outline — DOF 뒤 overlay pass
 	if (bHasSelectionMaskCommands)
 	{
 		FShader* PPShader = FShaderManager::Get().GetOrCreate(EShaderPath::Outline);
@@ -670,13 +671,13 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 			OutlineCB.Update(Ctx, &ppConstants, sizeof(ppConstants));
 
 			FDrawCommand& Cmd = DrawCommandList.AddCommand();
-			Cmd.InitFullscreenTriangle(PPShader, ERenderPass::PostProcess, PPRS);
+			Cmd.InitFullscreenTriangle(PPShader, ERenderPass::PostProcessOverlay, OverlayPPRS);
 			Cmd.Bindings.PerShaderCB[0] = &OutlineCB;
 			Cmd.BuildSortKey(1);
 		}
 	}
 
-	// SceneDepth (UserBits=2 → Outline 뒤)
+	// SceneDepth (UserBits=2)
 	if (CollectViewMode == EViewMode::SceneDepth)
 	{
 		FShader* DepthShader = FShaderManager::Get().GetOrCreate(EShaderPath::SceneDepth);
@@ -697,7 +698,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 		}
 	}
 
-	// WorldNormal (UserBits=3 → SceneDepth 뒤)
+	// WorldNormal (UserBits=3)
 	if (CollectViewMode == EViewMode::WorldNormal)
 	{
 		FShader* NormalShader = FShaderManager::Get().GetOrCreate(EShaderPath::SceneNormal);
@@ -709,7 +710,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 		}
 	}
 
-	// LightCulling (UserBits=4 → WorldNormal 뒤)
+	// LightCulling (UserBits=4)
 	if (CollectViewMode == EViewMode::LightCulling)
 	{
 		FShader* CullingShader = FShaderManager::Get().GetOrCreate(EShaderPath::LightCulling);
@@ -721,7 +722,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 		}
 	}
 
-	// FXAA
+	// FXAA — 실제 실행 순서는 ERenderPass enum 기준
 	if (Frame.RenderOptions.ShowFlags.bFXAA)
 	{
 		FShader* FXAAShader = FShaderManager::Get().GetOrCreate(EShaderPath::FXAA);
@@ -797,7 +798,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 			CameraFadeCB.Update(Ctx, &FadeData, sizeof(FCameraFadeConstants));
 
 			FDrawCommand& Cmd = DrawCommandList.AddCommand();
-			Cmd.InitFullscreenTriangle(FadeShader, ERenderPass::PostProcess, PPRS);
+			Cmd.InitFullscreenTriangle(FadeShader, ERenderPass::PostProcessOverlay, OverlayPPRS);
 			Cmd.Bindings.PerShaderCB[0] = &CameraFadeCB;
 			Cmd.BuildSortKey(5);
 		}
@@ -818,7 +819,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 			CameraVignetteCB.Update(Ctx, &VignetteData, sizeof(FCameraVignetteConstants));
 
 			FDrawCommand& Cmd = DrawCommandList.AddCommand();
-			Cmd.InitFullscreenTriangle(VignetteShader, ERenderPass::PostProcess, PPRS);
+			Cmd.InitFullscreenTriangle(VignetteShader, ERenderPass::PostProcessOverlay, OverlayPPRS);
 			Cmd.Bindings.PerShaderCB[0] = &CameraVignetteCB;
 			Cmd.BuildSortKey(6);
 		}
@@ -838,7 +839,7 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 			CameraLetterboxCB.Update(Ctx, &LetterboxData, sizeof(FCameraLetterboxConstants));
 
 			FDrawCommand& Cmd = DrawCommandList.AddCommand();
-			Cmd.InitFullscreenTriangle(LetterboxShader, ERenderPass::PostProcess, PPRS);
+			Cmd.InitFullscreenTriangle(LetterboxShader, ERenderPass::PostProcessOverlay, OverlayPPRS);
 			Cmd.Bindings.PerShaderCB[0] = &CameraLetterboxCB;
 			Cmd.BuildSortKey(7);
 		}
