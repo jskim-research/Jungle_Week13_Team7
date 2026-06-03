@@ -12,7 +12,9 @@
 #include "Component/Camera/CameraComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/SceneComponent.h"
+#include "Component/Primitive/SkeletalMeshComponent.h"
 #include "Component/Primitive/StaticMeshComponent.h"
+#include "Component/Primitive/ParticleSystemComponent.h"
 #include "Core/Types/CollisionTypes.h"
 #include "Runtime/Engine.h"
 #include "Viewport/GameViewportClient.h"
@@ -25,9 +27,11 @@
 #include "GameFramework/Camera/SequenceCameraShake.h"
 #include "GameFramework/GameMode/GameplayStatics.h"
 #include "GameFramework/World.h"
+#include "Mesh/MeshManager.h"
 #include "Object/Reflection/UClass.h"
 #include "Object/Reflection/UStruct.h"
 #include "Object/Object.h"
+#include "Particles/ParticleSystemManager.h"
 #include "Component/ActorComponent.h"
 #include "Core/Property/ArrayProperty.h"
 #include "Core/Property/BoolProperty.h"
@@ -2453,6 +2457,14 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 	{
 		Component.SetRelativeRotation(Rotation);
 	},
+		"SetRelativeScale", [](USceneComponent& Component, const FVector& Scale)
+	{
+		Component.SetRelativeScale(Scale);
+	},
+		"AttachToComponentWithSocket", [](USceneComponent& Component, USceneComponent* Parent, const FString& SocketName)
+	{
+		Component.AttachToComponentWithSocket(Parent, SocketName);
+	},
 
 		// 부모 기준 상대 위치 — 동일한 메시를 4개 깐 바퀴 같은 케이스에서 앞/뒤 구분 등
 		// 위치 기반 필터링에 쓰인다. 월드 위치는 위 "Location" 프로퍼티 참고.
@@ -2484,7 +2496,33 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		sol::base_classes,
 		sol::bases<UPrimitiveComponent, USceneComponent, UActorComponent, UObject>(),
 		"MeshPath", sol::property([](UStaticMeshComponent& C) { return C.GetStaticMeshPath(); }),
-		"GetMeshPath", [](UStaticMeshComponent& C) { return C.GetStaticMeshPath(); });
+		"GetMeshPath", [](UStaticMeshComponent& C) { return C.GetStaticMeshPath(); },
+		"SetMeshPath", [](UStaticMeshComponent& C, const FString& MeshPath)
+	{
+		if (!GEngine)
+		{
+			C.SetStaticMesh(nullptr);
+			return;
+		}
+
+		ID3D11Device* Device = GEngine->GetRenderer().GetFD3DDevice().GetDevice();
+		UStaticMesh* Mesh = MeshPath.empty() || MeshPath == "None"
+			? nullptr
+			: FMeshManager::LoadStaticMesh(MeshPath, Device);
+		C.SetStaticMesh(Mesh);
+	});
+
+	Lua.new_usertype<UParticleSystemComponent>("ParticleSystemComponent",
+		sol::base_classes,
+		sol::bases<UPrimitiveComponent, USceneComponent, UActorComponent, UObject>(),
+		"SetAnimTrailSourceComponent", &UParticleSystemComponent::SetAnimTrailSourceComponent,
+		"SetTemplatePath", [](UParticleSystemComponent& C, const FString& TemplatePath)
+	{
+		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
+			? nullptr
+			: FParticleSystemManager::Get().Load(TemplatePath);
+		C.SetTemplate(Template);
+	});
 
 	Lua.new_usertype<FHitResult>("HitResult",
 		"HitComponent", &FHitResult::HitComponent,
@@ -2599,6 +2637,19 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		return Actor.GetComponentByClass<UActionComponent>();
 	},
 
+		"GetSkeletalMeshComponent", [](AActor& Actor)
+	{
+		return Actor.GetComponentByClass<USkeletalMeshComponent>();
+	},
+
+		"AddStaticMeshComponent", [](AActor& Actor) -> UStaticMeshComponent*
+	{
+		return Actor.AddComponent<UStaticMeshComponent>();
+	},
+		"AddParticleSystemComponent", [](AActor& Actor) -> UParticleSystemComponent*
+	{
+		return Actor.AddComponent<UParticleSystemComponent>();
+	},
 		"GetRootPrimitiveComponent", [](AActor& Actor) -> UPrimitiveComponent*
 	{
 		return Cast<UPrimitiveComponent>(Actor.GetRootComponent());

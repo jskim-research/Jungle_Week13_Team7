@@ -10,6 +10,10 @@
 #include "GameFramework/World.h"
 #include "Component/Debug/GizmoComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
+#include "Animation/Skeleton/Skeleton.h"
+#include "Mesh/MeshManager.h"
+#include "Runtime/Engine.h"
 #include "Component/Debug/BoneDebugComponent.h"
 #include "Collision/Ray/RayUtils.h"
 #include "Settings/EditorSettings.h"
@@ -34,6 +38,10 @@ void FMeshEditorViewportClient::AddReferencedObjects(FReferenceCollector& Collec
 	Collector.AddReferencedObject(Gizmo);
 	Collector.AddReferencedObject(PreviewMeshComponent);
 	Collector.AddReferencedObject(BoneDebugComponent);
+	for (auto& Pair : SocketPreviewMeshes)
+	{
+		Collector.AddReferencedObject(Pair.second);
+	}
 	Collector.AddReferencedObject(PreviewWorld);
 	Collector.AddReferencedObject(PreviewActor);
 }
@@ -46,6 +54,8 @@ void FMeshEditorViewportClient::Release()
 		delete Viewport;
 		Viewport = nullptr;
 	}
+
+	ClearSocketPreviewMeshes();
 
 	PreviewWorld = nullptr;
 	PreviewActor = nullptr;
@@ -65,6 +75,11 @@ void FMeshEditorViewportClient::CreatePreviewGizmo()
 	Gizmo->SetScene(&PreviewWorld->GetScene());
 	Gizmo->CreateRenderState();
 	Gizmo->Deactivate();
+
+	SocketTarget.SetOnSocketChanged([this](const FName&)
+	{
+		bSocketTransformEdited = true;
+	});
 }
 
 void FMeshEditorViewportClient::CreateBoneDebugComponent()
@@ -73,6 +88,94 @@ void FMeshEditorViewportClient::CreateBoneDebugComponent()
 	BoneDebugComponent->SetTargetMeshComponent(PreviewMeshComponent);
 	BoneDebugComponent->SetSelectedBoneIndex(SelectedBoneIndex);
 	BoneDebugComponent->CreateRenderState();
+}
+
+
+void FMeshEditorViewportClient::SetSocketPreviewMesh(const FName& SocketName, const FString& StaticMeshPath)
+{
+	if (SocketName == FName::None || !PreviewActor || !PreviewMeshComponent)
+	{
+		return;
+	}
+
+	if (StaticMeshPath.empty() || StaticMeshPath == "None")
+	{
+		ClearSocketPreviewMesh(SocketName);
+		return;
+	}
+
+	UStaticMeshComponent* PreviewComp = FindSocketPreviewMesh(SocketName);
+	if (!PreviewComp)
+	{
+		PreviewComp = PreviewActor->AddComponent<UStaticMeshComponent>();
+		PreviewComp->AttachToComponent(PreviewMeshComponent, SocketName);
+		PreviewComp->SetRelativeTransform(FTransform());
+		SocketPreviewMeshes[SocketName] = PreviewComp;
+	}
+
+	ID3D11Device* Device = GEngine->GetRenderer().GetFD3DDevice().GetDevice();
+	UStaticMesh* StaticMesh = FMeshManager::LoadStaticMesh(StaticMeshPath, Device);
+	PreviewComp->SetStaticMesh(StaticMesh);
+	PreviewComp->MarkTransformDirty();
+}
+
+void FMeshEditorViewportClient::ClearSocketPreviewMesh(const FName& SocketName)
+{
+	auto It = SocketPreviewMeshes.find(SocketName);
+	if (It == SocketPreviewMeshes.end())
+	{
+		return;
+	}
+
+	if (PreviewActor && IsValid(It->second))
+	{
+		PreviewActor->RemoveComponent(It->second);
+	}
+	SocketPreviewMeshes.erase(It);
+}
+
+void FMeshEditorViewportClient::ClearSocketPreviewMeshes()
+{
+	TArray<FName> Names;
+	Names.reserve(SocketPreviewMeshes.size());
+	for (auto& Pair : SocketPreviewMeshes)
+	{
+		Names.push_back(Pair.first);
+	}
+
+	for (const FName& Name : Names)
+	{
+		ClearSocketPreviewMesh(Name);
+	}
+}
+
+void FMeshEditorViewportClient::RefreshSocketPreviewMeshes(USkeletalMesh* Mesh)
+{
+	ClearSocketPreviewMeshes();
+	if (!Mesh)
+	{
+		return;
+	}
+
+	USkeleton* Skeleton = Mesh->GetSkeleton();
+	if (!Skeleton)
+	{
+		return;
+	}
+
+	for (const FSkeletonSocket& Socket : Skeleton->GetSockets())
+	{
+		if (!Socket.PreviewStaticMeshPath.empty() && Socket.PreviewStaticMeshPath != "None")
+		{
+			SetSocketPreviewMesh(Socket.Name, Socket.PreviewStaticMeshPath);
+		}
+	}
+}
+
+UStaticMeshComponent* FMeshEditorViewportClient::FindSocketPreviewMesh(const FName& SocketName) const
+{
+	auto It = SocketPreviewMeshes.find(SocketName);
+	return It != SocketPreviewMeshes.end() ? It->second : nullptr;
 }
 
 void FMeshEditorViewportClient::ResetCameraToPreviousBounds()
@@ -98,7 +201,7 @@ void FMeshEditorViewportClient::ResetCameraToPreviousBounds()
 	const float Distance = Radius / std::tan(FovRadians * 0.5f) * 1.25f;
 
 	const FVector ViewDir = FVector(-1.0f, -1.0f, -0.6f).Normalized();
-	
+
 	ViewTransform.ViewLocation = Center - ViewDir * Distance;
 	ViewTransform.LookAt(Center);
 
@@ -191,6 +294,7 @@ void FMeshEditorViewportClient::SetSelectedBone(USkeletalMesh* Mesh, int32 BoneI
 {
 	SelectedMesh = Mesh;
 	SelectedBoneIndex = BoneIndex;
+	SelectedSocketName = FName::None;
 	RenderOptions.WeightBoneHeatMapBoneIndex = BoneIndex;
 
 	if (Gizmo && PreviewMeshComponent && BoneIndex >= 0)
@@ -208,6 +312,50 @@ void FMeshEditorViewportClient::SetSelectedBone(USkeletalMesh* Mesh, int32 BoneI
 		BoneDebugComponent->SetTargetMeshComponent(PreviewMeshComponent);
 		BoneDebugComponent->SetSelectedBoneIndex(BoneIndex);
 	}
+}
+
+void FMeshEditorViewportClient::SetSelectedSocket(USkeletalMesh* Mesh, const FName& SocketName)
+{
+	SelectedMesh = Mesh;
+	SelectedSocketName = SocketName;
+
+	int32 SocketBoneIndex = -1;
+	if (Mesh)
+	{
+		if (USkeleton* Skeleton = Mesh->GetSkeleton())
+		{
+			if (const FSkeletonSocket* Socket = Skeleton->FindSocket(SocketName))
+			{
+				SocketBoneIndex = Skeleton->ResolveSocketBoneIndex(*Socket);
+			}
+		}
+	}
+
+	SelectedBoneIndex = SocketBoneIndex;
+	RenderOptions.WeightBoneHeatMapBoneIndex = SocketBoneIndex;
+
+	if (Gizmo && PreviewMeshComponent && SocketName != FName::None)
+	{
+		SocketTarget.SetSocket(PreviewMeshComponent, SocketName);
+		Gizmo->SetTarget(&SocketTarget);
+	}
+	else if (Gizmo)
+	{
+		Gizmo->Deactivate();
+	}
+
+	if (BoneDebugComponent)
+	{
+		BoneDebugComponent->SetTargetMeshComponent(PreviewMeshComponent);
+		BoneDebugComponent->SetSelectedBoneIndex(SocketBoneIndex);
+	}
+}
+
+bool FMeshEditorViewportClient::ConsumeSocketTransformEdited()
+{
+	const bool bEdited = bSocketTransformEdited;
+	bSocketTransformEdited = false;
+	return bEdited;
 }
 
 const FBone* FMeshEditorViewportClient::GetSelectedBone() const
@@ -288,7 +436,7 @@ void FMeshEditorViewportClient::TickInput(float DeltaTime)
 	FViewportCameraControlSettings& ControlSettings = FEditorSettings::Get().MeshEditorViewportSettings.CameraControls;
 
 	InputSystem& Input = InputSystem::Get();
-	
+
 	FVector LocalMove = FVector::ZeroVector;
 	float WorldVerticalMove = 0.0f;
 	float CameraSpeed = ControlSettings.MoveSpeed;

@@ -243,9 +243,13 @@ void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
     // Mesh 가 바뀌면 이전 AnimInstance 가 가리키던 본 인덱스/카운트가 무의미해진다.
     // 새 SkeletalMesh 기준으로 AnimInstance 를 재인스턴스화한다.
     InitializeAnimation();
-	if (GetPhysicsAsset() && GetWorld() && GetWorld()->GetPhysicsScene())
+	if (ShouldInstantiatePhysicsAsset())
 	{
 		InstantiatePhysicsAsset();
+	}
+	else
+	{
+		TermPhysicsAsset();
 	}
 }
 
@@ -677,6 +681,17 @@ void USkeletalMeshComponent::PostEditProperty(const char* PropertyName)
 			EndRagdoll();
 		}
 	}
+	else if (std::strcmp(PropertyName, "bSimulatePhysics") == 0)
+	{
+		if (ShouldInstantiatePhysicsAsset())
+		{
+			InstantiatePhysicsAsset();
+		}
+		else
+		{
+			TermPhysicsAsset();
+		}
+	}
 
     // AnimInstance 자체 properties 는 자식이 자체 PostEdit 처리. 컴포넌트는 dispatch 만.
     // 컴포넌트가 인식한 이름과 겹치지 않는 한 무해 (자식이 모르는 이름은 no-op).
@@ -784,18 +799,27 @@ void USkeletalMeshComponent::SetPhysicsAsset(UPhysicsAsset* InPhysicsAsset)
 		? InPhysicsAsset->GetSourcePath()
 		: FString("None");
 
-	UWorld* World = GetWorld();
-	if (World && World->GetPhysicsScene())
+	if (ShouldInstantiatePhysicsAsset())
 	{
 		InstantiatePhysicsAsset();
 	}
 }
 
+bool USkeletalMeshComponent::ShouldInstantiatePhysicsAsset() const
+{
+	return GetPhysicsAsset() && GetWorld() && GetWorld()->GetPhysicsScene() && (GetSimulatePhysics() || bRagdollActive);
+}
+
 void USkeletalMeshComponent::InstantiatePhysicsAsset()
 {
-	PHYSICS_STATS_ADD_RAGDOLL_INSTANTIATE();
-
 	TermPhysicsAsset();
+
+	if (!ShouldInstantiatePhysicsAsset())
+	{
+		return;
+	}
+
+	PHYSICS_STATS_ADD_RAGDOLL_INSTANTIATE();
 
 	CreateBodiesFromPhysicsAsset();
 

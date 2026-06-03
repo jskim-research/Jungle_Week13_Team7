@@ -5,6 +5,7 @@
 #include "Component/ActorComponent.h"
 #include "Object/Ptr/ObjectPtr.h"
 #include "Object/Ptr/WeakObjectPtr.h"
+#include "Object/FName.h"
 #include "Math/MathUtils.h"
 
 class AActor;
@@ -23,10 +24,14 @@ public:
 	// Parent Relation Manager
 	UFUNCTION(Callable, Category="Scene|Hierarchy")
 	void AttachToComponent(USceneComponent* InParent);
+	void AttachToComponent(USceneComponent* InParent, const FName& InSocketName);
+	UFUNCTION(Callable, Category="Scene|Hierarchy")
+	void AttachToComponentWithSocket(USceneComponent* InParent, const FString& InSocketName);
 	UFUNCTION(Callable, Category="Scene|Hierarchy")
 	void SetParent(USceneComponent* NewParent);
 	UFUNCTION(Pure, Category="Scene|Hierarchy")
 	USceneComponent* GetParent() const { return ParentComponent.Get(); }
+	const FName& GetAttachSocketName() const { return AttachSocketName; }
 	UFUNCTION(Callable, Category="Scene|Hierarchy")
 	void AddChild(USceneComponent* NewChild);
 	UFUNCTION(Callable, Category="Scene|Hierarchy")
@@ -34,6 +39,9 @@ public:
 	UFUNCTION(Pure, Category="Scene|Hierarchy")
 	bool ContainsChild(const USceneComponent* Child) const;
 	TArray<USceneComponent*> GetChildren() const;
+
+	virtual bool HasSocket(const FName& SocketName) const { (void)SocketName; return false; }
+	virtual FTransform GetSocketTransform(const FName& SocketName) const { (void)SocketName; return FTransform(GetWorldMatrix()); }
 
 	void PreGetEditableProperties() override;
 	void PostEditProperty(const char* PropertyName) override;
@@ -109,6 +117,7 @@ public:
 protected:
 	// Non-owning back-reference. Parent keeps children alive through ChildComponents.
 	TWeakObjectPtr<USceneComponent> ParentComponent;
+	FName AttachSocketName = FName::None;
 
 	// Runtime hierarchy ownership. SceneSaveManager persists topology explicitly, so this remains Transient.
 	UPROPERTY(Transient, Instanced, Category="Scene|Hierarchy")

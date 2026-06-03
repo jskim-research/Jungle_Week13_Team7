@@ -1,13 +1,18 @@
 #pragma once
 #include "Editor/UI/Asset/AssetEditorWidget.h"
 #include "Editor/Viewport/Asset/MeshEditorViewportClient.h"
+#include "Editor/UI/Asset/Animation/AnimationTimelinePanel.h"
 #include "Editor/UI/Dialog/FbxImportOptionsDialog.h"
 #include "Asset/AssetRegistry.h"
+#include "Object/FName.h"
 
 struct FSkeletalMesh;
 struct ImDrawList;
 struct ImVec2;
 class UAnimSequence;
+class USkeletalMesh;
+class USkeleton;
+struct FSkeletonSocket;
 class UAnimMontage;
 class UAnimSingleNodeInstance;
 
@@ -24,6 +29,7 @@ struct FAnimationTabState
 	// -1 = 미선택. 시퀀스/몽타주 전환 시 -1 reset 필요.
 	// 유효 시 좌상단 AssetDetails 패널이 시퀀스 정보 대신 Notify 의 UPROPERTY 편집 UI 를 그림.
 	int32         SelectedNotifyIndex     = -1;
+	FAnimationTimelinePanel::FAnimNotifyClipboard NotifyClipboard;
 	int32         SelectedMorphCurveIndex = -1;
 	int32         SelectedMorphKeyIndex   = -1;
 	TArray<float> MorphPreviewWeights;
@@ -79,7 +85,10 @@ private:
 
 	// Shared helpers
 	void RenderViewportPanel(ImVec2 Size);
-	void RenderBoneTree(const FSkeletalMesh* Asset, int32 Index);
+	void RenderBoneTree(USkeletalMesh* Mesh, const FSkeletalMesh* Asset, int32 Index);
+	void RenderSelectedSocketDetails(USkeletalMesh* Mesh, USkeleton* Skeleton, FSkeletonSocket& Socket);
+	FSkeletonSocket* FindSelectedSocket(USkeleton* Skeleton, int32* OutIndex = nullptr);
+	void MarkSocketPreviewDirty(const FName& SocketName);
 	void RenderMeshStatsOverlay(ImDrawList* DrawList, const ImVec2& ViewportPos) const;
 
 	// Animation tab helpers
@@ -101,6 +110,7 @@ private:
 
 	// Skeleton tab state
 	int32 SelectedBoneIndex = -1;
+	FName SelectedSocketName = FName::None;
 	float HierarchyWidth    = 250.0f;
 	float DetailsWidth      = 300.0f;
 

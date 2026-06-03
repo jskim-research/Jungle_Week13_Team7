@@ -625,7 +625,7 @@ void UGizmoComponent::UpdateGizmoTransform()
 	}
 	else
 	{
-		SetRelativeRotation(Target->GetWorldRotation());
+		SetRelativeRotation(Target->GetWorldQuat());
 	}
 
 	const FMeshData* DesiredMeshData = nullptr;

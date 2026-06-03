@@ -17,17 +17,30 @@ static void NotifyOctreeTransformChanged(USceneComponent* Comp)
 
     UWorld* World = OwnerActor->GetWorld();
     if (!World) return;
-	
+
     World->UpdateActorInOctree(OwnerActor);
 }
 
 void USceneComponent::AttachToComponent(USceneComponent* InParent)
 {
+	AttachToComponent(InParent, FName::None);
+}
+
+void USceneComponent::AttachToComponent(USceneComponent* InParent, const FName& InSocketName)
+{
 	if (!IsValid(InParent) || InParent == this)
 	{
 		return;
 	}
+
 	SetParent(InParent);
+	AttachSocketName = InSocketName;
+	MarkTransformDirty();
+}
+
+void USceneComponent::AttachToComponentWithSocket(USceneComponent* InParent, const FString& InSocketName)
+{
+	AttachToComponent(InParent, FName(InSocketName));
 }
 
 void USceneComponent::PreGetEditableProperties()
@@ -75,6 +88,7 @@ void USceneComponent::Serialize(FArchive& Ar)
 	UActorComponent::Serialize(Ar);
 	// ParentComponent / ChildComponents 는 직렬화 제외 — 복제 단계에서 명시적으로 재구성.
 
+
 	if (Ar.IsLoading())
 	{
 		RelativeTransform.SetRotation(CachedEditRotator);
@@ -95,6 +109,7 @@ USceneComponent::USceneComponent()
 USceneComponent::~USceneComponent()
 {
     ParentComponent.Reset();
+	AttachSocketName = FName::None;
     ChildComponents.clear();
 }
 
@@ -133,12 +148,13 @@ void USceneComponent::SetParent(USceneComponent* NewParent)
 	{
 		NewParent = nullptr;
 	}
-	
+
 	if (USceneComponent* OldParent = ParentComponent.Get())
 	{
 		OldParent->RemoveChild(this);
 	}
 
+	AttachSocketName = FName::None;
 	ParentComponent = NewParent;
 	if (USceneComponent* Parent = ParentComponent.Get())
 	{
@@ -208,13 +224,18 @@ void USceneComponent::UpdateWorldMatrix() const
 		if (bAbsoluteScale)
 		{
 			// 에디터 아이콘 빌보드는 부모 스케일과 분리해 화면상 크기 변화를 막는다.
-			FMatrix ParentWorldNoScale = Parent->GetWorldMatrix();
+			FMatrix ParentWorldNoScale = (AttachSocketName != FName::None && Parent->HasSocket(AttachSocketName))
+				? Parent->GetSocketTransform(AttachSocketName).ToMatrix()
+				: Parent->GetWorldMatrix();
 			ParentWorldNoScale.RemoveScaling();
 			CachedWorldMatrix = RelativeMatrix * ParentWorldNoScale;
 		}
 		else
 		{
-			CachedWorldMatrix = RelativeMatrix * Parent->GetWorldMatrix();
+			const FMatrix ParentWorld = (AttachSocketName != FName::None && Parent->HasSocket(AttachSocketName))
+				? Parent->GetSocketTransform(AttachSocketName).ToMatrix()
+				: Parent->GetWorldMatrix();
+			CachedWorldMatrix = RelativeMatrix * ParentWorld;
 		}
 	}
 	else
