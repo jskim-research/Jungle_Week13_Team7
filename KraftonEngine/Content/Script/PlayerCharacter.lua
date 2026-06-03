@@ -13,7 +13,7 @@ local DASH_SLASH_DURATION = 0.2
 
 local KATANA_MESH_PATH = "Content/Mesh/Katana/source/red cyber katana_StaticMesh.uasset"
 local KATANA_SOCKET_NAME = "WeaponR"
-local KATANA_PS_PATH = "Content/Data/SwordTrail.uasset"
+local KATANA_PS_PATH = "Content/Data/SwordTrail2.uasset"
 
 local ULTIMATE_CAMERA_BACK_DISTANCE = 7.0
 local ULTIMATE_CAMERA_HEIGHT = 10

@@ -1,5 +1,6 @@
 #include "ParticleSystemComponent.h"
 
+#include "Component/Primitive/SkinnedMeshComponent.h"
 #include "Particles/ParticleEmitter.h"
 #include "Particles/ParticleEmitterInstances.h"
 #include "Particles/ParticleSystem.h"
@@ -365,12 +366,24 @@ TArray<UMaterial*> UParticleSystemComponent::GetEmitterMaterials() const
     return Result;
 }
 
+void UParticleSystemComponent::SetAnimTrailSourceComponent(USkinnedMeshComponent* InSourceComponent)
+{
+    if (AnimTrailSourceComponent.Get() == InSourceComponent)
+    {
+        return;
+    }
+
+    AnimTrailSourceComponent = InSourceComponent;
+    ResetSystem();
+}
+
 void UParticleSystemComponent::AddReferencedObjects(FReferenceCollector& Collector)
 {
     UPrimitiveComponent::AddReferencedObjects(Collector);
 
     Collector.AddReferencedObject(Template, "UParticleSystemComponent.Template");
     Collector.AddReferencedObjects(EmitterMaterials, "UParticleSystemComponent.EmitterMaterials");
+    Collector.AddReferencedObject(static_cast<UObject*>(AnimTrailSourceComponent.Get()), "UParticleSystemComponent.AnimTrailSourceComponent");
 
     for (FParticleEmitterInstance* Instance : EmitterInstances)
     {

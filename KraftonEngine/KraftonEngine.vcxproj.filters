@@ -1520,6 +1520,9 @@
     <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataRibbon.cpp">
       <Filter>Source\Engine\Particles\TypeData</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataAnimTrail.cpp">
+      <Filter>Source\Engine\Particles\TypeData</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.cpp">
       <Filter>Source\Engine\Particles\Velocity</Filter>
     </ClCompile>
@@ -2880,6 +2883,9 @@
       <Filter>Source\Engine\Particles\TypeData</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataRibbon.h">
+      <Filter>Source\Engine\Particles\TypeData</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Particles\TypeData\ParticleModuleTypeDataAnimTrail.h">
       <Filter>Source\Engine\Particles\TypeData</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Particles\Velocity\ParticleModuleVelocity.h">
