@@ -29,6 +29,14 @@ class FProjectSettings : public TSingleton<FProjectSettings>
 	struct FPhysicsOption
 	{
 		EPhysicsBackend Backend = EPhysicsBackend::PhysX;
+		bool bUseFixedPhysicsStep = true;
+	};
+
+	// --- Viewport ---
+	struct FViewportOption
+	{
+		bool bUseFixedFrameRate = false;
+		float FixedFrameRate = 60.0f;
 	};
 
 	// --- Game ---
@@ -42,6 +50,7 @@ class FProjectSettings : public TSingleton<FProjectSettings>
 public:
 	FShadowOption Shadow;
 	FPhysicsOption Physics;
+	FViewportOption Viewport;
 	FGameOption Game;
 
 	// --- 직렬화 ---

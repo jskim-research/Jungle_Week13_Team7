@@ -1,5 +1,6 @@
 ﻿#include "Engine/Runtime/EngineLoop.h"
 
+#include "Core/ProjectSettings.h"
 #include "Object/GarbageCollection.h"
 #include "Profiling/StartupProfiler.h"
 
@@ -50,6 +51,9 @@ bool FEngineLoop::Init(HINSTANCE hInstance, int nShowCmd)
 	}
 
 	GEngine->SetTimer(&Timer);
+	Timer.SetMaxFPS(FProjectSettings::Get().Viewport.bUseFixedFrameRate
+		? FProjectSettings::Get().Viewport.FixedFrameRate
+		: 0.0f);
 
 	{
 		SCOPE_STARTUP_STAT("Engine::BeginPlay");

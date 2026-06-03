@@ -13,6 +13,7 @@
 #include "Math/Quat.h"
 #include "Object/Object.h"  // IsAliveObject
 #include "Core/Logging/Log.h"
+#include "Core/ProjectSettings.h"
 
 #include <algorithm>
 #include <cmath>
@@ -605,6 +606,7 @@ void FPhysXPhysicsScene::Initialize(UWorld* InWorld)
 
 	World = InWorld;
 	bShutdownComplete = false;
+	PhysicsAccumulator = 0.0f;
 
 	// Foundation / Physics — 프로세스 싱글턴 공유
 	if (!AcquireSharedPhysX(Foundation, Physics))
@@ -683,6 +685,8 @@ void FPhysXPhysicsScene::Shutdown()
 	{
 		EventCallback->ClearPendingEvents();
 	}
+	PhysicsAccumulator = 0.0f;
+	PendingBodyForces.clear();
 
 	if (Scene)
 	{
@@ -791,6 +795,63 @@ PxRigidDynamic* FPhysXPhysicsScene::GetDynamicActorForComponent(UPrimitiveCompon
 	}
 
 	return BodyInstance->Actor->is<PxRigidDynamic>();
+}
+
+FPhysXPhysicsScene::FPendingBodyForces* FPhysXPhysicsScene::FindOrAddPendingBodyForces(UPrimitiveComponent* Comp)
+{
+	if (!IsValid(Comp))
+	{
+		return nullptr;
+	}
+
+	for (FPendingBodyForces& Pending : PendingBodyForces)
+	{
+		if (Pending.Comp == Comp)
+		{
+			return &Pending;
+		}
+	}
+
+	FPendingBodyForces& Pending = PendingBodyForces.emplace_back();
+	Pending.Comp = Comp;
+	return &Pending;
+}
+
+void FPhysXPhysicsScene::ClearPendingForcesForComponent(UPrimitiveComponent* Comp)
+{
+	PendingBodyForces.erase(
+		std::remove_if(PendingBodyForces.begin(), PendingBodyForces.end(),
+			[Comp](const FPendingBodyForces& Pending)
+			{
+				return Pending.Comp == Comp;
+			}),
+		PendingBodyForces.end());
+}
+
+void FPhysXPhysicsScene::ApplyPendingForces()
+{
+	for (const FPendingBodyForces& Pending : PendingBodyForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Pending.Comp);
+		if (!Dyn)
+		{
+			continue;
+		}
+		if (Dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)
+		{
+			continue;
+		}
+
+		Dyn->addForce(ToPxVec3(Pending.Force));
+		Dyn->addTorque(ToPxVec3(Pending.Torque));
+		for (const FPendingForceAtLocation& ForceAtLocation : Pending.ForcesAtLocation)
+		{
+			PxRigidBodyExt::addForceAtPos(
+				*Dyn,
+				ToPxVec3(ForceAtLocation.Force),
+				ToPxVec3(ForceAtLocation.WorldLocation));
+		}
+	}
 }
 
 namespace
@@ -1627,6 +1688,8 @@ void FPhysXPhysicsScene::UnregisterComponent(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene) return;
 
+	ClearPendingForcesForComponent(Comp);
+
 	if (!Comp->GetBodyInstance()->IsValidBodyInstance())
 	{
 		return;
@@ -1642,6 +1705,7 @@ void FPhysXPhysicsScene::RebuildBody(UPrimitiveComponent* Comp)
 {
 	if (!IsValid(Comp) || !Scene) return;
 
+	ClearPendingForcesForComponent(Comp);
 	UnregisterComponent(Comp);
 	if (ShouldUseBodyInstancePath(Comp))
 	{
@@ -1657,15 +1721,10 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 {
 	if (bShutdownComplete || !Scene || DeltaTime <= 0.0f) return;
 
-	// 어떤 이유로든 frame hitch (씬 로드 / 큰 OBJ 동기 로딩 / Alt-Tab / OS 스파이크) 가
-	// 발생해도 PhysX 가 큰 dt 한 번에 적분해 차량·메테오가 콜리전을 뚫는 tunneling 사고를
-	// 막기 위한 클램프. 0.1s 는 60 m/s 차량이 한 step 에 6m 이동 — 충돌 박스 내에서 풀림
-	// 가능한 수준이고, 그 이상 hitch 면 게임을 느리게 진행시키더라도 안전이 우선.
-	constexpr float MaxPhysicsDeltaTime = 0.1f;
-	if (DeltaTime > MaxPhysicsDeltaTime)
-	{
-		DeltaTime = MaxPhysicsDeltaTime;
-	}
+	constexpr float FixedPhysicsStep = 1.0f / 144.0f;
+	constexpr int32 MaxSubsteps = 6;
+	constexpr float MaxAccumulatedTime = FixedPhysicsStep * MaxSubsteps;
+	constexpr float MaxClampedPhysicsDeltaTime = 0.1f;
 
 	PruneInvalidBodyInstanceComponents();
 
@@ -1723,13 +1782,47 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 		}
 	}
 
-	RunVehicleSuspensionRaycasts();
+	bool bRanSimulationStep = false;
+	if (FProjectSettings::Get().Physics.bUseFixedPhysicsStep)
+	{
+		PhysicsAccumulator = (std::min)(PhysicsAccumulator + DeltaTime, MaxAccumulatedTime);
 
-	// ── Simulate ──
-	Scene->simulate(DeltaTime);
-	Scene->fetchResults(true);
+		int32 SubstepCount = 0;
+		while (PhysicsAccumulator >= FixedPhysicsStep && SubstepCount < MaxSubsteps)
+		{
+			RunVehicleSuspensionRaycasts();
+			ApplyPendingForces();
 
-	RunVehicleUpdates(DeltaTime);
+			// ── Simulate ──
+			Scene->simulate(FixedPhysicsStep);
+			Scene->fetchResults(true);
+
+			RunVehicleUpdates(FixedPhysicsStep);
+
+			PhysicsAccumulator -= FixedPhysicsStep;
+			++SubstepCount;
+			bRanSimulationStep = true;
+		}
+	}
+	else
+	{
+		PhysicsAccumulator = 0.0f;
+		const float ClampedDeltaTime = (std::min)(DeltaTime, MaxClampedPhysicsDeltaTime);
+
+		RunVehicleSuspensionRaycasts();
+		ApplyPendingForces();
+
+		// ── Simulate ──
+		Scene->simulate(ClampedDeltaTime);
+		Scene->fetchResults(true);
+
+		RunVehicleUpdates(ClampedDeltaTime);
+		bRanSimulationStep = true;
+	}
+	if (bRanSimulationStep)
+	{
+		PendingBodyForces.clear();
+	}
 
 	// ── Post-simulate: PhysX → Engine Transform 동기화 (per-component) ──
 	for (UPrimitiveComponent* Comp : BodyInstanceComponents)
@@ -1882,23 +1975,23 @@ bool FPhysXPhysicsScene::Sweep(const FVector& Start, const FVector& Dir, float M
 
 void FPhysXPhysicsScene::AddForce(UPrimitiveComponent* Comp, const FVector& Force)
 {
-	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
-	if (!Dyn) return;
-	Dyn->addForce(ToPxVec3(Force));
+	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
+	if (!Pending) return;
+	Pending->Force = Pending->Force + Force;
 }
 
 void FPhysXPhysicsScene::AddForceAtLocation(UPrimitiveComponent* Comp, const FVector& Force, const FVector& WorldLocation)
 {
-	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
-	if (!Dyn) return;
-	PxRigidBodyExt::addForceAtPos(*Dyn, ToPxVec3(Force), ToPxVec3(WorldLocation));
+	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
+	if (!Pending) return;
+	Pending->ForcesAtLocation.push_back(FPendingForceAtLocation{ Force, WorldLocation });
 }
 
 void FPhysXPhysicsScene::AddTorque(UPrimitiveComponent* Comp, const FVector& Torque)
 {
-	PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
-	if (!Dyn) return;
-	Dyn->addTorque(ToPxVec3(Torque));
+	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
+	if (!Pending) return;
+	Pending->Torque = Pending->Torque + Torque;
 }
 
 // ============================================================
