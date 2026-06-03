@@ -15,6 +15,7 @@
 #include "Component/Primitive/SkeletalMeshComponent.h"
 #include "Component/Primitive/StaticMeshComponent.h"
 #include "Component/Primitive/ParticleSystemComponent.h"
+#include "Component/Primitive/DecalComponent.h"
 #include "Core/Types/CollisionTypes.h"
 #include "Runtime/Engine.h"
 #include "Viewport/GameViewportClient.h"
@@ -2489,6 +2490,21 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		"SetMass", &UPrimitiveComponent::SetMass,
 		"GetGenerateOverlapEvents", &UPrimitiveComponent::GetGenerateOverlapEvents);
 
+	Lua.new_usertype<UDecalComponent>("DecalComponent",
+		sol::base_classes,
+		sol::bases<UPrimitiveComponent, USceneComponent, UActorComponent, UObject>(),
+		"SetMaterialPath", &UDecalComponent::SetMaterialPath,
+		"GetMaterialPath", &UDecalComponent::GetMaterialPath,
+		"SetColorRGBA", [](UDecalComponent& C, float R, float G, float B, float A)
+	{
+		C.SetColor(FVector4(R, G, B, A));
+	},
+		"SetFadeIn", &UDecalComponent::SetFadeIn,
+		"SetFadeOut", &UDecalComponent::SetFadeOut,
+		"ResetFade", &UDecalComponent::ResetFade,
+		"IsFadeFinished", &UDecalComponent::IsFadeFinished,
+		"SetAutoDestroyOwnerOnFadeFinished", &UDecalComponent::SetAutoDestroyOwnerOnFadeFinished);
+
 	// 메시 에셋 경로로 컴포넌트 식별 가능하게 노출. 자동 생성된 FName ("UStaticMeshComponent_41")
 	// 은 월드 초기화 순서에 따라 카운터가 달라져 빌드별로 매칭이 깨질 수 있다. 메시 경로는
 	// 씬 파일에 명시 저장되므로 deterministic.
@@ -2650,6 +2666,32 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 	{
 		return Actor.AddComponent<UParticleSystemComponent>();
 	},
+		"AddDecalComponent", [](AActor& Actor) -> UDecalComponent*
+	{
+		UDecalComponent* Decal = Actor.AddComponent<UDecalComponent>();
+		if (!Decal)
+		{
+			return nullptr;
+		}
+
+		if (USceneComponent* Root = Actor.GetRootComponent())
+		{
+			if (Root != Decal)
+			{
+				Decal->AttachToComponent(Root);
+			}
+		}
+		else
+		{
+			Actor.SetRootComponent(Decal);
+		}
+
+		return Decal;
+	},
+		"GetDecalComponent", [](AActor& Actor) -> UDecalComponent*
+	{
+		return Actor.GetComponentByClass<UDecalComponent>();
+	},
 		"GetRootPrimitiveComponent", [](AActor& Actor) -> UPrimitiveComponent*
 	{
 		return Cast<UPrimitiveComponent>(Actor.GetRootComponent());
@@ -2732,6 +2774,42 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 			});
 		},
 		"ClearBindings", &UInputComponent::ClearBindings);
+
+	// --- VFX helper binding — one-shot effect spawning for Lua gameplay scripts. ---
+	sol::table VFX = Lua.create_named_table("VFX");
+	VFX.set_function("SpawnGroundCrackDecal", [](
+		const FString& MaterialPath,
+		const FVector& Location,
+		const FVector& Scale,
+		sol::optional<float> FadeOutDelay,
+		sol::optional<float> FadeOutDuration) -> UDecalComponent*
+	{
+		if (!GEngine) return nullptr;
+		UWorld* W = GEngine->GetWorld();
+		if (!W) return nullptr;
+
+		UClass* ActorClass = UClass::FindByName("AActor");
+		if (!ActorClass) return nullptr;
+
+		AActor* Actor = W->SpawnActorByClass(ActorClass);
+		if (!Actor) return nullptr;
+
+		UDecalComponent* Decal = Actor->AddComponent<UDecalComponent>();
+		if (!Decal)
+		{
+			W->DestroyActor(Actor);
+			return nullptr;
+		}
+
+		Actor->SetRootComponent(Decal);
+		Decal->SetWorldLocation(Location);
+		Decal->SetRelativeScale(Scale);
+		Decal->SetMaterialPath(MaterialPath);
+		Decal->SetFadeOut(FadeOutDelay.value_or(0.35f), FadeOutDuration.value_or(0.45f));
+		Decal->SetAutoDestroyOwnerOnFadeFinished(true);
+		Decal->UpdateDecalVolumeFromTransform();
+		return Decal;
+	});
 
 	// --- World binding — 런타임 액터 spawn 용 (Engine 일반 기능) ---
 	sol::table World = Lua.create_named_table("World");

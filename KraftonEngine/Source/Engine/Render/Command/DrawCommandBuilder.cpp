@@ -287,6 +287,10 @@ void FDrawCommandBuilder::BuildDecalCommandForReceiver(FScene& Scene, const FPri
 	UMaterial* DecalMat = DecalProxy.GetSectionDraws().empty() ? nullptr : DecalProxy.GetSectionDraws()[0].Material;
 	if (!DecalMat || !DecalMat->GetShader()) return;
 
+	const FDecalSceneProxy* TypedDecalProxy = DecalProxy.HasProxyFlag(EPrimitiveProxyFlags::Decal)
+		? static_cast<const FDecalSceneProxy*>(&DecalProxy)
+		: nullptr;
+
 	ID3D11DeviceContext* Ctx = CachedContext;
 	const ERenderPass DecalPass = DecalProxy.GetRenderPass();
 	const FDrawCommandRenderState BaseRenderState = PassRenderStateTable->ToDrawCommandState(DecalPass, CollectViewMode);
@@ -298,8 +302,12 @@ void FDrawCommandBuilder::BuildDecalCommandForReceiver(FScene& Scene, const FPri
 		ReceiverProxy.ClearPerObjectCBDirty();
 	}
 
-	// Decal Material의 CB 업로드 (PerShaderOverride 포함)
+	// Decal projection CB(b2)와 graph material parameter CB/SRV를 각각 업로드한다.
 	DecalMat->FlushDirtyBuffers(CachedDevice, Ctx);
+	if (TypedDecalProxy)
+	{
+		TypedDecalProxy->UploadDecalConstantBuffer(CachedDevice, Ctx);
+	}
 
 	FDrawCommandBuffer ReceiverBuffer;
 	ReceiverBuffer.VB = ReceiverProxy.GetMeshBuffer()->GetVertexBuffer().GetBuffer();
@@ -322,7 +330,8 @@ void FDrawCommandBuilder::BuildDecalCommandForReceiver(FScene& Scene, const FPri
 			Cmd.Buffer.FirstIndex = FirstIndex;
 			Cmd.Buffer.IndexCount = IndexCount;
 			Cmd.PerObjectCB = ReceiverPerObjCB;
-			Cmd.Bindings.PerShaderCB[0] = DecalMat->GetGPUBufferBySlot(ECBSlot::PerShader0);
+			Cmd.Bindings.PerShaderCB[0] = TypedDecalProxy ? TypedDecalProxy->GetDecalConstantBuffer() : nullptr;
+			Cmd.Bindings.PerShaderCB[1] = DecalMat->GetGPUBufferBySlot(ECBSlot::PerShader1);
 
 			// Material의 CachedSRVs에서 텍스처 바인딩
 			const ID3D11ShaderResourceView* const* MatSRVs = DecalMat->GetCachedSRVs();

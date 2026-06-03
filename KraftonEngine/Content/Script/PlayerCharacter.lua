@@ -205,6 +205,28 @@ function PlayerCharacter.Initialize(ctx, owner)
     end
 end
 
+local function BuildGroundDecalAABBScale3(a, b, c, padding, minSize, projectionDepth)
+    padding = padding or 5.0
+    minSize = minSize or 8.0
+    projectionDepth = projectionDepth or 16.0
+
+    local minX = math.min(a.X, b.X, c.X)
+    local maxX = math.max(a.X, b.X, c.X)
+    local minY = math.min(a.Y, b.Y, c.Y)
+    local maxY = math.max(a.Y, b.Y, c.Y)
+
+    local sizeX = math.max((maxX - minX) + padding * 2.0, minSize)
+    local sizeY = math.max((maxY - minY) + padding * 2.0, minSize)
+
+    local center = Vector(
+        (minX + maxX) * 0.5,
+        (minY + maxY) * 0.5,
+        a.Z 
+    )
+
+    return center, Vector(sizeX, sizeY, projectionDepth)
+end
+
 function PlayerCharacter.SetMovementInputEnabled(ctx, enabled)
     SetMovementInputEnabled(ctx, enabled)
 end
@@ -574,6 +596,27 @@ function PlayerCharacter.BeginUltimate()
         + actorRight * ULTIMATE_MOVE_CONTROL_SIDE_OFFSET
 
     controlPos.Z = actorLocation.Z
+
+    local decalPos, decalScale = BuildGroundDecalAABBScale3(
+        startPos,
+        controlPos,
+        cinematicEndPos,
+        0.0,
+        0.0,
+        16.0
+    )
+
+    local decal = VFX.SpawnGroundCrackDecal(
+        "Content/Material/VFX/GroundCrack.mat",
+        decalPos,
+        decalScale,
+        0.35,
+        0.45
+    )
+
+    if decal ~= nil then
+        decal:SetColorRGBA(1.0, 0.05, 0.02, 1.0)
+    end
 
     Reflection.Call(owner, "SetActorLocation", startPos)
 

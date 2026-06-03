@@ -25,6 +25,10 @@ void UDecalComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	if (TickType == ELevelTick::LEVELTICK_All)
 	{
 		HandleFade(DeltaTime);
+		if (!IsValid(GetOwner()))
+		{
+			return;
+		}
 	}
 
 	UpdateReceivers();
@@ -119,6 +123,44 @@ void UDecalComponent::SetMaterial(UMaterial* InMaterial)
 	MarkProxyDirty(EDirtyFlag::Material);
 }
 
+void UDecalComponent::SetMaterialPath(const FString& MaterialPath)
+{
+	if (MaterialPath.empty() || MaterialPath == "None")
+	{
+		SetMaterial(nullptr);
+		return;
+	}
+
+	UMaterial* LoadedMaterial = FMaterialManager::Get().GetOrCreateMaterial(MaterialPath);
+	SetMaterial(LoadedMaterial);
+}
+
+void UDecalComponent::SetFadeIn(float Delay, float Duration)
+{
+	FadeInDelay = std::max(0.0f, Delay);
+	FadeInDuration = std::max(0.0f, Duration);
+	ResetFade();
+}
+
+void UDecalComponent::SetFadeOut(float Delay, float Duration)
+{
+	FadeOutDelay = std::max(0.0f, Delay);
+	FadeOutDuration = std::max(0.0f, Duration);
+	ResetFade();
+}
+
+void UDecalComponent::ResetFade()
+{
+	FadeTimer = 0.0f;
+	FadeOpacity = (FadeInDuration > 0.0f) ? 0.0f : 1.0f;
+	MarkProxyDirty(EDirtyFlag::Material);
+}
+
+bool UDecalComponent::IsFadeFinished() const
+{
+	return FadeOutDuration > 0.0f && FadeTimer >= FadeOutDelay + FadeOutDuration;
+}
+
 void UDecalComponent::UpdateDecalVolumeFromTransform()
 {
 	ConvexVolume.UpdateAsOBB(GetWorldMatrix());
@@ -171,6 +213,14 @@ void UDecalComponent::HandleFade(float DeltaTime)
 
 	FadeOpacity = Alpha;
 	MarkProxyDirty(EDirtyFlag::Material);
+
+	if (bAutoDestroyOwnerOnFadeFinished && IsFadeFinished())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->DestroyActor(GetOwner());
+		}
+	}
 }
 
 void UDecalComponent::UpdateReceivers()
