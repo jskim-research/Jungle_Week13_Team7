@@ -18,6 +18,8 @@ namespace PSKey
 	constexpr const char* PhysicsSection = "Physics";
 	constexpr const char* Backend = "Backend";
 	constexpr const char* bUseFixedPhysicsStep = "bUseFixedPhysicsStep";
+	constexpr const char* FixedPhysicsFPS = "FixedPhysicsFPS";
+	constexpr const char* bUsePendingForces = "bUsePendingForces";
 
 	constexpr const char* ViewportSection = "Viewport";
 	constexpr const char* bUseFixedFrameRate = "bUseFixedFrameRate";
@@ -46,6 +48,8 @@ void FProjectSettings::SaveToFile(const FString& Path) const
 	JSON PhysObj = Object();
 	PhysObj[PSKey::Backend] = static_cast<int>(Physics.Backend);
 	PhysObj[PSKey::bUseFixedPhysicsStep] = Physics.bUseFixedPhysicsStep;
+	PhysObj[PSKey::FixedPhysicsFPS] = Physics.FixedPhysicsFPS;
+	PhysObj[PSKey::bUsePendingForces] = Physics.bUsePendingForces;
 	Root[PSKey::PhysicsSection] = PhysObj;
 
 	JSON ViewportObj = Object();
@@ -94,6 +98,15 @@ void FProjectSettings::LoadFromFile(const FString& Path)
 		if (P.hasKey(PSKey::bUseFixedPhysicsStep))
 		{
 			Physics.bUseFixedPhysicsStep = P[PSKey::bUseFixedPhysicsStep].ToBool();
+		}
+		if (P.hasKey(PSKey::FixedPhysicsFPS))
+		{
+			float v = static_cast<float>(P[PSKey::FixedPhysicsFPS].ToFloat());
+			Physics.FixedPhysicsFPS = (std::max)(1.0f, (std::min)(v, 1000.0f));
+		}
+		if (P.hasKey(PSKey::bUsePendingForces))
+		{
+			Physics.bUsePendingForces = P[PSKey::bUsePendingForces].ToBool();
 		}
 	}
 

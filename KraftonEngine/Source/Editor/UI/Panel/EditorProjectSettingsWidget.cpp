@@ -101,7 +101,12 @@ void EditorProjectSettingsWidget::Render()
 			PS.Physics.Backend = static_cast<EPhysicsBackend>(CurrentBackend);
 		}
 		ImGui::Checkbox("Fixed Physics Step", &PS.Physics.bUseFixedPhysicsStep);
-		ImGui::TextDisabled("Requires scene reload to take effect.");
+		ImGui::BeginDisabled(!PS.Physics.bUseFixedPhysicsStep);
+		ImGui::DragFloat("Fixed Physics FPS", &PS.Physics.FixedPhysicsFPS, 1.0f, 1.0f, 1000.0f, "%.0f");
+		ImGui::EndDisabled();
+		PS.Physics.FixedPhysicsFPS = (std::max)(1.0f, (std::min)(PS.Physics.FixedPhysicsFPS, 1000.0f));
+		ImGui::Checkbox("Pending Physics Forces", &PS.Physics.bUsePendingForces);
+		ImGui::TextDisabled("Backend requires scene reload. Step, FPS, and force toggles apply immediately.");
 	}
 
 	if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen))

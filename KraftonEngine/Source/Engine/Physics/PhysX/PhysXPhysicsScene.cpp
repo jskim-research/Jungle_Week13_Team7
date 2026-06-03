@@ -830,6 +830,11 @@ void FPhysXPhysicsScene::ClearPendingForcesForComponent(UPrimitiveComponent* Com
 
 void FPhysXPhysicsScene::ApplyPendingForces()
 {
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		return;
+	}
+
 	for (const FPendingBodyForces& Pending : PendingBodyForces)
 	{
 		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Pending.Comp);
@@ -1721,9 +1726,10 @@ void FPhysXPhysicsScene::Tick(float DeltaTime)
 {
 	if (bShutdownComplete || !Scene || DeltaTime <= 0.0f) return;
 
-	constexpr float FixedPhysicsStep = 1.0f / 144.0f;
+	const float FixedPhysicsFPS = (std::max)(1.0f, (std::min)(FProjectSettings::Get().Physics.FixedPhysicsFPS, 1000.0f));
+	const float FixedPhysicsStep = 1.0f / FixedPhysicsFPS;
 	constexpr int32 MaxSubsteps = 6;
-	constexpr float MaxAccumulatedTime = FixedPhysicsStep * MaxSubsteps;
+	const float MaxAccumulatedTime = FixedPhysicsStep * MaxSubsteps;
 	constexpr float MaxClampedPhysicsDeltaTime = 0.1f;
 
 	PruneInvalidBodyInstanceComponents();
@@ -1975,6 +1981,14 @@ bool FPhysXPhysicsScene::Sweep(const FVector& Start, const FVector& Dir, float M
 
 void FPhysXPhysicsScene::AddForce(UPrimitiveComponent* Comp, const FVector& Force)
 {
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
+		if (!Dyn) return;
+		Dyn->addForce(ToPxVec3(Force));
+		return;
+	}
+
 	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
 	if (!Pending) return;
 	Pending->Force = Pending->Force + Force;
@@ -1982,6 +1996,14 @@ void FPhysXPhysicsScene::AddForce(UPrimitiveComponent* Comp, const FVector& Forc
 
 void FPhysXPhysicsScene::AddForceAtLocation(UPrimitiveComponent* Comp, const FVector& Force, const FVector& WorldLocation)
 {
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
+		if (!Dyn) return;
+		PxRigidBodyExt::addForceAtPos(*Dyn, ToPxVec3(Force), ToPxVec3(WorldLocation));
+		return;
+	}
+
 	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
 	if (!Pending) return;
 	Pending->ForcesAtLocation.push_back(FPendingForceAtLocation{ Force, WorldLocation });
@@ -1989,6 +2011,14 @@ void FPhysXPhysicsScene::AddForceAtLocation(UPrimitiveComponent* Comp, const FVe
 
 void FPhysXPhysicsScene::AddTorque(UPrimitiveComponent* Comp, const FVector& Torque)
 {
+	if (!FProjectSettings::Get().Physics.bUsePendingForces)
+	{
+		PxRigidDynamic* Dyn = GetDynamicActorForComponent(Comp);
+		if (!Dyn) return;
+		Dyn->addTorque(ToPxVec3(Torque));
+		return;
+	}
+
 	FPendingBodyForces* Pending = FindOrAddPendingBodyForces(Comp);
 	if (!Pending) return;
 	Pending->Torque = Pending->Torque + Torque;

@@ -30,6 +30,8 @@ class FProjectSettings : public TSingleton<FProjectSettings>
 	{
 		EPhysicsBackend Backend = EPhysicsBackend::PhysX;
 		bool bUseFixedPhysicsStep = true;
+		float FixedPhysicsFPS = 144.0f;
+		bool bUsePendingForces = true;
 	};
 
 	// --- Viewport ---
