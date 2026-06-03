@@ -18,6 +18,7 @@
 #include "Materials/Material.h"
 #include "Texture/Texture2D.h"
 #include "Profiling/Stats/ParticleStats.h"
+#include "Core/Logging/Log.h"
 
 // UpdateProxyLOD defined in RenderCollector.cpp (shared)
 extern void UpdateProxyLOD(FPrimitiveSceneProxy* Proxy, const FLODUpdateContext& LODCtx);
@@ -285,7 +286,12 @@ void FDrawCommandBuilder::BuildDecalCommandForReceiver(FScene& Scene, const FPri
 
 	// Decal Material은 SectionDraws[0]에 저장됨
 	UMaterial* DecalMat = DecalProxy.GetSectionDraws().empty() ? nullptr : DecalProxy.GetSectionDraws()[0].Material;
-	if (!DecalMat || !DecalMat->GetShader()) return;
+	FShader* DecalShader = DecalMat ? DecalMat->GetShader() : nullptr;
+	if (!DecalMat || !DecalShader || !DecalShader->IsValid())
+	{
+		UE_LOG("[DrawCommandBuilder] Skip decal draw: invalid decal material shader");
+		return;
+	}
 
 	const FDecalSceneProxy* TypedDecalProxy = DecalProxy.HasProxyFlag(EPrimitiveProxyFlags::Decal)
 		? static_cast<const FDecalSceneProxy*>(&DecalProxy)
@@ -320,7 +326,7 @@ void FDrawCommandBuilder::BuildDecalCommandForReceiver(FScene& Scene, const FPri
 
 			FDrawCommand& Cmd = DrawCommandList.AddCommand();
 			Cmd.Pass = DecalPass;
-			Cmd.Shader = DecalMat->GetShader();
+			Cmd.Shader = DecalShader;
 			Cmd.RenderState = BaseRenderState;
 
 			// 머티리얼 기반 렌더 상태 오버라이드

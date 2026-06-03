@@ -475,12 +475,25 @@ void FParticleSystemSceneProxy::SubmitSpriteEmitter(
 	FrameCB.CameraUp    = Frame.CameraUp;    FrameCB._pad1 = 0.0f;
 	Buffer.ParticleFrameCB.Update(Context, &FrameCB, sizeof(FParticleFrameConstants));
 
-    FShader* Shader = Buffer.Material
-        && Buffer.Material->GetDomain() == EMaterialDomain::ParticleSprite
-        && Buffer.Material->GetShader()
-        ? Buffer.Material->GetShader()
-        : FShaderManager::Get().GetOrCreate(EShaderPath::ParticleSprite);
-	if (!Shader)
+    FShader* Shader = nullptr;
+    if (Buffer.Material && Buffer.Material->GetDomain() == EMaterialDomain::ParticleSprite)
+    {
+        FShader* MaterialShader = Buffer.Material->GetShader();
+        if (MaterialShader && MaterialShader->IsValid())
+        {
+            Shader = MaterialShader;
+        }
+        else
+        {
+            UE_LOG("[ParticleProxy] Invalid ParticleSprite material shader. Fallback to default sprite shader.");
+        }
+    }
+
+    if (!Shader)
+    {
+        Shader = FShaderManager::Get().GetOrCreate(EShaderPath::ParticleSprite);
+    }
+	if (!Shader || !Shader->IsValid())
 	{
 		UE_LOG("[ParticleProxy] SubmitSpriteEmitter: ParticleSprite shader not found (%s)", EShaderPath::ParticleSprite);
 		return;
@@ -495,7 +508,9 @@ void FParticleSystemSceneProxy::SubmitSpriteEmitter(
         Cmd.Pass                     = Buffer.Material->GetRenderPass();
         Cmd.RenderState.Blend        = Buffer.Material->GetBlendState();
         Cmd.RenderState.DepthStencil = Buffer.Material->GetDepthStencilState();
-        Cmd.RenderState.Rasterizer   = Buffer.Material->GetRasterizerState();
+        // Sprite billboard는 두 삼각형으로 된 카메라 페이싱 쿼드라서
+        // material의 cull 설정과 무관하게 항상 양면으로 렌더링한다.
+        Cmd.RenderState.Rasterizer   = ERasterizerState::SolidNoCull;
     }
     else
     {

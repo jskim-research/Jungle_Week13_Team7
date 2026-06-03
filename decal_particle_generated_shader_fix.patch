@@ -1,0 +1,220 @@
+diff --git a/KraftonEngine/Source/Engine/Materials/MaterialManager.cpp b/KraftonEngine/Source/Engine/Materials/MaterialManager.cpp
+index 8e14baf..68d28e4 100644
+--- a/KraftonEngine/Source/Engine/Materials/MaterialManager.cpp
++++ b/KraftonEngine/Source/Engine/Materials/MaterialManager.cpp
+@@ -13,6 +13,7 @@
+ #include "Render/Pipeline/Renderer.h"
+ #include "Materials/Material.h"
+ #include "Object/GarbageCollection.h"
++#include "Core/Logging/Log.h"
+ 
+ namespace
+ {
+@@ -352,17 +353,30 @@ bool FMaterialManager::LoadMaterialFromJson(
+ 	EDepthStencilState DepthState = StringToDepthStencilState(DepthStr, RenderPass);
+ 	ERasterizerState RasterState = StringToRasterizerState(RasterStr, RenderPass);
+ 
++    const bool bUseGeneratedGraphShader =
++        bGraphMaterial &&
++        GraphShaderMode == EMaterialGraphShaderMode::Generated;
++
++    // Generated ParticleSprite/ParticleMesh shaders have non-standard vertex input.
++    // They must use an explicit vertex-factory key so ShaderManager picks the
++    // correct instance-buffer input layout. Decal generated shaders intentionally
++    // keep the default VS entry/input reflection because they redraw receiver
++    // static meshes through the decal projection wrapper.
++    const bool bGeneratedNeedsExplicitVertexFactory =
++        bUseGeneratedGraphShader &&
++        (
++            Domain == EMaterialDomain::Surface ||
++            Domain == EMaterialDomain::ParticleSprite ||
++            Domain == EMaterialDomain::ParticleMesh
++        );
++
+     FShaderKey ShaderKey(ShaderPath);
+-    if (bGraphMaterial
+-        && GraphShaderMode == EMaterialGraphShaderMode::Generated
+-        && Domain == EMaterialDomain::Surface)
++    if (bGeneratedNeedsExplicitVertexFactory)
+     {
+         ShaderKey.SetVertexFactory(DomainToVertexFactory(Domain));
+     }
+ 
+-    FMaterialTemplate* Template = (bGraphMaterial
+-            && GraphShaderMode == EMaterialGraphShaderMode::Generated
+-            && Domain == EMaterialDomain::Surface)
++    FMaterialTemplate* Template = bGeneratedNeedsExplicitVertexFactory
+         ? GetOrCreateTemplate(ShaderKey)
+         : GetOrCreateTemplate(ShaderPath);
+     if (!Template)
+@@ -1107,8 +1121,9 @@ FMaterialTemplate* FMaterialManager::GetOrCreateTemplate(const FString& ShaderPa
+ 	// 2. 템플릿이 기존에 없다면 새로 제작
+ 	//    캐시에 있으면 반환, 없으면 컴파일 후 캐싱
+ 	FShader* Shader = FShaderManager::Get().FindOrCreate(ShaderPath);
+-	if (!Shader)
++	if (!Shader || !Shader->IsValid())
+ 	{
++		UE_LOG("[MaterialManager] Invalid shader template: %s", ShaderPath.c_str());
+ 		return nullptr;
+ 	}
+ 
+@@ -1137,8 +1152,13 @@ FMaterialTemplate* FMaterialManager::GetOrCreateTemplate(const FShaderKey& Key)
+     }
+ 
+     FShader* Shader = FShaderManager::Get().FindOrCreate(Key);
+-    if (!Shader)
++    if (!Shader || !Shader->IsValid())
+     {
++        UE_LOG("[MaterialManager] Invalid shader template: %s VF=%d VS=%s PS=%s",
++            Key.Path.c_str(),
++            static_cast<int32>(Key.VertexFactory),
++            Key.VSEntryPoint.c_str(),
++            Key.PSEntryPoint.c_str());
+         return nullptr;
+     }
+ 
+diff --git a/KraftonEngine/Source/Engine/Render/Command/DrawCommandBuilder.cpp b/KraftonEngine/Source/Engine/Render/Command/DrawCommandBuilder.cpp
+index 34cf4d7..b258d0b 100644
+--- a/KraftonEngine/Source/Engine/Render/Command/DrawCommandBuilder.cpp
++++ b/KraftonEngine/Source/Engine/Render/Command/DrawCommandBuilder.cpp
+@@ -18,6 +18,7 @@
+ #include "Materials/Material.h"
+ #include "Texture/Texture2D.h"
+ #include "Profiling/Stats/ParticleStats.h"
++#include "Core/Logging/Log.h"
+ 
+ // UpdateProxyLOD defined in RenderCollector.cpp (shared)
+ extern void UpdateProxyLOD(FPrimitiveSceneProxy* Proxy, const FLODUpdateContext& LODCtx);
+@@ -285,7 +286,12 @@ void FDrawCommandBuilder::BuildDecalCommandForReceiver(FScene& Scene, const FPri
+ 
+ 	// Decal Material은 SectionDraws[0]에 저장됨
+ 	UMaterial* DecalMat = DecalProxy.GetSectionDraws().empty() ? nullptr : DecalProxy.GetSectionDraws()[0].Material;
+-	if (!DecalMat || !DecalMat->GetShader()) return;
++	FShader* DecalShader = DecalMat ? DecalMat->GetShader() : nullptr;
++	if (!DecalMat || !DecalShader || !DecalShader->IsValid())
++	{
++		UE_LOG("[DrawCommandBuilder] Skip decal draw: invalid decal material shader");
++		return;
++	}
+ 
+ 	const FDecalSceneProxy* TypedDecalProxy = DecalProxy.HasProxyFlag(EPrimitiveProxyFlags::Decal)
+ 		? static_cast<const FDecalSceneProxy*>(&DecalProxy)
+@@ -320,7 +326,7 @@ void FDrawCommandBuilder::BuildDecalCommandForReceiver(FScene& Scene, const FPri
+ 
+ 			FDrawCommand& Cmd = DrawCommandList.AddCommand();
+ 			Cmd.Pass = DecalPass;
+-			Cmd.Shader = DecalMat->GetShader();
++			Cmd.Shader = DecalShader;
+ 			Cmd.RenderState = BaseRenderState;
+ 
+ 			// 머티리얼 기반 렌더 상태 오버라이드
+diff --git a/KraftonEngine/Source/Engine/Render/Proxy/DecalSceneProxy.cpp b/KraftonEngine/Source/Engine/Render/Proxy/DecalSceneProxy.cpp
+index 1b827c2..4b050e9 100644
+--- a/KraftonEngine/Source/Engine/Render/Proxy/DecalSceneProxy.cpp
++++ b/KraftonEngine/Source/Engine/Render/Proxy/DecalSceneProxy.cpp
+@@ -77,12 +77,16 @@ void FDecalSceneProxy::UpdateMaterial()
+ 	// 원본 Material을 직접 SectionDraws에 넣어야 graph material의 parameter CB/SRV가 유지된다.
+ 	if (!DecalMaterial && !DecalProxyMaterial)
+ 	{
+-		DecalProxyMaterial = UMaterial::CreateTransient(
+-			ERenderPass::Decal,
+-			EBlendState::AlphaBlend,
+-			EDepthStencilState::DepthReadOnly,
+-			ERasterizerState::SolidNoCull,
+-			FShaderManager::Get().GetOrCreate(EShaderPath::Decal));
++		FShader* FallbackShader = FShaderManager::Get().GetOrCreate(EShaderPath::Decal);
++		if (FallbackShader && FallbackShader->IsValid())
++		{
++			DecalProxyMaterial = UMaterial::CreateTransient(
++				ERenderPass::Decal,
++				EBlendState::AlphaBlend,
++				EDepthStencilState::DepthReadOnly,
++				ERasterizerState::SolidNoCull,
++				FallbackShader);
++		}
+ 	}
+ 
+ 	DecalCBData.WorldToDecal = DecalComp->GetWorldMatrix().GetInverse();
+diff --git a/KraftonEngine/Source/Engine/Render/Proxy/ParticleSystemSceneProxy.cpp b/KraftonEngine/Source/Engine/Render/Proxy/ParticleSystemSceneProxy.cpp
+index b52258e..9c9017f 100644
+--- a/KraftonEngine/Source/Engine/Render/Proxy/ParticleSystemSceneProxy.cpp
++++ b/KraftonEngine/Source/Engine/Render/Proxy/ParticleSystemSceneProxy.cpp
+@@ -475,12 +475,25 @@ void FParticleSystemSceneProxy::SubmitSpriteEmitter(
+ 	FrameCB.CameraUp    = Frame.CameraUp;    FrameCB._pad1 = 0.0f;
+ 	Buffer.ParticleFrameCB.Update(Context, &FrameCB, sizeof(FParticleFrameConstants));
+ 
+-    FShader* Shader = Buffer.Material
+-        && Buffer.Material->GetDomain() == EMaterialDomain::ParticleSprite
+-        && Buffer.Material->GetShader()
+-        ? Buffer.Material->GetShader()
+-        : FShaderManager::Get().GetOrCreate(EShaderPath::ParticleSprite);
+-	if (!Shader)
++    FShader* Shader = nullptr;
++    if (Buffer.Material && Buffer.Material->GetDomain() == EMaterialDomain::ParticleSprite)
++    {
++        FShader* MaterialShader = Buffer.Material->GetShader();
++        if (MaterialShader && MaterialShader->IsValid())
++        {
++            Shader = MaterialShader;
++        }
++        else
++        {
++            UE_LOG("[ParticleProxy] Invalid ParticleSprite material shader. Fallback to default sprite shader.");
++        }
++    }
++
++    if (!Shader)
++    {
++        Shader = FShaderManager::Get().GetOrCreate(EShaderPath::ParticleSprite);
++    }
++	if (!Shader || !Shader->IsValid())
+ 	{
+ 		UE_LOG("[ParticleProxy] SubmitSpriteEmitter: ParticleSprite shader not found (%s)", EShaderPath::ParticleSprite);
+ 		return;
+@@ -495,7 +508,9 @@ void FParticleSystemSceneProxy::SubmitSpriteEmitter(
+         Cmd.Pass                     = Buffer.Material->GetRenderPass();
+         Cmd.RenderState.Blend        = Buffer.Material->GetBlendState();
+         Cmd.RenderState.DepthStencil = Buffer.Material->GetDepthStencilState();
+-        Cmd.RenderState.Rasterizer   = Buffer.Material->GetRasterizerState();
++        // Sprite billboard는 두 삼각형으로 된 카메라 페이싱 쿼드라서
++        // material의 cull 설정과 무관하게 항상 양면으로 렌더링한다.
++        Cmd.RenderState.Rasterizer   = ERasterizerState::SolidNoCull;
+     }
+     else
+     {
+diff --git a/KraftonEngine/Source/Engine/Render/Shader/ShaderManager.cpp b/KraftonEngine/Source/Engine/Render/Shader/ShaderManager.cpp
+index 2e5c00b..4f135e7 100644
+--- a/KraftonEngine/Source/Engine/Render/Shader/ShaderManager.cpp
++++ b/KraftonEngine/Source/Engine/Render/Shader/ShaderManager.cpp
+@@ -220,6 +220,15 @@ FShader* FShaderManager::GetOrCreate(const FShaderKey& Key, EShaderErrorMode Err
+ 		const D3D_SHADER_MACRO* Defines = nullptr;
+ 		CacheEntry.Shader->Create(CachedDevice, WidePath.c_str(), Key.VSEntryPoint.c_str(), Key.PSEntryPoint.c_str(), Defines,
+ 			&CacheEntry.Includes, ErrorMode, GetExplicitInputLayoutDesc(Key));
++		if (!CacheEntry.Shader->IsValid())
++		{
++			UE_LOG("[ShaderManager] Failed to create shader: %s VS=%s PS=%s VF=%d",
++				Key.Path.c_str(),
++				Key.VSEntryPoint.c_str(),
++				Key.PSEntryPoint.c_str(),
++				static_cast<int32>(Key.VertexFactory));
++			return nullptr;
++		}
+ 		CacheEntry.StoredDefines = CopyDefines(Defines);
+ 	}
+ 	else
+@@ -251,6 +260,15 @@ FShader* FShaderManager::PreCompile(const FShaderKey& Key, const D3D_SHADER_MACR
+ 	std::wstring WidePath = FPaths::ToWide(Key.Path);
+ 	CacheEntry.Shader->Create(CachedDevice, WidePath.c_str(), Key.VSEntryPoint.c_str(), Key.PSEntryPoint.c_str(), Defines,
+ 		&CacheEntry.Includes, ErrorMode, GetExplicitInputLayoutDesc(Key));
++	if (!CacheEntry.Shader->IsValid())
++	{
++		UE_LOG("[ShaderManager] Failed to precompile shader: %s VS=%s PS=%s VF=%d",
++			Key.Path.c_str(),
++			Key.VSEntryPoint.c_str(),
++			Key.PSEntryPoint.c_str(),
++			static_cast<int32>(Key.VertexFactory));
++		return nullptr;
++	}
+ 	CacheEntry.StoredDefines = CopyDefines(Defines);
+ 
+ 	auto* RawPtr = CacheEntry.Shader.get();

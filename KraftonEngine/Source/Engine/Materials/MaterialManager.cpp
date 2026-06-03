@@ -13,6 +13,7 @@
 #include "Render/Pipeline/Renderer.h"
 #include "Materials/Material.h"
 #include "Object/GarbageCollection.h"
+#include "Core/Logging/Log.h"
 
 namespace
 {
@@ -352,17 +353,30 @@ bool FMaterialManager::LoadMaterialFromJson(
 	EDepthStencilState DepthState = StringToDepthStencilState(DepthStr, RenderPass);
 	ERasterizerState RasterState = StringToRasterizerState(RasterStr, RenderPass);
 
+    const bool bUseGeneratedGraphShader =
+        bGraphMaterial &&
+        GraphShaderMode == EMaterialGraphShaderMode::Generated;
+
+    // Generated ParticleSprite/ParticleMesh shaders have non-standard vertex input.
+    // They must use an explicit vertex-factory key so ShaderManager picks the
+    // correct instance-buffer input layout. Decal generated shaders intentionally
+    // keep the default VS entry/input reflection because they redraw receiver
+    // static meshes through the decal projection wrapper.
+    const bool bGeneratedNeedsExplicitVertexFactory =
+        bUseGeneratedGraphShader &&
+        (
+            Domain == EMaterialDomain::Surface ||
+            Domain == EMaterialDomain::ParticleSprite ||
+            Domain == EMaterialDomain::ParticleMesh
+        );
+
     FShaderKey ShaderKey(ShaderPath);
-    if (bGraphMaterial
-        && GraphShaderMode == EMaterialGraphShaderMode::Generated
-        && Domain == EMaterialDomain::Surface)
+    if (bGeneratedNeedsExplicitVertexFactory)
     {
         ShaderKey.SetVertexFactory(DomainToVertexFactory(Domain));
     }
 
-    FMaterialTemplate* Template = (bGraphMaterial
-            && GraphShaderMode == EMaterialGraphShaderMode::Generated
-            && Domain == EMaterialDomain::Surface)
+    FMaterialTemplate* Template = bGeneratedNeedsExplicitVertexFactory
         ? GetOrCreateTemplate(ShaderKey)
         : GetOrCreateTemplate(ShaderPath);
     if (!Template)
@@ -1107,8 +1121,9 @@ FMaterialTemplate* FMaterialManager::GetOrCreateTemplate(const FString& ShaderPa
 	// 2. 템플릿이 기존에 없다면 새로 제작
 	//    캐시에 있으면 반환, 없으면 컴파일 후 캐싱
 	FShader* Shader = FShaderManager::Get().FindOrCreate(ShaderPath);
-	if (!Shader)
+	if (!Shader || !Shader->IsValid())
 	{
+		UE_LOG("[MaterialManager] Invalid shader template: %s", ShaderPath.c_str());
 		return nullptr;
 	}
 
@@ -1137,8 +1152,13 @@ FMaterialTemplate* FMaterialManager::GetOrCreateTemplate(const FShaderKey& Key)
     }
 
     FShader* Shader = FShaderManager::Get().FindOrCreate(Key);
-    if (!Shader)
+    if (!Shader || !Shader->IsValid())
     {
+        UE_LOG("[MaterialManager] Invalid shader template: %s VF=%d VS=%s PS=%s",
+            Key.Path.c_str(),
+            static_cast<int32>(Key.VertexFactory),
+            Key.VSEntryPoint.c_str(),
+            Key.PSEntryPoint.c_str());
         return nullptr;
     }
 

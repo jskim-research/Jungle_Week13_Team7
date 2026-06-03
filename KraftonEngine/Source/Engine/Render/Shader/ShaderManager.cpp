@@ -220,6 +220,15 @@ FShader* FShaderManager::GetOrCreate(const FShaderKey& Key, EShaderErrorMode Err
 		const D3D_SHADER_MACRO* Defines = nullptr;
 		CacheEntry.Shader->Create(CachedDevice, WidePath.c_str(), Key.VSEntryPoint.c_str(), Key.PSEntryPoint.c_str(), Defines,
 			&CacheEntry.Includes, ErrorMode, GetExplicitInputLayoutDesc(Key));
+		if (!CacheEntry.Shader->IsValid())
+		{
+			UE_LOG("[ShaderManager] Failed to create shader: %s VS=%s PS=%s VF=%d",
+				Key.Path.c_str(),
+				Key.VSEntryPoint.c_str(),
+				Key.PSEntryPoint.c_str(),
+				static_cast<int32>(Key.VertexFactory));
+			return nullptr;
+		}
 		CacheEntry.StoredDefines = CopyDefines(Defines);
 	}
 	else
@@ -251,6 +260,15 @@ FShader* FShaderManager::PreCompile(const FShaderKey& Key, const D3D_SHADER_MACR
 	std::wstring WidePath = FPaths::ToWide(Key.Path);
 	CacheEntry.Shader->Create(CachedDevice, WidePath.c_str(), Key.VSEntryPoint.c_str(), Key.PSEntryPoint.c_str(), Defines,
 		&CacheEntry.Includes, ErrorMode, GetExplicitInputLayoutDesc(Key));
+	if (!CacheEntry.Shader->IsValid())
+	{
+		UE_LOG("[ShaderManager] Failed to precompile shader: %s VS=%s PS=%s VF=%d",
+			Key.Path.c_str(),
+			Key.VSEntryPoint.c_str(),
+			Key.PSEntryPoint.c_str(),
+			static_cast<int32>(Key.VertexFactory));
+		return nullptr;
+	}
 	CacheEntry.StoredDefines = CopyDefines(Defines);
 
 	auto* RawPtr = CacheEntry.Shader.get();

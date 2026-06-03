@@ -77,12 +77,16 @@ void FDecalSceneProxy::UpdateMaterial()
 	// 원본 Material을 직접 SectionDraws에 넣어야 graph material의 parameter CB/SRV가 유지된다.
 	if (!DecalMaterial && !DecalProxyMaterial)
 	{
-		DecalProxyMaterial = UMaterial::CreateTransient(
-			ERenderPass::Decal,
-			EBlendState::AlphaBlend,
-			EDepthStencilState::DepthReadOnly,
-			ERasterizerState::SolidNoCull,
-			FShaderManager::Get().GetOrCreate(EShaderPath::Decal));
+		FShader* FallbackShader = FShaderManager::Get().GetOrCreate(EShaderPath::Decal);
+		if (FallbackShader && FallbackShader->IsValid())
+		{
+			DecalProxyMaterial = UMaterial::CreateTransient(
+				ERenderPass::Decal,
+				EBlendState::AlphaBlend,
+				EDepthStencilState::DepthReadOnly,
+				ERasterizerState::SolidNoCull,
+				FallbackShader);
+		}
 	}
 
 	DecalCBData.WorldToDecal = DecalComp->GetWorldMatrix().GetInverse();
