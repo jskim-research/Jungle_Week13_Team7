@@ -83,7 +83,13 @@ function PlayerCharacter.AttachKatanaToWeaponSocket(ctx)
     end
 
     if PlayerCharacter.KatanaComponent ~= nil and PlayerCharacter.KatanaComponent:IsValid() then
-        return
+        -- PlayerCharacter 가 전역 Lua Table 에 등록되어있어서 이전 Handle 이 남아있을 수 있음
+        if PlayerCharacter.KatanaComponent:GetOwner() == owner then
+            print("Katana already exists")
+            return
+        end
+
+        PlayerCharacter.KatanaComponent = nil
     end
 
     if owner.GetSkeletalMeshComponent == nil or owner.AddStaticMeshComponent == nil then
@@ -578,6 +584,9 @@ function BeginPlay()
 end
 
 function EndPlay()
+    -- 전역 Lua 테이블 데이터 초기화 -> 안정성 강화
+    PlayerCharacter.KatanaComponent = nil
+    PlayerCharacter.KatanaPSC = nil
     print("[EndPlay] " .. obj.UUID)
 end
 
