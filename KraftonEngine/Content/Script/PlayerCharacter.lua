@@ -21,7 +21,7 @@ local ULTIMATE_CAMERA_BACK_DISTANCE = 7.0
 local ULTIMATE_CAMERA_HEIGHT = 10
 
 local ULTIMATE_MOVE_START_DISTANCE = 100.0
-local ULTIMATE_MOVE_END_DISTANCE = 20
+local ULTIMATE_MOVE_END_DISTANCE = 30
 local ULTIMATE_MOVE_SIDE_OFFSET = -10.0
 local ULTIMATE_MOVE_CONTROL_SIDE_OFFSET = 40.0
 local ULTIMATE_MOVE_CONTROL_HEIGHT = 1.2
@@ -606,18 +606,6 @@ function PlayerCharacter.BeginUltimate()
         16.0
     )
 
-    local decal = VFX.SpawnGroundCrackDecal(
-        "Content/Material/VFX/GroundCrack.mat",
-        decalPos,
-        decalScale,
-        0.35,
-        0.45
-    )
-
-    if decal ~= nil then
-        decal:SetColorRGBA(1.0, 0.05, 0.02, 1.0)
-    end
-
     Reflection.Call(owner, "SetActorLocation", startPos)
 
     local elapsed = 0.0
@@ -649,6 +637,18 @@ function PlayerCharacter.BeginUltimate()
         end
 
         prevPos = nextPos
+    end
+
+    local decal = VFX.SpawnGroundCrackDecal(
+        "Content/Material/VFX/GroundCrack.mat",
+        cinematicEndPos,
+        decalScale,
+        0.35,
+        0.45
+    )
+
+    if decal ~= nil then
+        decal:SetColorRGBA(1.0, 0.05, 0.02, 1.0)
     end
 
     -- 연출상 도착 지점은 기존처럼 카메라 앞쪽

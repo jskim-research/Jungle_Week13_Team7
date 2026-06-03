@@ -48,7 +48,7 @@ FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
     Result.Roughness = 0.5f;
     Result.Metallic = 0.0f;
     Result.Emissive = float3(0, 0, 0);
-    Result.Opacity = (n_12).x;
+    Result.Opacity = (n_3).x;
     return Result;
 }
 

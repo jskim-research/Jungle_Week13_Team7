@@ -1275,6 +1275,11 @@ void USkeletalMeshComponent::UpdateWorldAABB() const
 	USkinnedMeshComponent::UpdateWorldAABB();
 }
 
+ECollisionPropertyExposure USkeletalMeshComponent::GetCollisionPropertyExposure() const
+{
+	return ECollisionPropertyExposure::Full;
+}
+
 bool USkeletalMeshComponent::EvaluateAnimInstance(float DeltaTime)
 {
     if (!AnimInstance) return false;

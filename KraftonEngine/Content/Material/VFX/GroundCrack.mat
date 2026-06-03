@@ -4,7 +4,7 @@
     "BlendState" : "AlphaBlend",
     "Domain" : "Decal",
     "GeneratorVersion" : "GeneratedMaterialPass_v4_Decal",
-    "GraphHash" : "B21E73107C25EECA",
+    "GraphHash" : "EC0DAFD05D94D1DE",
     "GraphShaderMode" : "Generated",
     "Parameters" : {
 
@@ -13,7 +13,7 @@
     "RenderPass" : "Decal",
     "Textures" : {
       "DiffuseTexture" : {
-        "Path" : "Content/Particle/T_Fire_B.PNG",
+        "Path" : "Content/Texture/GroundCrack.png",
         "Slot" : "Diffuse"
       }
     }
@@ -39,15 +39,15 @@
         "LinkId" : 38,
         "ToPinId" : 28
       }, {
-        "FromPinId" : 17,
-        "LinkId" : 40,
-        "ToPinId" : 32
-      }, {
         "FromPinId" : 42,
         "LinkId" : 43,
         "ToPinId" : 5
+      }, {
+        "FromPinId" : 10,
+        "LinkId" : 44,
+        "ToPinId" : 32
       }],
-    "NextId" : 44,
+    "NextId" : 45,
     "Nodes" : [{
         "DisplayName" : "Texture Object",
         "Mask" : "RGBA",
@@ -62,7 +62,7 @@
           }],
         "PosX" : -720.000000,
         "PosY" : -80.000000,
-        "TexturePath" : "Content/Particle/T_Fire_B.PNG",
+        "TexturePath" : "Content/Texture/GroundCrack.png",
         "TextureSlot" : "Diffuse",
         "Type" : "TextureObject",
         "Value" : [1.000000, 1.000000, 1.000000, 1.000000]
