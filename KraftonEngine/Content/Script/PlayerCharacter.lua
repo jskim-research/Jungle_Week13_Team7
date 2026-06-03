@@ -10,6 +10,8 @@ local VK_SPACE = 0x20
 
 local DASH_SLASH_DISTANCE = 8.0
 local DASH_SLASH_DURATION = 0.2
+local ATTACK_STEP_FORWARD_DISTANCE = 1.5
+local ATTACK_TURN_SPEED = 12.0
 
 local KATANA_MESH_PATH = "Content/Mesh/Katana/source/red cyber katana_StaticMesh.uasset"
 local KATANA_SOCKET_NAME = "WeaponR"
@@ -118,6 +120,19 @@ function PlayerCharacter.AttachKatanaToWeaponSocket(ctx)
     PlayerCharacter.KatanaComponent = katana
 end
 
+function PlayerCharacter.SetKatanaTrailActive(active)
+    local PSC = PlayerCharacter.KatanaPSC
+    if PSC == nil or not PSC:IsValid() then
+        return
+    end
+
+    if active then
+        PSC:Activate()
+    else
+        PSC:Deactivate()
+    end
+end
+
 -- Katana 에 Particle System Component 부착
 function PlayerCharacter.AttachPSCToWeaponSocket(ctx)
     local owner = GetOwner(ctx)
@@ -142,12 +157,14 @@ function PlayerCharacter.AttachPSCToWeaponSocket(ctx)
     end
 
     PSC:SetTemplatePath(KATANA_PS_PATH)
+    PSC:SetAnimTrailSourceComponent(meshComp)
     PSC:AttachToComponentWithSocket(meshComp, KATANA_SOCKET_NAME)
     PSC.RelativeLocation = Vector(0.0, 0.0, 0.0)
     PSC:SetRotation(Vector(0.0, 0.0, 0.0))
     PSC:SetRelativeScale(Vector(1.0, 1.0, 1.0))
 
     PlayerCharacter.KatanaPSC = PSC
+    PlayerCharacter.SetKatanaTrailActive(false)
 
 end
 
@@ -194,6 +211,20 @@ end
 
 function PlayerCharacter.StopMovementImmediately(ctx)
     StopMovementImmediately(ctx)
+end
+
+function PlayerCharacter.StepAttackForward(ctx)
+    local owner = GetOwner(ctx)
+    if owner == nil then
+        return
+    end
+
+    local forward = PlayerCharacter.GetOwnerForward2D(ctx)
+    if forward == nil then
+        return
+    end
+
+    Reflection.Call(owner, "AddActorWorldOffset", forward * ATTACK_STEP_FORWARD_DISTANCE)
 end
 
 function PlayerCharacter.GetMoveInputWorldDirection(ctx)
@@ -286,6 +317,29 @@ function PlayerCharacter.FaceOwnerToDirection(ctx, dir)
 
     local targetYaw = math.atan2(dir.Y, dir.X) * 180.0 / math.pi
     Reflection.Call(owner, "SetActorRotation", Vector(0.0, 0.0, targetYaw))
+end
+
+function PlayerCharacter.SmoothFaceOwnerToDirection(ctx, dir, dt)
+    local owner = GetOwner(ctx)
+    if owner == nil or dir == nil or dt == nil then
+        return
+    end
+
+    local currentRot = Reflection.Call(owner, "GetActorRotation")
+    if currentRot == nil then
+        PlayerCharacter.FaceOwnerToDirection(ctx, dir)
+        return
+    end
+
+    local targetYaw = math.atan2(dir.Y, dir.X) * 180.0 / math.pi
+    local deltaYaw = (targetYaw - currentRot.Z + 180.0) % 360.0 - 180.0
+    local alpha = dt * ATTACK_TURN_SPEED
+    if alpha > 1.0 then
+        alpha = 1.0
+    end
+    local nextYaw = currentRot.Z + deltaYaw * alpha
+
+    Reflection.Call(owner, "SetActorRotation", Vector(currentRot.X, currentRot.Y, nextYaw))
 end
 
 local function Clamp(v, minValue, maxValue)
@@ -382,6 +436,8 @@ function PlayerCharacter.BeginDashSlash(ctx)
     ctx.DashSlashActive = true
     ctx.DashSlashElapsed = 0.0
     ctx.DashSlashEnd = false
+
+    PlayerCharacter.SetKatanaTrailActive(true)
 end
 
 function PlayerCharacter.EndDashSlash(ctx)
@@ -397,6 +453,7 @@ function PlayerCharacter.EndDashSlash(ctx)
     ctx.DashSlashMoveDirection = nil
 
     SetMovementInputEnabled(ctx, true)
+    PlayerCharacter.SetKatanaTrailActive(false)
 end
 
 function PlayerCharacter.UpdateDashSlash(ctx, dt)
@@ -524,6 +581,7 @@ function PlayerCharacter.BeginUltimate()
     local prevPos = startPos
 
     PlayerCharacter.IsInUltimateMode = true
+    PlayerCharacter.SetKatanaTrailActive(true)
 
     while elapsed < ULTIMATE_MOVE_DURATION do
         Wait(ULTIMATE_FRAME_STEP)
@@ -571,6 +629,7 @@ function PlayerCharacter.BeginUltimate()
 
     PlayerCharacter.IsInUltimateMode = false
     PlayerCharacter.IsUltimateRunning = false
+    PlayerCharacter.SetKatanaTrailActive(false)
 
     print("End Ultimate")
 end

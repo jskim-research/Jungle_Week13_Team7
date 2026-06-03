@@ -41,6 +41,8 @@ local function ResetAttack(self, unlockMovement)
     if unlockMovement ~= false then
         PlayerCharacter.SetMovementInputEnabled(self, true)
     end
+
+    PlayerCharacter.SetKatanaTrailActive(false)
 end
 
 local function BeginAttack(self, index)
@@ -49,6 +51,8 @@ local function BeginAttack(self, index)
     self.ComboQueued = false
     self.AttackEnd = false
     PlayerCharacter.StopMovementImmediately(self)
+    PlayerCharacter.StepAttackForward(self)
+    PlayerCharacter.SetKatanaTrailActive(true)
 end
 
 local function BeginDashSlash(self)
@@ -128,11 +132,11 @@ function init(self)
     Anim.sm_add_state(top, "Locomotion", loco)
     Anim.sm_add_state(top, "Jump", Anim.create_sequence_player(JUMP_PATH, 1.0, JUMP_LOOP))
 
-    Anim.sm_add_state(top, "Attack1", Anim.create_sequence_player(ATTACK1_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack2", Anim.create_sequence_player(ATTACK2_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack3", Anim.create_sequence_player(ATTACK3_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack4", Anim.create_sequence_player(ATTACK4_PATH, 1.0, false))
-    Anim.sm_add_state(top, "Attack5", Anim.create_sequence_player(ATTACK5_PATH, 1.0, false))
+    Anim.sm_add_state(top, "Attack1", Anim.create_sequence_player(ATTACK1_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack2", Anim.create_sequence_player(ATTACK2_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack3", Anim.create_sequence_player(ATTACK3_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack4", Anim.create_sequence_player(ATTACK4_PATH, 1.5, false))
+    Anim.sm_add_state(top, "Attack5", Anim.create_sequence_player(ATTACK5_PATH, 1.5, false))
 
     Anim.sm_add_state(top, "DashSlash", Anim.create_sequence_player(DASH_SLASH_PATH, 3.0, false))
 
@@ -147,7 +151,7 @@ function init(self)
         DASH_SLASH_BLEND_IN
     )
 
-    Anim.sm_add_state(top, "UltimateAttack", Anim.create_sequence_player(ULTIMATE_ATTACK_PATH, 1.0, false))
+    Anim.sm_add_state(top, "UltimateAttack", Anim.create_sequence_player(ULTIMATE_ATTACK_PATH, 1.2, false))
 
     Anim.sm_add_transition(top, "AnyState", "UltimateAttack",
         function()
@@ -318,6 +322,11 @@ function update(self, dt)
         PlayerCharacter.UpdateDashSlash(self, dt)
     elseif self.AttackIndex == 0 then
         PlayerCharacter.ApplyMoveInput(self)
+    else
+        local dir = PlayerCharacter.GetMoveInputWorldDirection(self)
+        if dir ~= nil then
+            PlayerCharacter.SmoothFaceOwnerToDirection(self, dir, dt)
+        end
     end
 end
 

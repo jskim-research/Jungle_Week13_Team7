@@ -104,6 +104,9 @@ public:
     void             SetTemplate(UParticleSystem* InTemplate);
     UParticleSystem* GetTemplate() const { return Template.Get(); }
 
+    void Activate() override;
+    void Deactivate() override;
+
     void InitializeSystem();
     void ResetSystem();
 
@@ -114,6 +117,7 @@ public:
     TArray<UMaterial*> GetEmitterMaterials() const;
 
     // AnimTrail TypeData가 blade_base/blade_tip 같은 소켓을 샘플링할 원본 스켈레탈 메시.
+	UFUNCTION(Callable)
     void SetAnimTrailSourceComponent(USkinnedMeshComponent* InSourceComponent);
     USkinnedMeshComponent* GetAnimTrailSourceComponent() const { return AnimTrailSourceComponent.Get(); }
 

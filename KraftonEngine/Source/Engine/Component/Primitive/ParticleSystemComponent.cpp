@@ -1,4 +1,4 @@
-#include "ParticleSystemComponent.h"
+﻿#include "ParticleSystemComponent.h"
 
 #include "Component/Primitive/SkinnedMeshComponent.h"
 #include "Particles/ParticleEmitter.h"
@@ -27,6 +27,25 @@ UParticleSystemComponent::~UParticleSystemComponent()
 {
     ClearRenderData();
     ClearEmitterInstances();
+}
+
+void UParticleSystemComponent::Activate()
+{
+    UPrimitiveComponent::Activate();
+    ResetSystem();
+}
+
+void UParticleSystemComponent::Deactivate()
+{
+    UPrimitiveComponent::Deactivate();
+
+    ClearRenderData();
+    ClearEmitterInstances();
+    CachedWorldTimeSeconds = 0.0f;
+    bInitialized = false;
+
+    MarkRenderStateDirty();
+    MarkWorldBoundsDirty();
 }
 
 void UParticleSystemComponent::SetTemplate(UParticleSystem* InTemplate)

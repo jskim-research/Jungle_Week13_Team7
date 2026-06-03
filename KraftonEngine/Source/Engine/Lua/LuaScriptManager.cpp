@@ -2515,6 +2515,7 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 	Lua.new_usertype<UParticleSystemComponent>("ParticleSystemComponent",
 		sol::base_classes,
 		sol::bases<UPrimitiveComponent, USceneComponent, UActorComponent, UObject>(),
+		"SetAnimTrailSourceComponent", &UParticleSystemComponent::SetAnimTrailSourceComponent,
 		"SetTemplatePath", [](UParticleSystemComponent& C, const FString& TemplatePath)
 	{
 		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
