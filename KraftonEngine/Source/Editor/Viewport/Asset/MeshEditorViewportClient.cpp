@@ -461,7 +461,7 @@ void FMeshEditorViewportClient::TickInput(float DeltaTime)
 	FVector MouseRotation = FVector::ZeroVector;
 	float MouseRotationSpeed = 0.15f * ControlSettings.RotationSpeed;
 
-	if (Input.GetKey(VK_RBUTTON))
+	if (Input.GetKey(VK_RBUTTON) && !Input.GetKey(VK_CONTROL))
 	{
 		float DeltaX = static_cast<float>(Input.MouseDeltaX());
 		float DeltaY = static_cast<float>(Input.MouseDeltaY());
@@ -551,6 +551,21 @@ void FMeshEditorViewportClient::TickInteraction(float DeltaTime)
 	FRayUtils::RaycastComponent(Gizmo, Ray, HitResult);
 
 	InputSystem& Input = InputSystem::Get();
+
+	if (Input.GetKey(VK_CONTROL)
+		&& (Input.GetKeyDown(VK_RBUTTON) || Input.GetKey(VK_RBUTTON) || Input.GetKeyUp(VK_RBUTTON))
+		&& PreviewRagdollInteractionHandler)
+	{
+		if (PreviewRagdollInteractionHandler(
+			Ray,
+			Input.GetKeyDown(VK_RBUTTON),
+			Input.GetKey(VK_RBUTTON),
+			Input.GetKeyUp(VK_RBUTTON),
+			DeltaTime))
+		{
+			return;
+		}
+	}
 
 	if (Input.GetKeyDown(VK_LBUTTON))
 	{

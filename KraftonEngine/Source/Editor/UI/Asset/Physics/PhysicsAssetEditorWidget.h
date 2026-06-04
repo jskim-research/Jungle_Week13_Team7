@@ -15,8 +15,15 @@ class USkeletalBodySetup;
 class UPhysicsConstraintTemplate;
 class FPhysicsAssetPrimitiveGizmoTarget;
 class FPhysicsAssetSolidPreviewComponent;
+class FPhysicsAssetConstraintLimitPreviewComponent;
 struct FSkeletalMesh;
 struct ImVec2;
+
+namespace physx
+{
+	class PxD6Joint;
+	class PxRigidDynamic;
+}
 
 enum class EPhysicsAssetEditorSelectionType : uint8
 {
@@ -45,6 +52,7 @@ class FPhysicsAssetEditorWidget : public FAssetEditorWidget
 {
 	friend class FPhysicsAssetPrimitiveGizmoTarget;
 	friend class FPhysicsAssetSolidPreviewComponent;
+	friend class FPhysicsAssetConstraintLimitPreviewComponent;
 
 public:
 	FPhysicsAssetEditorWidget();
@@ -107,10 +115,23 @@ private:
 	void DestroyConstraintGraphEditor();
 	void ClearConstraintGraphSelection();
 	bool HandleViewportPick(const FRay& Ray);
+	bool HandleRagdollInteraction(const FRay& Ray, bool bPressed, bool bHeld, bool bReleased, float DeltaTime);
 	bool PickBodyPrimitive(const FRay& Ray, int32& OutBodyIndex, EPhysicsAssetPrimitiveType& OutPrimitiveType, int32& OutPrimitiveIndex) const;
+	bool PickSimulatedBodyPrimitive(
+		const FRay& Ray,
+		int32& OutBodyIndex,
+		EPhysicsAssetPrimitiveType& OutPrimitiveType,
+		int32& OutPrimitiveIndex,
+		float& OutDistance) const;
+	void StartPreviewSimulation();
+	void StopPreviewSimulation();
+	void EndRagdollDrag();
+	void ApplyRagdollDrag(const FRay& Ray, float DeltaTime);
+	void SyncPreviewSimulationPose() const;
 	void SyncPreviewSelection();
 	void SyncPrimitiveGizmo();
 	void UpdateSolidPreview();
+	void UpdateConstraintLimitPreview();
 	void RenderPhysicsDebug();
 	void DrawBodySetupDebug(const USkeletalBodySetup* BodySetup, bool bSelected);
 	void DrawConstraintDebug(const UPhysicsConstraintTemplate* Constraint, bool bSelected);
@@ -120,6 +141,7 @@ private:
 	ax::NodeEditor::EditorContext* ConstraintGraphContext = nullptr;
 	std::unique_ptr<FPhysicsAssetPrimitiveGizmoTarget> PrimitiveGizmoTarget;
 	FPhysicsAssetSolidPreviewComponent* SolidPreviewComponent = nullptr;
+	FPhysicsAssetConstraintLimitPreviewComponent* ConstraintLimitPreviewComponent = nullptr;
 
 	USkeletalMesh* EditingMesh = nullptr;
 	UPhysicsAsset* EditingPhysicsAsset = nullptr;
@@ -130,6 +152,7 @@ private:
 	int32 SelectedConstraintIndex = -1;
 	EPhysicsAssetPrimitiveType SelectedPrimitiveType = EPhysicsAssetPrimitiveType::None;
 	int32 SelectedPrimitiveIndex = -1;
+	int32 ConstraintGraphFocusBodyIndex = -1;
 
 	uint32 InstanceId = 0;
 	FName PreviewWorldHandle = FName::None;
@@ -139,6 +162,16 @@ private:
 	bool bShowBodies = true;
 	bool bShowSolidBodies = true;
 	bool bShowConstraints = true;
+	bool bPreviewSimulating = false;
+	bool bPreviewWorldBegunPlay = false;
+	int32 DraggedRagdollBodyIndex = -1;
+	FVector RagdollDragLocalPoint = FVector::ZeroVector;
+	FVector RagdollDragTargetWorldPoint = FVector::ZeroVector;
+	float RagdollDragDistance = 0.0f;
+	physx::PxRigidDynamic* RagdollDragTargetActor = nullptr;
+	physx::PxD6Joint* RagdollDragJoint = nullptr;
+	TArray<FTransform> PreviewSimulationStartLocalPose;
+	FTransform PreviewSimulationStartComponentTransform;
 	EPhysicsAssetHierarchyMode HierarchyMode = EPhysicsAssetHierarchyMode::BonesAndBodies;
 	FPhysicsAssetAutoGenerateOptions AutoGenerateOptions;
 	FPhysicsAssetAutoGenerateResult LastAutoGenerateResult;

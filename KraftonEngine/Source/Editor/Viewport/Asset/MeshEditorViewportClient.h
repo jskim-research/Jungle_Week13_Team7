@@ -46,6 +46,10 @@ public:
 	UStaticMeshComponent* FindSocketPreviewMesh(const FName& SocketName) const;
 	void SetViewportRect(float X, float Y, float Width, float Height);
 	void SetPreviewPickHandler(std::function<bool(const FRay&)> InHandler) { PreviewPickHandler = std::move(InHandler); }
+	void SetPreviewRagdollInteractionHandler(std::function<bool(const FRay&, bool, bool, bool, float)> InHandler)
+	{
+		PreviewRagdollInteractionHandler = std::move(InHandler);
+	}
 
 	bool IsRenderable() const override { return bIsRenderable; }
 	bool IsMouseOverViewport() const override;
@@ -105,6 +109,7 @@ private:
 	UBoneDebugComponent* BoneDebugComponent = nullptr;
 	TMap<FName, UStaticMeshComponent*> SocketPreviewMeshes;
 	std::function<bool(const FRay&)> PreviewPickHandler;
+	std::function<bool(const FRay&, bool, bool, bool, float)> PreviewRagdollInteractionHandler;
 
 	UWorld* PreviewWorld = nullptr;
 	AActor* PreviewActor = nullptr;
