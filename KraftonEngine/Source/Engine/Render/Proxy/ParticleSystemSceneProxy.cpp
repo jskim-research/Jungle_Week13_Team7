@@ -640,6 +640,11 @@ void FParticleSystemSceneProxy::SubmitBeamTrailEmitter(
 				: FallbackWhite;
 		}
 	}
+	else
+	{
+		Cmd.Bindings.SRVs[static_cast<int32>(EMaterialTextureSlot::Diffuse)] =
+			FMaterialManager::Get().GetFallbackWhiteSRV();
+	}
 
 	if (Cmd.Pass == ERenderPass::AlphaBlend)
 	{

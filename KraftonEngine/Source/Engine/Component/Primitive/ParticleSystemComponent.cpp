@@ -166,6 +166,142 @@ void UParticleSystemComponent::ClearAutoDestroyOwnerAfter()
 	AutoDestroyOwnerRemaining = 0.0f;
 }
 
+bool UParticleSystemComponent::SetBeamSourcePoint(int32 EmitterIndex, int32 BeamIndex, const FVector& Point)
+{
+	if (EmitterIndex < 0 || EmitterIndex >= static_cast<int32>(EmitterInstances.size()))
+	{
+		return false;
+	}
+
+	FParticleBeam2EmitterInstance* BeamInst = dynamic_cast<FParticleBeam2EmitterInstance*>(EmitterInstances[EmitterIndex]);
+	if (!BeamInst)
+	{
+		return false;
+	}
+
+	BeamInst->SetBeamSourcePoint(Point, BeamIndex);
+	BuildDynamicData();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+	MarkWorldBoundsDirty();
+	return true;
+}
+
+bool UParticleSystemComponent::SetBeamTargetPoint(int32 EmitterIndex, int32 BeamIndex, const FVector& Point)
+{
+	if (EmitterIndex < 0 || EmitterIndex >= static_cast<int32>(EmitterInstances.size()))
+	{
+		return false;
+	}
+
+	FParticleBeam2EmitterInstance* BeamInst = dynamic_cast<FParticleBeam2EmitterInstance*>(EmitterInstances[EmitterIndex]);
+	if (!BeamInst)
+	{
+		return false;
+	}
+
+	BeamInst->SetBeamTargetPoint(Point, BeamIndex);
+	BuildDynamicData();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+	MarkWorldBoundsDirty();
+	return true;
+}
+
+bool UParticleSystemComponent::SetBeamEndPoint(int32 EmitterIndex, const FVector& Point)
+{
+	if (EmitterIndex < 0 || EmitterIndex >= static_cast<int32>(EmitterInstances.size()))
+	{
+		return false;
+	}
+
+	FParticleBeam2EmitterInstance* BeamInst = dynamic_cast<FParticleBeam2EmitterInstance*>(EmitterInstances[EmitterIndex]);
+	if (!BeamInst)
+	{
+		return false;
+	}
+
+	BeamInst->SetBeamEndPoint(Point);
+	BuildDynamicData();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+	MarkWorldBoundsDirty();
+	return true;
+}
+
+bool UParticleSystemComponent::SetBeamSourceTangent(int32 EmitterIndex, int32 BeamIndex, const FVector& Tangent)
+{
+	if (EmitterIndex < 0 || EmitterIndex >= static_cast<int32>(EmitterInstances.size()))
+	{
+		return false;
+	}
+
+	FParticleBeam2EmitterInstance* BeamInst = dynamic_cast<FParticleBeam2EmitterInstance*>(EmitterInstances[EmitterIndex]);
+	if (!BeamInst)
+	{
+		return false;
+	}
+
+	BeamInst->SetBeamSourceTangent(Tangent, BeamIndex);
+	BuildDynamicData();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+	return true;
+}
+
+bool UParticleSystemComponent::SetBeamTargetTangent(int32 EmitterIndex, int32 BeamIndex, const FVector& Tangent)
+{
+	if (EmitterIndex < 0 || EmitterIndex >= static_cast<int32>(EmitterInstances.size()))
+	{
+		return false;
+	}
+
+	FParticleBeam2EmitterInstance* BeamInst = dynamic_cast<FParticleBeam2EmitterInstance*>(EmitterInstances[EmitterIndex]);
+	if (!BeamInst)
+	{
+		return false;
+	}
+
+	BeamInst->SetBeamTargetTangent(Tangent, BeamIndex);
+	BuildDynamicData();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+	return true;
+}
+
+bool UParticleSystemComponent::SetBeamSourceStrength(int32 EmitterIndex, int32 BeamIndex, float Strength)
+{
+	if (EmitterIndex < 0 || EmitterIndex >= static_cast<int32>(EmitterInstances.size()))
+	{
+		return false;
+	}
+
+	FParticleBeam2EmitterInstance* BeamInst = dynamic_cast<FParticleBeam2EmitterInstance*>(EmitterInstances[EmitterIndex]);
+	if (!BeamInst)
+	{
+		return false;
+	}
+
+	BeamInst->SetBeamSourceStrength(Strength, BeamIndex);
+	BuildDynamicData();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+	return true;
+}
+
+bool UParticleSystemComponent::SetBeamTargetStrength(int32 EmitterIndex, int32 BeamIndex, float Strength)
+{
+	if (EmitterIndex < 0 || EmitterIndex >= static_cast<int32>(EmitterInstances.size()))
+	{
+		return false;
+	}
+
+	FParticleBeam2EmitterInstance* BeamInst = dynamic_cast<FParticleBeam2EmitterInstance*>(EmitterInstances[EmitterIndex]);
+	if (!BeamInst)
+	{
+		return false;
+	}
+
+	BeamInst->SetBeamTargetStrength(Strength, BeamIndex);
+	BuildDynamicData();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+	return true;
+}
+
 UMaterial* UParticleSystemComponent::GetMaterial(int32 ElementIndex) const
 {
     if (ElementIndex >= 0 && ElementIndex < static_cast<int32>(EmitterMaterials.size()) &&

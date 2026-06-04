@@ -24,6 +24,12 @@ local ULTIMATE_SLASH_FRAME_RATE = 15.0
 local ULTIMATE_SLASH_CAMERA_DISTANCE = 30.0
 local ULTIMATE_SLASH_CAMERA_RIGHT_OFFSET = 15
 local ULTIMATE_SLASH_CAMERA_HEIGHT_OFFSET = -5.0
+local ULTIMATE_SLASH_FLASH_PATH = "Content/Data/DirectionalBeam.uasset"
+
+local ULTIMATE_LIGHTNING_BEAM_PATH = "Content/Data/Lightning.uasset"
+local ULTIMATE_VERTICAL_LIGHTNING_PATH = "Content/Data/Lightning.uasset"
+local ULTIMATE_LIGHTNING_MATERIAL_PATH = "Content/Material/VFX/M_Lightning.mat"
+local ULTIMATE_LIGHTNING_LIFETIME = 0.45
 
 local ULTIMATE_MOVE_START_DISTANCE = 100.0
 local ULTIMATE_MOVE_END_DISTANCE = 30
@@ -608,6 +614,46 @@ function PlayerCharacter.BeginUltimate()
 
     controlPos.Z = actorLocation.Z
 
+    local function SetUltimateBeamUserSet(beam, source, target)
+        if beam == nil then
+            return
+        end
+
+        beam:SetBeamSourcePoint(0, 0, source)
+        beam:SetBeamTargetPoint(0, 0, target)
+        beam:SetBeamEndPoint(0, target)
+
+        beam:SetBeamSourcePoint(1, 0, source)
+        beam:SetBeamTargetPoint(1, 0, target)
+        beam:SetBeamEndPoint(1, target)
+    end
+
+    local function SpawnUltimateLightningBeam(source, target)
+        local beam = VFX.SpawnLightningBeam(
+            ULTIMATE_LIGHTNING_BEAM_PATH,
+            source,
+            target,
+            ULTIMATE_LIGHTNING_LIFETIME,
+            ULTIMATE_LIGHTNING_MATERIAL_PATH
+        )
+        SetUltimateBeamUserSet(beam, source, target)
+        return beam
+    end
+
+    local function SpawnUltimateVerticalLightning(groundLocation, height)
+        local source = groundLocation + up * height
+        local target = groundLocation
+        local beam = VFX.SpawnVerticalLightning(
+            ULTIMATE_VERTICAL_LIGHTNING_PATH,
+            groundLocation,
+            height,
+            ULTIMATE_LIGHTNING_LIFETIME,
+            ULTIMATE_LIGHTNING_MATERIAL_PATH
+        )
+        SetUltimateBeamUserSet(beam, source, target)
+        return beam
+    end
+
     local decalPos, decalScale = BuildGroundDecalAABBScale3(
         startPos,
         controlPos,
@@ -617,15 +663,51 @@ function PlayerCharacter.BeginUltimate()
         16.0
     )
 
+    local function RandomRange(minValue, maxValue)
+        return minValue + (maxValue - minValue) * math.random()
+    end
+
+    local function RandomLightningGroundPoint()
+        local forwardRadius = math.max(16.0, decalScale.X * 0.35)
+        local rightRadius = math.max(16.0, decalScale.Y * 0.35)
+        local point =
+            cinematicEndPos
+            + actorForward * RandomRange(-forwardRadius, forwardRadius)
+            + actorRight * RandomRange(-rightRadius, rightRadius)
+
+        point.Z = actorLocation.Z
+        return point
+    end
+
+    local function SpawnRandomLightningBeam(heightA, heightB)
+        local source = RandomLightningGroundPoint() + up * heightA
+        local target = RandomLightningGroundPoint() + up * heightB
+        return SpawnUltimateLightningBeam(source, target)
+    end
+
+    local function SpawnRandomVerticalLightning(height)
+        return SpawnUltimateVerticalLightning(RandomLightningGroundPoint(), height)
+    end
+
     Reflection.Call(owner, "SetActorLocation", startPos)
 
     local elapsed = 0.0
     local prevPos = startPos
+
+    local spawnAirSlashFlag = true
     local spawnedAirSlashA = false
     local spawnedAirSlashB = false
     local spawnedAirSlashC = false
     local spawnedAirSlashD = false
     local spawnedAirSlashE = false
+
+    local spawnLightning = true
+    local spawnedLightningA = false
+    local spawnedLightningB = false
+    local spawnedLightningC = false
+    local spawnedLightningD = false
+    local spawnedLightningE = false
+    local spawnedSlashFlash = false
 
     PlayerCharacter.IsInUltimateMode = true
     PlayerCharacter.SetKatanaTrailActive(true)
@@ -638,70 +720,111 @@ function PlayerCharacter.BeginUltimate()
         local t = Clamp(elapsed / ULTIMATE_MOVE_DURATION, 0.0, 1.0)
         local easedT = EaseOutCubic(t)
 
-        -- 궁극기 카메라 앞 고정 위치에 공중 검격 SubUV 생성
-        if not spawnedAirSlashA and t >= 0.20 then
-            VFX.SpawnSubUV(
-                ULTIMATE_SLASH_SUBUV_RESOURCE,
-                slashAnchor - actorForward * 6.0 - actorRight * 8.0 + up * 0.4,
-                Vector(1.0, 88.0, 7.0),
-                -12.0,
-                ULTIMATE_SLASH_FRAME_RATE,
-                false,
-                true
-            )
-            spawnedAirSlashA = true
+        if spawnLightning then
+            if not spawnedLightningA and t >= 0.10 then
+                SpawnRandomLightningBeam(4.0, 7.0)
+                spawnedLightningA = true
+            end
+
+            if not spawnedLightningB and t >= 0.18 then
+                SpawnRandomLightningBeam(1.5, 5.0)
+                spawnedLightningB = true
+            end
+
+            if not spawnedLightningC and t >= 0.28 then
+                SpawnRandomVerticalLightning(RandomRange(58.0, 86.0))
+                spawnedLightningC = true
+            end
+
+            if not spawnedLightningD and t >= 0.40 then
+                SpawnRandomVerticalLightning(RandomRange(52.0, 78.0))
+                spawnedLightningD = true
+            end
+
+            if not spawnedLightningE and t >= 0.52 then
+                SpawnRandomLightningBeam(8.0, 2.0)
+                spawnedLightningE = true
+            end
         end
 
-        if not spawnedAirSlashB and t >= 0.34 then
-            VFX.SpawnSubUV(
-                ULTIMATE_SLASH_SUBUV_RESOURCE,
-                slashAnchor + actorForward * 2.0 + actorRight * 9.0 + up * 3.0,
-                Vector(1.0, 65.0, 4.5),
-                32.0,
-                ULTIMATE_SLASH_FRAME_RATE,
-                false,
-                true
-            )
-            spawnedAirSlashB = true
-        end
+        if spawnAirSlashFlag then
+            if not spawnedSlashFlash and t >= 0.38 then
+                VFX.SpawnSlashFlash(
+                    ULTIMATE_SLASH_FLASH_PATH,
+                    slashAnchor + actorForward * 2.0 + up * 1.0,
+                    Vector(0.0, 0.0, 0.0),
+                    Vector(1.0, 1.8, 1.8),
+                    0.25,
+                    ULTIMATE_LIGHTNING_MATERIAL_PATH
+                )
+                spawnedSlashFlash = true
+            end
 
-        if not spawnedAirSlashD and t >= 0.42 then
-            VFX.SpawnSubUV(
-                ULTIMATE_SLASH_SUBUV_RESOURCE,
-                slashAnchor + actorForward * 8.0 - actorRight * 3.0 + up * 5.0,
-                Vector(1.0, 72.0, 4.0),
-                58.0,
-                ULTIMATE_SLASH_FRAME_RATE,
-                false,
-                true
-            )
-            spawnedAirSlashD = true
-        end
+            -- 궁극기 카메라 앞 고정 위치에 공중 검격 SubUV 생성
+            if not spawnedAirSlashA and t >= 0.20 then
+                VFX.SpawnSubUV(
+                    ULTIMATE_SLASH_SUBUV_RESOURCE,
+                    slashAnchor - actorForward * 6.0 - actorRight * 8.0 + up * 0.4,
+                    Vector(1.0, 88.0, 7.0),
+                    -12.0,
+                    ULTIMATE_SLASH_FRAME_RATE,
+                    false,
+                    true
+                )
+                spawnedAirSlashA = true
+            end
 
-        if not spawnedAirSlashC and t >= 0.50 then
-            VFX.SpawnSubUV(
-                ULTIMATE_SLASH_SUBUV_RESOURCE,
-                slashAnchor + actorForward * 12.0 - actorRight * 12.0 + up * -2.0,
-                Vector(1.0, 55.0, 3.5),
-                -36.0,
-                ULTIMATE_SLASH_FRAME_RATE,
-                false,
-                true
-            )
-            spawnedAirSlashC = true
-        end
+            if not spawnedAirSlashB and t >= 0.34 then
+                VFX.SpawnSubUV(
+                    ULTIMATE_SLASH_SUBUV_RESOURCE,
+                    slashAnchor + actorForward * 2.0 + actorRight * 9.0 + up * 3.0,
+                    Vector(1.0, 65.0, 4.5),
+                    32.0,
+                    ULTIMATE_SLASH_FRAME_RATE,
+                    false,
+                    true
+                )
+                spawnedAirSlashB = true
+            end
 
-        if not spawnedAirSlashE and t >= 0.62 then
-            VFX.SpawnSubUV(
-                ULTIMATE_SLASH_SUBUV_RESOURCE,
-                slashAnchor - actorForward * 2.0 + actorRight * 15.0 + up * -3.4,
-                Vector(1.0, 50.0, 3.0),
-                -62.0,
-                ULTIMATE_SLASH_FRAME_RATE,
-                false,
-                true
-            )
-            spawnedAirSlashE = true
+            if not spawnedAirSlashD and t >= 0.42 then
+                VFX.SpawnSubUV(
+                    ULTIMATE_SLASH_SUBUV_RESOURCE,
+                    slashAnchor + actorForward * 8.0 - actorRight * 3.0 + up * 5.0,
+                    Vector(1.0, 72.0, 4.0),
+                    58.0,
+                    ULTIMATE_SLASH_FRAME_RATE,
+                    false,
+                    true
+                )
+                spawnedAirSlashD = true
+            end
+
+            if not spawnedAirSlashC and t >= 0.50 then
+                VFX.SpawnSubUV(
+                    ULTIMATE_SLASH_SUBUV_RESOURCE,
+                    slashAnchor + actorForward * 12.0 - actorRight * 12.0 + up * -2.0,
+                    Vector(1.0, 55.0, 3.5),
+                    -36.0,
+                    ULTIMATE_SLASH_FRAME_RATE,
+                    false,
+                    true
+                )
+                spawnedAirSlashC = true
+            end
+
+            if not spawnedAirSlashE and t >= 0.62 then
+                VFX.SpawnSubUV(
+                    ULTIMATE_SLASH_SUBUV_RESOURCE,
+                    slashAnchor - actorForward * 2.0 + actorRight * 15.0 + up * -3.4,
+                    Vector(1.0, 50.0, 3.0),
+                    -62.0,
+                    ULTIMATE_SLASH_FRAME_RATE,
+                    false,
+                    true
+                )
+                spawnedAirSlashE = true
+            end
         end
 
         local nextPos = Bezier2(startPos, controlPos, cinematicEndPos, easedT)

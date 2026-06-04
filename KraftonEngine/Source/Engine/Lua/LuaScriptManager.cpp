@@ -2558,6 +2558,13 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		"SetMaterialPath", &UParticleSystemComponent::SetMaterialPath,
 		"SetAutoDestroyOwnerAfter", &UParticleSystemComponent::SetAutoDestroyOwnerAfter,
 		"ClearAutoDestroyOwnerAfter", &UParticleSystemComponent::ClearAutoDestroyOwnerAfter,
+		"SetBeamSourcePoint", &UParticleSystemComponent::SetBeamSourcePoint,
+		"SetBeamTargetPoint", &UParticleSystemComponent::SetBeamTargetPoint,
+		"SetBeamEndPoint", &UParticleSystemComponent::SetBeamEndPoint,
+		"SetBeamSourceTangent", &UParticleSystemComponent::SetBeamSourceTangent,
+		"SetBeamTargetTangent", &UParticleSystemComponent::SetBeamTargetTangent,
+		"SetBeamSourceStrength", &UParticleSystemComponent::SetBeamSourceStrength,
+		"SetBeamTargetStrength", &UParticleSystemComponent::SetBeamTargetStrength,
 		"SetTemplatePath", [](UParticleSystemComponent& C, const FString& TemplatePath)
 	{
 		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
@@ -2905,6 +2912,148 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		}
 
 		PSC->SetAutoDestroyOwnerAfter(AutoDestroyAfter.value_or(1.0f));
+		PSC->Activate();
+		return PSC;
+	});
+
+	VFX.set_function("SpawnLightningBeam", [](
+		const FString& TemplatePath,
+		const FVector& Source,
+		const FVector& Target,
+		sol::optional<float> AutoDestroyAfter,
+		sol::optional<FString> MaterialPath) -> UParticleSystemComponent*
+	{
+		if (!GEngine) return nullptr;
+		UWorld* W = GEngine->GetWorld();
+		if (!W) return nullptr;
+
+		UClass* ActorClass = UClass::FindByName("AActor");
+		if (!ActorClass) return nullptr;
+
+		AActor* Actor = W->SpawnActorByClass(ActorClass);
+		if (!Actor) return nullptr;
+
+		UParticleSystemComponent* PSC = Actor->AddComponent<UParticleSystemComponent>();
+		if (!PSC)
+		{
+			W->DestroyActor(Actor);
+			return nullptr;
+		}
+
+		Actor->SetRootComponent(PSC);
+		PSC->SetWorldLocation(Source);
+		PSC->SetRelativeRotation(FVector(0.0f, 0.0f, 0.0f));
+		PSC->SetRelativeScale(FVector(1.0f, 1.0f, 1.0f));
+
+		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
+			? nullptr
+			: FParticleSystemManager::Get().Load(TemplatePath);
+		PSC->SetTemplate(Template);
+
+		if (MaterialPath && !MaterialPath.value().empty() && MaterialPath.value() != "None")
+		{
+			PSC->SetMaterialPath(0, MaterialPath.value());
+		}
+
+		PSC->SetAutoDestroyOwnerAfter(AutoDestroyAfter.value_or(0.35f));
+		PSC->Activate();
+		PSC->SetBeamSourcePoint(0, 0, Source);
+		PSC->SetBeamTargetPoint(0, 0, Target);
+		PSC->SetBeamEndPoint(0, Target);
+		return PSC;
+	});
+
+	VFX.set_function("SpawnVerticalLightning", [](
+		const FString& TemplatePath,
+		const FVector& GroundLocation,
+		float Height,
+		sol::optional<float> AutoDestroyAfter,
+		sol::optional<FString> MaterialPath) -> UParticleSystemComponent*
+	{
+		if (!GEngine) return nullptr;
+		UWorld* W = GEngine->GetWorld();
+		if (!W) return nullptr;
+
+		UClass* ActorClass = UClass::FindByName("AActor");
+		if (!ActorClass) return nullptr;
+
+		AActor* Actor = W->SpawnActorByClass(ActorClass);
+		if (!Actor) return nullptr;
+
+		UParticleSystemComponent* PSC = Actor->AddComponent<UParticleSystemComponent>();
+		if (!PSC)
+		{
+			W->DestroyActor(Actor);
+			return nullptr;
+		}
+
+		const FVector Source = GroundLocation + FVector(0.0f, 0.0f, Height);
+		const FVector Target = GroundLocation;
+
+		Actor->SetRootComponent(PSC);
+		PSC->SetWorldLocation(Source);
+		PSC->SetRelativeRotation(FVector(0.0f, 0.0f, 0.0f));
+		PSC->SetRelativeScale(FVector(1.0f, 1.0f, 1.0f));
+
+		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
+			? nullptr
+			: FParticleSystemManager::Get().Load(TemplatePath);
+		PSC->SetTemplate(Template);
+
+		if (MaterialPath && !MaterialPath.value().empty() && MaterialPath.value() != "None")
+		{
+			PSC->SetMaterialPath(0, MaterialPath.value());
+		}
+
+		PSC->SetAutoDestroyOwnerAfter(AutoDestroyAfter.value_or(0.35f));
+		PSC->Activate();
+		PSC->SetBeamSourcePoint(0, 0, Source);
+		PSC->SetBeamTargetPoint(0, 0, Target);
+		PSC->SetBeamEndPoint(0, Target);
+		return PSC;
+	});
+
+	VFX.set_function("SpawnSlashFlash", [](
+		const FString& TemplatePath,
+		const FVector& Location,
+		const FVector& Rotation,
+		const FVector& Scale,
+		sol::optional<float> AutoDestroyAfter,
+		sol::optional<FString> MaterialPath) -> UParticleSystemComponent*
+	{
+		if (!GEngine) return nullptr;
+		UWorld* W = GEngine->GetWorld();
+		if (!W) return nullptr;
+
+		UClass* ActorClass = UClass::FindByName("AActor");
+		if (!ActorClass) return nullptr;
+
+		AActor* Actor = W->SpawnActorByClass(ActorClass);
+		if (!Actor) return nullptr;
+
+		UParticleSystemComponent* PSC = Actor->AddComponent<UParticleSystemComponent>();
+		if (!PSC)
+		{
+			W->DestroyActor(Actor);
+			return nullptr;
+		}
+
+		Actor->SetRootComponent(PSC);
+		PSC->SetWorldLocation(Location);
+		PSC->SetRelativeRotation(Rotation);
+		PSC->SetRelativeScale(Scale);
+
+		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
+			? nullptr
+			: FParticleSystemManager::Get().Load(TemplatePath);
+		PSC->SetTemplate(Template);
+
+		if (MaterialPath && !MaterialPath.value().empty() && MaterialPath.value() != "None")
+		{
+			PSC->SetMaterialPath(0, MaterialPath.value());
+		}
+
+		PSC->SetAutoDestroyOwnerAfter(AutoDestroyAfter.value_or(0.35f));
 		PSC->Activate();
 		return PSC;
 	});

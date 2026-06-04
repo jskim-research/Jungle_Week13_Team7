@@ -123,6 +123,21 @@ public:
 	UFUNCTION(Callable)
 	void ClearAutoDestroyOwnerAfter();
 
+	UFUNCTION(Callable)
+	bool SetBeamSourcePoint(int32 EmitterIndex, int32 BeamIndex, const FVector& Point);
+	UFUNCTION(Callable)
+	bool SetBeamTargetPoint(int32 EmitterIndex, int32 BeamIndex, const FVector& Point);
+	UFUNCTION(Callable)
+	bool SetBeamEndPoint(int32 EmitterIndex, const FVector& Point);
+	UFUNCTION(Callable)
+	bool SetBeamSourceTangent(int32 EmitterIndex, int32 BeamIndex, const FVector& Tangent);
+	UFUNCTION(Callable)
+	bool SetBeamTargetTangent(int32 EmitterIndex, int32 BeamIndex, const FVector& Tangent);
+	UFUNCTION(Callable)
+	bool SetBeamSourceStrength(int32 EmitterIndex, int32 BeamIndex, float Strength);
+	UFUNCTION(Callable)
+	bool SetBeamTargetStrength(int32 EmitterIndex, int32 BeamIndex, float Strength);
+
     // AnimTrail TypeData가 blade_base/blade_tip 같은 소켓을 샘플링할 원본 스켈레탈 메시.
 	UFUNCTION(Callable)
     void SetAnimTrailSourceComponent(USkinnedMeshComponent* InSourceComponent);
