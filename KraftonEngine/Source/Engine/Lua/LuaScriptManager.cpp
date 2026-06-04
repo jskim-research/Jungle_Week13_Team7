@@ -2532,6 +2532,9 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		sol::base_classes,
 		sol::bases<UPrimitiveComponent, USceneComponent, UActorComponent, UObject>(),
 		"SetAnimTrailSourceComponent", &UParticleSystemComponent::SetAnimTrailSourceComponent,
+		"SetMaterialPath", &UParticleSystemComponent::SetMaterialPath,
+		"SetAutoDestroyOwnerAfter", &UParticleSystemComponent::SetAutoDestroyOwnerAfter,
+		"ClearAutoDestroyOwnerAfter", &UParticleSystemComponent::ClearAutoDestroyOwnerAfter,
 		"SetTemplatePath", [](UParticleSystemComponent& C, const FString& TemplatePath)
 	{
 		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
@@ -2777,6 +2780,51 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 
 	// --- VFX helper binding — one-shot effect spawning for Lua gameplay scripts. ---
 	sol::table VFX = Lua.create_named_table("VFX");
+	VFX.set_function("SpawnParticleSystem", [](
+		const FString& TemplatePath,
+		const FVector& Location,
+		const FVector& Rotation,
+		const FVector& Scale,
+		sol::optional<float> AutoDestroyAfter,
+		sol::optional<FString> MaterialPath) -> UParticleSystemComponent*
+	{
+		if (!GEngine) return nullptr;
+		UWorld* W = GEngine->GetWorld();
+		if (!W) return nullptr;
+
+		UClass* ActorClass = UClass::FindByName("AActor");
+		if (!ActorClass) return nullptr;
+
+		AActor* Actor = W->SpawnActorByClass(ActorClass);
+		if (!Actor) return nullptr;
+
+		UParticleSystemComponent* PSC = Actor->AddComponent<UParticleSystemComponent>();
+		if (!PSC)
+		{
+			W->DestroyActor(Actor);
+			return nullptr;
+		}
+
+		Actor->SetRootComponent(PSC);
+		PSC->SetWorldLocation(Location);
+		PSC->SetRelativeRotation(Rotation);
+		PSC->SetRelativeScale(Scale);
+
+		UParticleSystem* Template = TemplatePath.empty() || TemplatePath == "None"
+			? nullptr
+			: FParticleSystemManager::Get().Load(TemplatePath);
+		PSC->SetTemplate(Template);
+
+		if (MaterialPath && !MaterialPath.value().empty() && MaterialPath.value() != "None")
+		{
+			PSC->SetMaterialPath(0, MaterialPath.value());
+		}
+
+		PSC->SetAutoDestroyOwnerAfter(AutoDestroyAfter.value_or(1.0f));
+		PSC->Activate();
+		return PSC;
+	});
+
 	VFX.set_function("SpawnGroundCrackDecal", [](
 		const FString& MaterialPath,
 		const FVector& Location,

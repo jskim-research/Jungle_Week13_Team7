@@ -61,8 +61,8 @@ PS_Input_MaterialParticle VS(VS_Input_ParticleQuad quad, VS_Input_ParticleInstan
     );
 
     float3 worldPos = inst.position
-                    + FrameCameraRight * rotUV.x * inst.size
-                    + FrameCameraUp * rotUV.y * inst.size;
+                    + FrameCameraRight * rotUV.x * inst.size.x
+                    + FrameCameraUp * rotUV.y * inst.size.y;
 
     PS_Input_MaterialParticle output;
     output.position       = mul(float4(worldPos, 1.0f), mul(View, Projection));

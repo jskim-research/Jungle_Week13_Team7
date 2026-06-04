@@ -34,8 +34,8 @@ PS_Input_Particle VS(VS_Input_ParticleQuad quad, VS_Input_ParticleInstance inst)
     );
 
     float3 worldPos = inst.position
-                    + CameraRight * rotUV.x * inst.size
-                    + CameraUp * rotUV.y * inst.size;
+                    + CameraRight * rotUV.x * inst.size.x
+                    + CameraUp * rotUV.y * inst.size.y;
 
     PS_Input_Particle output;
     output.position = mul(float4(worldPos, 1.0f), mul(View, Projection));

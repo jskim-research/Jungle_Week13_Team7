@@ -113,8 +113,15 @@ public:
 	bool IsGameWorld() const { return true; }
 
     void       SetMaterial(int32 ElementIndex, UMaterial* InMaterial);
+	UFUNCTION(Callable)
+    void       SetMaterialPath(int32 ElementIndex, const FString& MaterialPath);
     UMaterial* GetMaterial(int32 ElementIndex) const;
     TArray<UMaterial*> GetEmitterMaterials() const;
+
+	UFUNCTION(Callable)
+	void SetAutoDestroyOwnerAfter(float DelaySeconds);
+	UFUNCTION(Callable)
+	void ClearAutoDestroyOwnerAfter();
 
     // AnimTrail TypeData가 blade_base/blade_tip 같은 소켓을 샘플링할 원본 스켈레탈 메시.
 	UFUNCTION(Callable)
@@ -181,4 +188,7 @@ private:
 	
 	float CachedDistanceToCamera = 0.0f;
 	float CachedWorldTimeSeconds = 0.0f;
+
+	bool  bAutoDestroyOwnerAfter = false;
+	float AutoDestroyOwnerRemaining = 0.0f;
 };

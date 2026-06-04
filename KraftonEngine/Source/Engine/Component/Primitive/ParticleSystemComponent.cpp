@@ -11,8 +11,11 @@
 #include "Materials/MaterialManager.h"
 #include "Particles/TypeData/ParticleModuleTypeDataMesh.h"
 #include "Mesh/MeshManager.h"
-#include "Engine/Runtime/Engine.h"  
+#include "Engine/Runtime/Engine.h"
+#include "GameFramework/AActor.h"
+#include "GameFramework/World.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "Object/GarbageCollection.h"
@@ -141,6 +144,28 @@ void UParticleSystemComponent::SetMaterial(int32 ElementIndex, UMaterial* InMate
     MarkProxyDirty(EDirtyFlag::Mesh);
 }
 
+void UParticleSystemComponent::SetMaterialPath(int32 ElementIndex, const FString& MaterialPath)
+{
+	UMaterial* Material = nullptr;
+	if (!MaterialPath.empty() && MaterialPath != "None")
+	{
+		Material = FMaterialManager::Get().GetOrCreateMaterial(MaterialPath);
+	}
+	SetMaterial(ElementIndex, Material);
+}
+
+void UParticleSystemComponent::SetAutoDestroyOwnerAfter(float DelaySeconds)
+{
+	bAutoDestroyOwnerAfter = true;
+	AutoDestroyOwnerRemaining = std::max(0.0f, DelaySeconds);
+}
+
+void UParticleSystemComponent::ClearAutoDestroyOwnerAfter()
+{
+	bAutoDestroyOwnerAfter = false;
+	AutoDestroyOwnerRemaining = 0.0f;
+}
+
 UMaterial* UParticleSystemComponent::GetMaterial(int32 ElementIndex) const
 {
     if (ElementIndex >= 0 && ElementIndex < static_cast<int32>(EmitterMaterials.size()) &&
@@ -266,6 +291,21 @@ void UParticleSystemComponent::TickComponent(
     )
 {
     UPrimitiveComponent::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (bAutoDestroyOwnerAfter)
+	{
+		AutoDestroyOwnerRemaining -= DeltaTime;
+		if (AutoDestroyOwnerRemaining <= 0.0f)
+		{
+			AActor* Owner = GetOwner();
+			UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+			if (World && Owner)
+			{
+				World->DestroyActor(Owner);
+			}
+			return;
+		}
+	}
 
     if (!IsActive())
     {

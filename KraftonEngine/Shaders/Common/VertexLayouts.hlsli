@@ -66,7 +66,7 @@ struct VS_Input_ParticleQuad
 struct VS_Input_ParticleInstance
 {
     float3 position       : INSTANCE_POSITION;
-    float  size           : INSTANCE_SIZE;
+    float2 size           : INSTANCE_SIZE;
     float4 color          : INSTANCE_COLOR;
     float  rotation       : INSTANCE_ROTATION;
     float  subImageIndex  : INSTANCE_SUBIMAGE;

@@ -64,7 +64,7 @@ struct FParticleQuadVertex
 struct FParticleSpriteInstance
 {
 	FVector  Position;          // INSTANCE_POSITION
-	float    Size;              // INSTANCE_SIZE
+	FVector2 Size;              // INSTANCE_SIZE (X/Y sprite scale)
 	FVector4 Color;             // INSTANCE_COLOR
 	float    Rotation;          // INSTANCE_ROTATION
 	float    SubImageIndex;     // INSTANCE_SUBIMAGE  — RelativeTime [0,1). 아틀라스 행/열은 머티리얼 그래프가 알고 있음.

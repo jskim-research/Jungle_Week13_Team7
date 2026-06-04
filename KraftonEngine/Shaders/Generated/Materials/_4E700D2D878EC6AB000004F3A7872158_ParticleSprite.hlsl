@@ -1,4 +1,4 @@
-// Generated from Content/Material/Material_Emitter0.mat
+// Generated from Content/Material/VFX/M_UltimateSlash_SubUV.mat
 // Domain: ParticleSprite
 
 #include "Common/ConstantBuffers.hlsli"
@@ -28,39 +28,14 @@ struct FMaterialResult
     float2 UVOffset;
 };
 
-Texture2D Tex_Diffuse : register(t0);
-Texture2D Tex_SubUV : register(t6);
-
 FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
 {
-    float n_100 = -0.200000f;
-    float n_98 = 1.000000f;
-    float2 n_133 = Input.UV0;
-    float4 n_3 = Tex_Diffuse.Sample(LinearWrapSampler, n_133);
-    float n_93 = lerp(n_100, n_98, (n_3).r);
-    float n_179 = 0.000000f;
-    float n_183 = 1.000000f;
-    float n_172 = clamp(n_93, n_179, n_183);
-    float2 n_39 = ((float2(fmod(floor(saturate(Input.SubImageIndex) * (36 - 0.0001f)), 6), floor(floor(saturate(Input.SubImageIndex) * (36 - 0.0001f)) / 6)) + Input.UV0) * float2(1.0f/6, 1.0f/6));
-    float4 n_43 = Tex_SubUV.Sample(LinearWrapSampler, n_39);
-    float3 n_162 = (float3(n_172, n_172, n_172) + (n_43).rgb);
-    float4 n_12 = Input.ParticleColor;
-    float3 n_111 = (n_162 * (n_12).rgb);
-    float4 n_60 = Input.DynamicParam;
-    float n_71 = 1.000000f;
-    float n_66 = ((n_60).r + n_71);
-    float n_54 = pow((n_43).r, n_66);
-    float n_84 = 0.000000f;
-    float n_81 = 1.000000f;
-    float n_75 = clamp(n_54, n_84, n_81);
-    float n_87 = (n_75 * (n_12).a);
-    float n_124 = 0.000000f;
-    float n_126 = 1.000000f;
-    float n_118 = clamp(n_87, n_124, n_126);
+    float3 n_15 = float3(1.000000f, 0.000000f, 0.000000f);
+    float n_17 = 1.000000f;
     FMaterialResult Result;
-    Result.Color = n_111;
+    Result.Color = n_15;
     Result.Emissive = float3(0, 0, 0);
-    Result.Opacity = n_118;
+    Result.Opacity = n_17;
     Result.UVOffset = float2(0, 0);
     return Result;
 }

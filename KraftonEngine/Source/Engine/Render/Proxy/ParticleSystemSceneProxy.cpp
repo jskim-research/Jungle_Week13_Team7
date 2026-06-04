@@ -369,7 +369,7 @@ void FParticleSystemSceneProxy::FillStagingBuffer(
 			Inst->Position = SpriteSource.bUseLocalSpace
 				? SpriteSource.SimulationToWorld.TransformPosition(P->Location)
 				: P->Location;
-			Inst->Size     = P->Size.X * Source.Scale.X;
+			Inst->Size     = FVector2(P->Size.X * Source.Scale.X, P->Size.Y * Source.Scale.Y);
 			Inst->Color    = P->Color.ToVector4();
 			Inst->Rotation = P->Rotation;
 			// 라이프타임 진행도를 그대로 흘려보냄. 머티리얼 그래프의 ParticleSubUV가 Rows/Cols로 정수 프레임 변환.
