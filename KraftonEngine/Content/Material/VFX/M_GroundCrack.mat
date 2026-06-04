@@ -268,7 +268,7 @@
   },
   "GraphShaderMode" : "Generated",
   "MaterialGuid" : "D6BE3E03588C78660001DB0FEF725228",
-  "PathFileName" : "Content/Material/VFX/GroundCrack.mat",
+  "PathFileName" : "Content/Material/VFX/M_GroundCrack.mat",
   "RasterizerState" : "SolidNoCull",
   "ReceiveLighting" : false,
   "RenderPass" : "Decal",

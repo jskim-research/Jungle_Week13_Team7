@@ -19,6 +19,11 @@ local KATANA_PS_PATH = "Content/Data/SwordTrail2.uasset"
 
 local ULTIMATE_CAMERA_BACK_DISTANCE = 7.0
 local ULTIMATE_CAMERA_HEIGHT = 10
+local ULTIMATE_SLASH_SUBUV_RESOURCE = "SlashTexture"
+local ULTIMATE_SLASH_FRAME_RATE = 15.0
+local ULTIMATE_SLASH_CAMERA_DISTANCE = 30.0
+local ULTIMATE_SLASH_CAMERA_RIGHT_OFFSET = 15
+local ULTIMATE_SLASH_CAMERA_HEIGHT_OFFSET = -5.0
 
 local ULTIMATE_MOVE_START_DISTANCE = 100.0
 local ULTIMATE_MOVE_END_DISTANCE = 30
@@ -560,6 +565,12 @@ function PlayerCharacter.BeginUltimate()
         - actorForward * ULTIMATE_CAMERA_BACK_DISTANCE
         + up * ULTIMATE_CAMERA_HEIGHT
 
+    local slashAnchor =
+        cameraLocation
+        + actorForward * ULTIMATE_SLASH_CAMERA_DISTANCE
+        + up * ULTIMATE_SLASH_CAMERA_HEIGHT_OFFSET
+        + actorRight * ULTIMATE_SLASH_CAMERA_RIGHT_OFFSET
+
     local cameraYaw = math.atan2(actorForward.Y, actorForward.X) * 180.0 / math.pi
     local baseCameraRotation = Vector(-10.0, 15.0, cameraYaw)
 
@@ -610,6 +621,11 @@ function PlayerCharacter.BeginUltimate()
 
     local elapsed = 0.0
     local prevPos = startPos
+    local spawnedAirSlashA = false
+    local spawnedAirSlashB = false
+    local spawnedAirSlashC = false
+    local spawnedAirSlashD = false
+    local spawnedAirSlashE = false
 
     PlayerCharacter.IsInUltimateMode = true
     PlayerCharacter.SetKatanaTrailActive(true)
@@ -621,6 +637,72 @@ function PlayerCharacter.BeginUltimate()
 
         local t = Clamp(elapsed / ULTIMATE_MOVE_DURATION, 0.0, 1.0)
         local easedT = EaseOutCubic(t)
+
+        -- 궁극기 카메라 앞 고정 위치에 공중 검격 SubUV 생성
+        if not spawnedAirSlashA and t >= 0.20 then
+            VFX.SpawnSubUV(
+                ULTIMATE_SLASH_SUBUV_RESOURCE,
+                slashAnchor - actorForward * 6.0 - actorRight * 8.0 + up * 0.4,
+                Vector(1.0, 88.0, 7.0),
+                -12.0,
+                ULTIMATE_SLASH_FRAME_RATE,
+                false,
+                true
+            )
+            spawnedAirSlashA = true
+        end
+
+        if not spawnedAirSlashB and t >= 0.34 then
+            VFX.SpawnSubUV(
+                ULTIMATE_SLASH_SUBUV_RESOURCE,
+                slashAnchor + actorForward * 2.0 + actorRight * 9.0 + up * 3.0,
+                Vector(1.0, 65.0, 4.5),
+                32.0,
+                ULTIMATE_SLASH_FRAME_RATE,
+                false,
+                true
+            )
+            spawnedAirSlashB = true
+        end
+
+        if not spawnedAirSlashD and t >= 0.42 then
+            VFX.SpawnSubUV(
+                ULTIMATE_SLASH_SUBUV_RESOURCE,
+                slashAnchor + actorForward * 8.0 - actorRight * 3.0 + up * 5.0,
+                Vector(1.0, 72.0, 4.0),
+                58.0,
+                ULTIMATE_SLASH_FRAME_RATE,
+                false,
+                true
+            )
+            spawnedAirSlashD = true
+        end
+
+        if not spawnedAirSlashC and t >= 0.50 then
+            VFX.SpawnSubUV(
+                ULTIMATE_SLASH_SUBUV_RESOURCE,
+                slashAnchor + actorForward * 12.0 - actorRight * 12.0 + up * -2.0,
+                Vector(1.0, 55.0, 3.5),
+                -36.0,
+                ULTIMATE_SLASH_FRAME_RATE,
+                false,
+                true
+            )
+            spawnedAirSlashC = true
+        end
+
+        if not spawnedAirSlashE and t >= 0.62 then
+            VFX.SpawnSubUV(
+                ULTIMATE_SLASH_SUBUV_RESOURCE,
+                slashAnchor - actorForward * 2.0 + actorRight * 15.0 + up * -3.4,
+                Vector(1.0, 50.0, 3.0),
+                -62.0,
+                ULTIMATE_SLASH_FRAME_RATE,
+                false,
+                true
+            )
+            spawnedAirSlashE = true
+        end
 
         local nextPos = Bezier2(startPos, controlPos, cinematicEndPos, easedT)
         nextPos.Z = actorLocation.Z
@@ -640,7 +722,7 @@ function PlayerCharacter.BeginUltimate()
     end
 
     local decal = VFX.SpawnGroundCrackDecal(
-        "Content/Material/VFX/GroundCrack.mat",
+        "Content/Material/VFX/M_GroundCrack.mat",
         cinematicEndPos,
         decalScale,
         0.35,

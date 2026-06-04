@@ -4,6 +4,9 @@
 #include "Render/Resource/MeshBufferManager.h"
 #include "Materials/Material.h"
 #include "Object/Object.h"
+#include "Math/MathUtils.h"
+
+#include <cmath>
 
 // ============================================================
 // FSubUVSceneProxy
@@ -17,6 +20,16 @@ FSubUVSceneProxy::FSubUVSceneProxy(USubUVComponent* InComponent)
 FSubUVSceneProxy::~FSubUVSceneProxy()
 {
 	UVRegionCB.Release();
+}
+
+void FSubUVSceneProxy::UpdateTransform()
+{
+	FBillboardSceneProxy::UpdateTransform();
+
+	if (USubUVComponent* Comp = GetSubUVComponent())
+	{
+		CachedSpriteRoll = Comp->GetSpriteRoll();
+	}
 }
 
 void FSubUVSceneProxy::UpdateMesh()
@@ -42,6 +55,7 @@ void FSubUVSceneProxy::UpdateMesh()
 	// Particle/FrameIndex 캐싱
 	CachedParticle = Comp->GetParticle();
 	CachedFrameIndex = Comp->GetFrameIndex();
+	CachedSpriteRoll = Comp->GetSpriteRoll();
 
 	// SectionDraws 단일 항목 — SubUVMaterial로 Particle SRV 바인딩
 	SectionDraws.clear();
@@ -64,6 +78,7 @@ void FSubUVSceneProxy::UpdateMaterial()
 	}
 	CachedFrameIndex = Comp->GetFrameIndex();
 	CachedParticle = Comp->GetParticle();
+	CachedSpriteRoll = Comp->GetSpriteRoll();
 
 	// SectionDraws 갱신 — SubUVMaterial의 CachedSRV는 Component가 관리
 	SectionDraws.clear();
@@ -85,10 +100,28 @@ void FSubUVSceneProxy::UpdatePerViewport(const FFrameContext& Frame)
 		return;
 	}
 
-	// Billboard matrix
+	// Billboard matrix. SubUV keeps camera-facing alignment, then applies an
+	// extra roll inside the billboard plane. Component rotation is intentionally
+	// ignored for camera-facing sprites, so this value is the proper way to tilt
+	// slash/streak textures.
 	FVector BillboardForward = Frame.CameraForward * -1.0f;
+	FVector BillboardRight = Frame.CameraRight;
+	FVector BillboardUp = Frame.CameraUp;
+
+	if (std::abs(CachedSpriteRoll) > 0.0001f)
+	{
+		const float RollRad = CachedSpriteRoll * FMath::DegToRad;
+		const float C = std::cos(RollRad);
+		const float S = std::sin(RollRad);
+
+		const FVector RotRight = BillboardRight * C + BillboardUp * S;
+		const FVector RotUp = BillboardRight * (-S) + BillboardUp * C;
+		BillboardRight = RotRight;
+		BillboardUp = RotUp;
+	}
+
 	FMatrix RotMatrix;
-	RotMatrix.SetAxes(BillboardForward, Frame.CameraRight, Frame.CameraUp);
+	RotMatrix.SetAxes(BillboardForward, BillboardRight, BillboardUp);
 	FMatrix BillboardMatrix = FMatrix::MakeScaleMatrix(CachedScale)
 		* RotMatrix * FMatrix::MakeTranslationMatrix(CachedLocation);
 

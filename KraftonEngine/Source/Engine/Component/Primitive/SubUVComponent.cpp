@@ -27,7 +27,7 @@ void USubUVComponent::PostDuplicate()
 
 USubUVComponent::USubUVComponent()
 {
-	SetVisibility(false);
+	SetVisibility(true);
 }
 
 USubUVComponent::~USubUVComponent()
@@ -63,6 +63,13 @@ void USubUVComponent::SetParticle(const FName& InParticleName)
 	ParticleName = InParticleName;
 	CachedParticle = FResourceManager::Get().FindParticle(InParticleName);
 	RebuildSubUVMaterial();
+	MarkProxyDirty(EDirtyFlag::Mesh);
+}
+
+void USubUVComponent::SetSpriteRoll(float InDegrees)
+{
+	SpriteRoll = InDegrees;
+	MarkProxyDirty(EDirtyFlag::Transform);
 }
 
 void USubUVComponent::RebuildSubUVMaterial()
@@ -100,6 +107,10 @@ void USubUVComponent::PostEditProperty(const char* PropertyName)
 		SetParticle(ParticleName);
 		// 파티클 교체 시 UV 그리드/텍스처가 바뀌므로 Mesh 단계까지 dirty.
 		MarkProxyDirty(EDirtyFlag::Mesh);
+	}
+	if (strcmp(PropertyName, "SpriteRoll") == 0 || strcmp(PropertyName, "Sprite Roll") == 0)
+	{
+		MarkProxyDirty(EDirtyFlag::Transform);
 	}
 }
 
@@ -157,6 +168,16 @@ void USubUVComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			{
 				bIsExecute = true;    // 마지막 프레임 도달 → 완료
 				TimeAccumulator = 0.0f;
+
+				if (bAutoDestroyOwnerOnFinished)
+				{
+					if (UWorld* World = GetWorld())
+					{
+						World->DestroyActor(GetOwner());
+						return;
+					}
+				}
+
 				break;
 			}
 		}

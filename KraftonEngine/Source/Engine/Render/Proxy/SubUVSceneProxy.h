@@ -17,6 +17,7 @@ public:
 	FSubUVSceneProxy(USubUVComponent* InComponent);
 	~FSubUVSceneProxy() override;
 
+	void UpdateTransform() override;
 	void UpdateMesh() override;
 	void UpdateMaterial() override;
 	void UpdatePerViewport(const FFrameContext& Frame) override;
@@ -30,4 +31,5 @@ private:
 	// Owner 접근 없이 UpdatePerViewport에서 사용하기 위한 캐시
 	const FParticleResource* CachedParticle = nullptr;
 	uint32 CachedFrameIndex = 0;
+	float CachedSpriteRoll = 0.0f;
 };

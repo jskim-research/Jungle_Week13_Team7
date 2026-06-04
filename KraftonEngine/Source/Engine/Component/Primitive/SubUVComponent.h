@@ -31,12 +31,19 @@ public:
 	void SetFrameIndex(uint32 InIndex) { FrameIndex = static_cast<int32>(InIndex); }
 	uint32 GetFrameIndex() const { return static_cast<uint32>(FrameIndex); }
 
+	// Billboard plane-space roll in degrees. This is intentionally separate from
+	// component rotation because camera-facing billboards rebuild their world basis
+	// every view. Use this for SubUV slash/streak orientation.
+	void SetSpriteRoll(float InDegrees);
+	float GetSpriteRoll() const { return SpriteRoll; }
+
 	// --- Playback ---
 	void SetFrameRate(float InFPS) { PlayRate = InFPS; }
 	void SetLoop(bool bInLoop) { bLoop = bInLoop; }
 	bool IsLoop()     const { return bLoop; }
 	bool IsFinished() const { return !bLoop && bIsExecute; }
 	void Play() { FrameIndex = 0; TimeAccumulator = 0.0f; bIsExecute = false; } // 처음부터 다시 재생
+	void SetAutoDestroyOwnerOnFinished(bool bInAutoDestroy) { bAutoDestroyOwnerOnFinished = bInAutoDestroy; }
 
 	// --- Property / Serialization ---
 	bool ShouldExposeProperty(const FProperty& Property) const override;
@@ -65,7 +72,11 @@ private:
 	float  PlayRate = 30.0f; // 초당 프레임 수
 	float  TimeAccumulator = 0.0f;
 
+	UPROPERTY(Edit, Save, Category="Particle", DisplayName="Sprite Roll", Min=-360.0f, Max=360.0f, Speed=1.0f)
+	float SpriteRoll = 0.0f;
+
 	UPROPERTY(Edit, Save, Category="Particle", DisplayName="bLoop")
 	bool bLoop = true;
 	bool bIsExecute = false;
+	bool bAutoDestroyOwnerOnFinished = false;
 };

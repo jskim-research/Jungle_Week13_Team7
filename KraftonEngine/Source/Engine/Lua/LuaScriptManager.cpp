@@ -16,6 +16,7 @@
 #include "Component/Primitive/StaticMeshComponent.h"
 #include "Component/Primitive/ParticleSystemComponent.h"
 #include "Component/Primitive/DecalComponent.h"
+#include "Component/Primitive/SubUVComponent.h"
 #include "Core/Types/CollisionTypes.h"
 #include "Runtime/Engine.h"
 #include "Viewport/GameViewportClient.h"
@@ -2505,6 +2506,28 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 		"IsFadeFinished", &UDecalComponent::IsFadeFinished,
 		"SetAutoDestroyOwnerOnFadeFinished", &UDecalComponent::SetAutoDestroyOwnerOnFadeFinished);
 
+	Lua.new_usertype<USubUVComponent>("SubUVComponent",
+		sol::base_classes,
+		sol::bases<UPrimitiveComponent, USceneComponent, UActorComponent, UObject>(),
+		"SetParticle", [](USubUVComponent& C, const FString& ParticleName)
+	{
+		C.SetParticle(FName(ParticleName));
+	},
+		"GetParticleName", [](USubUVComponent& C)
+	{
+		return C.GetParticleName().ToString();
+	},
+		"SetFrameIndex", &USubUVComponent::SetFrameIndex,
+		"GetFrameIndex", &USubUVComponent::GetFrameIndex,
+		"SetFrameRate", &USubUVComponent::SetFrameRate,
+		"SetLoop", &USubUVComponent::SetLoop,
+		"IsLoop", &USubUVComponent::IsLoop,
+		"IsFinished", &USubUVComponent::IsFinished,
+		"Play", &USubUVComponent::Play,
+		"SetSpriteRoll", &USubUVComponent::SetSpriteRoll,
+		"GetSpriteRoll", &USubUVComponent::GetSpriteRoll,
+		"SetAutoDestroyOwnerOnFinished", &USubUVComponent::SetAutoDestroyOwnerOnFinished);
+
 	// 메시 에셋 경로로 컴포넌트 식별 가능하게 노출. 자동 생성된 FName ("UStaticMeshComponent_41")
 	// 은 월드 초기화 순서에 따라 카운터가 달라져 빌드별로 매칭이 깨질 수 있다. 메시 경로는
 	// 씬 파일에 명시 저장되므로 deterministic.
@@ -2669,6 +2692,28 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 	{
 		return Actor.AddComponent<UParticleSystemComponent>();
 	},
+		"AddSubUVComponent", [](AActor& Actor) -> USubUVComponent*
+	{
+		USubUVComponent* SubUV = Actor.AddComponent<USubUVComponent>();
+		if (!SubUV)
+		{
+			return nullptr;
+		}
+
+		if (USceneComponent* Root = Actor.GetRootComponent())
+		{
+			if (Root != SubUV)
+			{
+				SubUV->AttachToComponent(Root);
+			}
+		}
+		else
+		{
+			Actor.SetRootComponent(SubUV);
+		}
+
+		return SubUV;
+	},
 		"AddDecalComponent", [](AActor& Actor) -> UDecalComponent*
 	{
 		UDecalComponent* Decal = Actor.AddComponent<UDecalComponent>();
@@ -2780,6 +2825,45 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
 
 	// --- VFX helper binding — one-shot effect spawning for Lua gameplay scripts. ---
 	sol::table VFX = Lua.create_named_table("VFX");
+	VFX.set_function("SpawnSubUV", [](
+		const FString& ParticleName,
+		const FVector& Location,
+		const FVector& Scale,
+		sol::optional<float> SpriteRoll,
+		sol::optional<float> FrameRate,
+		sol::optional<bool> bLoop,
+		sol::optional<bool> bAutoDestroyOwnerOnFinished) -> USubUVComponent*
+	{
+		if (!GEngine) return nullptr;
+		UWorld* W = GEngine->GetWorld();
+		if (!W) return nullptr;
+
+		UClass* ActorClass = UClass::FindByName("AActor");
+		if (!ActorClass) return nullptr;
+
+		AActor* Actor = W->SpawnActorByClass(ActorClass);
+		if (!Actor) return nullptr;
+
+		USubUVComponent* SubUV = Actor->AddComponent<USubUVComponent>();
+		if (!SubUV)
+		{
+			W->DestroyActor(Actor);
+			return nullptr;
+		}
+
+		Actor->SetRootComponent(SubUV);
+		SubUV->SetWorldLocation(Location);
+		SubUV->SetRelativeScale(Scale);
+		SubUV->SetParticle(FName(ParticleName));
+		SubUV->SetSpriteRoll(SpriteRoll.value_or(0.0f));
+		SubUV->SetFrameRate(FrameRate.value_or(30.0f));
+		SubUV->SetLoop(bLoop.value_or(false));
+		SubUV->SetAutoDestroyOwnerOnFinished(bAutoDestroyOwnerOnFinished.value_or(true));
+		SubUV->SetVisibility(true);
+		SubUV->Play();
+		return SubUV;
+	});
+
 	VFX.set_function("SpawnParticleSystem", [](
 		const FString& TemplatePath,
 		const FVector& Location,
