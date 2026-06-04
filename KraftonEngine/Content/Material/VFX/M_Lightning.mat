@@ -4,7 +4,7 @@
     "BlendState" : "AlphaBlend",
     "Domain" : "ParticleSprite",
     "GeneratorVersion" : "GeneratedMaterialPass_v4_Decal",
-    "GraphHash" : "368B8398A7BD1C24",
+    "GraphHash" : "93F7235238BA74AB",
     "GraphShaderMode" : "Generated",
     "Parameters" : {
 
@@ -43,7 +43,7 @@
         "LinkId" : 39,
         "ToPinId" : 30
       }],
-    "NextId" : 40,
+    "NextId" : 43,
     "Nodes" : [{
         "DisplayName" : "Texture Object",
         "Mask" : "RGBA",

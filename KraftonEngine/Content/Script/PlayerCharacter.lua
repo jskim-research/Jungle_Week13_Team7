@@ -30,6 +30,30 @@ local ULTIMATE_LIGHTNING_BEAM_PATH = "Content/Data/Lightning.uasset"
 local ULTIMATE_VERTICAL_LIGHTNING_PATH = "Content/Data/Lightning.uasset"
 local ULTIMATE_LIGHTNING_MATERIAL_PATH = "Content/Material/VFX/M_Lightning.mat"
 local ULTIMATE_LIGHTNING_LIFETIME = 0.45
+local ULTIMATE_LIGHTNING_POST_DECAL_DELAY = 0.16
+local ULTIMATE_LIGHTNING_POST_DECAL_INTERVAL = 0.06
+
+local ULTIMATE_LIGHTNING_BEAM_A_SOURCE_OFFSET = Vector(10.0, -10.0, -10.0)
+local ULTIMATE_LIGHTNING_BEAM_A_TARGET_OFFSET = Vector(-10.0, -5.0, -10.0)
+local ULTIMATE_LIGHTNING_BEAM_B_SOURCE_OFFSET = Vector(20.0, 10.0, -5.0)
+local ULTIMATE_LIGHTNING_BEAM_B_TARGET_OFFSET = Vector(20.0, 20.0, -5.0)
+local ULTIMATE_LIGHTNING_BEAM_C_SOURCE_OFFSET = Vector(-5.0, 0.0, -7.0)
+local ULTIMATE_LIGHTNING_BEAM_C_TARGET_OFFSET = Vector(-5.0, 5.0, -7.0)
+local ULTIMATE_LIGHTNING_BEAM_D_SOURCE_OFFSET = Vector(-18.0, -18.0, -6.0)
+local ULTIMATE_LIGHTNING_BEAM_D_TARGET_OFFSET = Vector(16.0, 12.0, -6.0)
+local ULTIMATE_LIGHTNING_BEAM_E_SOURCE_OFFSET = Vector(8.0, 24.0, -8.0)
+local ULTIMATE_LIGHTNING_BEAM_E_TARGET_OFFSET = Vector(-10.0, 13.0, -8.0)
+local ULTIMATE_LIGHTNING_BEAM_F_SOURCE_OFFSET = Vector(-24.0, 9.0, -4.0)
+local ULTIMATE_LIGHTNING_BEAM_F_TARGET_OFFSET = Vector(-12.0, -24.0, -4.0)
+
+local ULTIMATE_LIGHTNING_VERTICAL_A_OFFSET = Vector(8.0, -10.0, 0.0)
+local ULTIMATE_LIGHTNING_VERTICAL_B_OFFSET = Vector(22.0, 16.0, 0.0)
+local ULTIMATE_LIGHTNING_VERTICAL_C_OFFSET = Vector(-16.0, 20.0, 0.0)
+local ULTIMATE_LIGHTNING_VERTICAL_D_OFFSET = Vector(-26.0, -8.0, 0.0)
+local ULTIMATE_LIGHTNING_VERTICAL_A_HEIGHT = 14.0
+local ULTIMATE_LIGHTNING_VERTICAL_B_HEIGHT = 12.0
+local ULTIMATE_LIGHTNING_VERTICAL_C_HEIGHT = 7.0
+local ULTIMATE_LIGHTNING_VERTICAL_D_HEIGHT = 18.0
 
 local ULTIMATE_MOVE_START_DISTANCE = 100.0
 local ULTIMATE_MOVE_END_DISTANCE = 30
@@ -663,30 +687,47 @@ function PlayerCharacter.BeginUltimate()
         16.0
     )
 
-    local function RandomRange(minValue, maxValue)
-        return minValue + (maxValue - minValue) * math.random()
-    end
-
-    local function RandomLightningGroundPoint()
-        local forwardRadius = math.max(16.0, decalScale.X * 0.35)
-        local rightRadius = math.max(16.0, decalScale.Y * 0.35)
+    local function GetCinematicLightningPoint(offset)
         local point =
             cinematicEndPos
-            + actorForward * RandomRange(-forwardRadius, forwardRadius)
-            + actorRight * RandomRange(-rightRadius, rightRadius)
+            + actorForward * offset.X
+            + actorRight * offset.Y
+            + up * offset.Z
 
-        point.Z = actorLocation.Z
+        point.Z = actorLocation.Z + offset.Z
         return point
     end
 
-    local function SpawnRandomLightningBeam(heightA, heightB)
-        local source = RandomLightningGroundPoint() + up * heightA
-        local target = RandomLightningGroundPoint() + up * heightB
-        return SpawnUltimateLightningBeam(source, target)
+    local function SpawnConfiguredLightningBeam(sourceOffset, targetOffset)
+        return SpawnUltimateLightningBeam(
+            GetCinematicLightningPoint(sourceOffset),
+            GetCinematicLightningPoint(targetOffset)
+        )
     end
 
-    local function SpawnRandomVerticalLightning(height)
-        return SpawnUltimateVerticalLightning(RandomLightningGroundPoint(), height)
+    local function SpawnConfiguredVerticalLightning(offset, height)
+        return SpawnUltimateVerticalLightning(GetCinematicLightningPoint(offset), height)
+    end
+
+    local function SpawnUltimateLightningBurst()
+        SpawnConfiguredLightningBeam(ULTIMATE_LIGHTNING_BEAM_A_SOURCE_OFFSET, ULTIMATE_LIGHTNING_BEAM_A_TARGET_OFFSET)
+        SpawnConfiguredVerticalLightning(ULTIMATE_LIGHTNING_VERTICAL_A_OFFSET, ULTIMATE_LIGHTNING_VERTICAL_A_HEIGHT)
+        Wait(ULTIMATE_LIGHTNING_POST_DECAL_INTERVAL)
+
+        SpawnConfiguredLightningBeam(ULTIMATE_LIGHTNING_BEAM_D_SOURCE_OFFSET, ULTIMATE_LIGHTNING_BEAM_D_TARGET_OFFSET)
+        SpawnConfiguredLightningBeam(ULTIMATE_LIGHTNING_BEAM_B_SOURCE_OFFSET, ULTIMATE_LIGHTNING_BEAM_B_TARGET_OFFSET)
+        Wait(ULTIMATE_LIGHTNING_POST_DECAL_INTERVAL * 0.75)
+
+        SpawnConfiguredVerticalLightning(ULTIMATE_LIGHTNING_VERTICAL_D_OFFSET, ULTIMATE_LIGHTNING_VERTICAL_D_HEIGHT)
+        SpawnConfiguredLightningBeam(ULTIMATE_LIGHTNING_BEAM_E_SOURCE_OFFSET, ULTIMATE_LIGHTNING_BEAM_E_TARGET_OFFSET)
+        Wait(ULTIMATE_LIGHTNING_POST_DECAL_INTERVAL * 1.25)
+
+        SpawnConfiguredLightningBeam(ULTIMATE_LIGHTNING_BEAM_C_SOURCE_OFFSET, ULTIMATE_LIGHTNING_BEAM_C_TARGET_OFFSET)
+        SpawnConfiguredVerticalLightning(ULTIMATE_LIGHTNING_VERTICAL_C_OFFSET, ULTIMATE_LIGHTNING_VERTICAL_C_HEIGHT)
+        Wait(ULTIMATE_LIGHTNING_POST_DECAL_INTERVAL)
+
+        SpawnConfiguredLightningBeam(ULTIMATE_LIGHTNING_BEAM_F_SOURCE_OFFSET, ULTIMATE_LIGHTNING_BEAM_F_TARGET_OFFSET)
+        SpawnConfiguredVerticalLightning(ULTIMATE_LIGHTNING_VERTICAL_B_OFFSET, ULTIMATE_LIGHTNING_VERTICAL_B_HEIGHT)
     end
 
     Reflection.Call(owner, "SetActorLocation", startPos)
@@ -701,12 +742,6 @@ function PlayerCharacter.BeginUltimate()
     local spawnedAirSlashD = false
     local spawnedAirSlashE = false
 
-    local spawnLightning = true
-    local spawnedLightningA = false
-    local spawnedLightningB = false
-    local spawnedLightningC = false
-    local spawnedLightningD = false
-    local spawnedLightningE = false
     local spawnedSlashFlash = false
 
     PlayerCharacter.IsInUltimateMode = true
@@ -719,33 +754,6 @@ function PlayerCharacter.BeginUltimate()
 
         local t = Clamp(elapsed / ULTIMATE_MOVE_DURATION, 0.0, 1.0)
         local easedT = EaseOutCubic(t)
-
-        if spawnLightning then
-            if not spawnedLightningA and t >= 0.10 then
-                SpawnRandomLightningBeam(4.0, 7.0)
-                spawnedLightningA = true
-            end
-
-            if not spawnedLightningB and t >= 0.18 then
-                SpawnRandomLightningBeam(1.5, 5.0)
-                spawnedLightningB = true
-            end
-
-            if not spawnedLightningC and t >= 0.28 then
-                SpawnRandomVerticalLightning(RandomRange(58.0, 86.0))
-                spawnedLightningC = true
-            end
-
-            if not spawnedLightningD and t >= 0.40 then
-                SpawnRandomVerticalLightning(RandomRange(52.0, 78.0))
-                spawnedLightningD = true
-            end
-
-            if not spawnedLightningE and t >= 0.52 then
-                SpawnRandomLightningBeam(8.0, 2.0)
-                spawnedLightningE = true
-            end
-        end
 
         if spawnAirSlashFlag then
             if not spawnedSlashFlash and t >= 0.38 then
@@ -856,6 +864,8 @@ function PlayerCharacter.BeginUltimate()
         decal:SetColorRGBA(1.0, 0.05, 0.02, 1.0)
     end
 
+    -- SpawnUltimateLightningBurst()
+
     -- 연출상 도착 지점은 기존처럼 카메라 앞쪽
     Reflection.Call(owner, "SetActorLocation", cinematicEndPos)
 
@@ -864,7 +874,7 @@ function PlayerCharacter.BeginUltimate()
     -- CameraManager.FadeOut(0.2)
     -- CameraManager.SetVignette(0.7, 0.7, 0.5)
 
-    Wait(0.4)
+    Wait(0.4 - (ULTIMATE_LIGHTNING_POST_DECAL_INTERVAL * 4.0))
 
     Reflection.Call(movementComp, "SetMovementInputEnabled", true)
 
